@@ -93,7 +93,7 @@ body {
 	flex: 1;
 	position: relative;
 	min-height: 50vh;
-	padding: 20px;
+	padding: 20px 20px 10px 20px;
 }
 
 #map {
@@ -108,7 +108,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	padding: 20px;
+	padding: 10px 20px 20px 20px;
 }
 
 .elevation-content {
