@@ -7,6 +7,31 @@ if (typeof ChartZoom !== 'undefined') {
 	Chart.register(ChartZoom);
 }
 
+// Custom crosshair plugin
+const crosshairPlugin = {
+	id: 'crosshair',
+	afterDatasetsDraw(chart) {
+		if (chart.crosshair) {
+			const ctx = chart.ctx;
+			const { top, bottom } = chart.chartArea;
+			
+			ctx.save();
+			ctx.strokeStyle = 'rgba(255, 107, 107, 0.8)';
+			ctx.lineWidth = 2;
+			ctx.setLineDash([5, 5]);
+			
+			ctx.beginPath();
+			ctx.moveTo(chart.crosshair.x, top);
+			ctx.lineTo(chart.crosshair.x, bottom);
+			ctx.stroke();
+			
+			ctx.restore();
+		}
+	}
+};
+
+Chart.register(crosshairPlugin);
+
 class ElevationChart {
 	constructor(containerId) {
 		this.containerId = containerId;
@@ -52,6 +77,21 @@ class ElevationChart {
 				},
 				hover: {
 					mode: null,
+				},
+				onHover: (event, activeElements, chart) => {
+					const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+					const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+					
+					if (dataX !== null && canvasPosition.x >= chart.chartArea.left && canvasPosition.x <= chart.chartArea.right) {
+						chart.crosshair = {
+							x: canvasPosition.x
+						};
+						chart.draw();
+					}
+				},
+				onLeave: (event, activeElements, chart) => {
+					chart.crosshair = null;
+					chart.draw();
 				},
 				plugins: {
 					legend: {
