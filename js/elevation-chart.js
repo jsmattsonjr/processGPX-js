@@ -58,6 +58,10 @@ class ElevationChart {
 		const yMin = Math.floor(minElevation / 100) * 100;
 		const yMax = Math.ceil(maxElevation / 100) * 100;
 
+		// Calculate distance range for x-axis
+		const distances = elevationData.distances;
+		const maxDistance = distances[distances.length - 1] / 1000; // Convert to km
+
 		this.chart = new Chart(ctx, {
 			type: "line",
 			data: {
@@ -116,7 +120,7 @@ class ElevationChart {
 					},
 					zoom: {
 						limits: {
-							x: {min: 'original', max: 'original'},
+							x: {min: 0, max: maxDistance},
 							y: {min: yMin, max: yMax},
 						},
 						pan: {
@@ -142,6 +146,8 @@ class ElevationChart {
 						grid: {
 							color: "rgba(0, 0, 0, 0.1)",
 						},
+						min: 0,
+						max: maxDistance,
 					},
 					y: {
 						display: true,
