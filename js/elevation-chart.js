@@ -89,10 +89,6 @@ class ElevationChart {
 						chart.draw();
 					}
 				},
-				onLeave: (event, activeElements, chart) => {
-					chart.crosshair = null;
-					chart.draw();
-				},
 				plugins: {
 					legend: {
 						display: false,
@@ -155,6 +151,12 @@ class ElevationChart {
 					},
 				},
 			},
+		});
+
+		// Add mouse leave event to hide crosshair
+		ctx.addEventListener('mouseleave', () => {
+			this.chart.crosshair = null;
+			this.chart.draw();
 		});
 	}
 
