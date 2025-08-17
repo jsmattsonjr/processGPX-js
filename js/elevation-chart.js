@@ -1,6 +1,15 @@
 /**
  * Elevation profile chart using Chart.js
  */
+
+// Register the zoom plugin
+if (typeof ChartZoom !== 'undefined') {
+	Chart.register(ChartZoom);
+	console.log('Chart.js zoom plugin registered successfully');
+} else {
+	console.error('Chart.js zoom plugin not found');
+}
+
 class ElevationChart {
 	constructor(containerId) {
 		this.containerId = containerId;
@@ -20,11 +29,13 @@ class ElevationChart {
 		this.chart = new Chart(ctx, {
 			type: "line",
 			data: {
-				labels: elevationData.labels,
 				datasets: [
 					{
 						label: "Elevation",
-						data: elevationData.elevations,
+						data: elevationData.elevations.map((elevation, index) => ({
+							x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
+							y: elevation
+						})),
 						borderColor: "#3498db",
 						backgroundColor: "rgba(52, 152, 219, 0.1)",
 						fill: true,
@@ -40,7 +51,10 @@ class ElevationChart {
 				maintainAspectRatio: false,
 				interaction: {
 					intersect: false,
-					mode: "index",
+					mode: null,
+				},
+				hover: {
+					mode: null,
 				},
 				plugins: {
 					legend: {
@@ -49,21 +63,38 @@ class ElevationChart {
 					tooltip: {
 						callbacks: {
 							title: function (context) {
-								const index = context[0].dataIndex;
-								return `Distance: ${elevationData.labels[index]}`;
+								const distance = context[0].parsed.x;
+								return `Distance: ${distance.toFixed(2)}km`;
 							},
 							label: function (context) {
 								return `Elevation: ${Math.round(context.parsed.y)}m`;
 							},
 						},
 					},
+					zoom: {
+						limits: {
+							x: {min: 'original', max: 'original'},
+							y: {min: 'original', max: 'original'},
+						},
+						pan: {
+							enabled: true,
+							mode: 'x',
+						},
+						zoom: {
+							wheel: {
+								enabled: true,
+							},
+							mode: 'x',
+						}
+					},
 				},
 				scales: {
 					x: {
+						type: 'linear',
 						display: true,
 						title: {
 							display: true,
-							text: "Distance",
+							text: "Distance (km)",
 						},
 						grid: {
 							color: "rgba(0, 0, 0, 0.1)",
@@ -96,11 +127,22 @@ class ElevationChart {
 	 */
 	updateChart(elevationData) {
 		if (this.chart) {
-			this.chart.data.labels = elevationData.labels;
-			this.chart.data.datasets[0].data = elevationData.elevations;
+			this.chart.data.datasets[0].data = elevationData.elevations.map((elevation, index) => ({
+				x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
+				y: elevation
+			}));
 			this.chart.update();
 		} else {
 			this.createChart(elevationData);
+		}
+	}
+
+	/**
+	 * Reset zoom to show full chart
+	 */
+	resetZoom() {
+		if (this.chart) {
+			this.chart.resetZoom();
 		}
 	}
 
