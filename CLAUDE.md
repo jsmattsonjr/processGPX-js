@@ -12,13 +12,13 @@ This is a JavaScript port of the original Perl processGPX tool (v0.52) designed 
 
 ```bash
 # Format all supported files
-npx @biomejs/biome format --write .
+npx biome format --write .
 
 # Check formatting and linting
-npx @biomejs/biome check .
+npx biome check .
 
 # Fix auto-fixable issues  
-npx @biomejs/biome check --apply .
+npx biome check --apply .
 ```
 
 ## Planned Architecture
