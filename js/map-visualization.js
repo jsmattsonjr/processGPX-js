@@ -12,14 +12,10 @@ class MapVisualization {
 
 	/**
 	 * Initialize the map
-	 * @param {Object} bounds - Map bounds {minLat, maxLat, minLon, maxLon, center}
 	 */
-	initializeMap(bounds) {
-		// Create map centered on route
-		this.map = L.map(this.containerId).setView(
-			[bounds.center.lat, bounds.center.lon],
-			10,
-		);
+	initializeMap() {
+		// Create map with default view
+		this.map = L.map(this.containerId).setView([0, 0], 2);
 
 		// Define base layers
 		const streetLayer = L.tileLayer(
@@ -54,54 +50,47 @@ class MapVisualization {
 				collapsed: true,
 			})
 			.addTo(this.map);
-
-		// Fit map to route bounds
-		this.map.fitBounds(
-			[
-				[bounds.minLat, bounds.minLon],
-				[bounds.maxLat, bounds.maxLon],
-			],
-			{ padding: [20, 20] },
-		);
 	}
 
 	/**
-	 * Display route on map
-	 * @param {Array} points - Route points with lat/lon
-	 * @param {Object} routeInfo - Route metadata
+	 * Display route on map from GeoJSON
+	 * @param {Object} geoJson - GeoJSON object
 	 */
-	displayRoute(points, routeInfo) {
+	displayRoute(geoJson) {
 		if (!this.map) {
 			throw new Error("Map not initialized");
 		}
 
-		// Remove existing route layer
-		if (this.routeLayer) {
-			this.map.removeLayer(this.routeLayer);
+		// Clear existing route
+		this.clearRoute();
+
+		// Find the first LineString feature (track)
+		const trackFeature = geoJson.features.find(
+			(feature) => feature.geometry && feature.geometry.type === "LineString",
+		);
+
+		if (!trackFeature) {
+			throw new Error("No track LineString found in GeoJSON");
 		}
 
-		// Remove existing markers
-		if (this.startMarker) {
-			this.map.removeLayer(this.startMarker);
-		}
-		if (this.endMarker) {
-			this.map.removeLayer(this.endMarker);
-		}
-
-		// Create route line
-		const routeCoords = points.map((point) => [point.lat, point.lon]);
-
-		this.routeLayer = L.polyline(routeCoords, {
-			color: "#3498db",
-			weight: 4,
-			opacity: 0.8,
-			lineJoin: "round",
-			lineCap: "round",
+		// Use Leaflet's built-in GeoJSON layer
+		this.routeLayer = L.geoJSON(trackFeature, {
+			style: {
+				color: "#3498db",
+				weight: 4,
+				opacity: 0.8,
+				lineJoin: "round",
+				lineCap: "round",
+			},
 		}).addTo(this.map);
 
+		// Get coordinates for markers
+		const coordinates = trackFeature.geometry.coordinates;
+		const startCoord = coordinates[0];
+		const endCoord = coordinates[coordinates.length - 1];
+
 		// Add start marker (green)
-		const startPoint = points[0];
-		this.startMarker = L.circleMarker([startPoint.lat, startPoint.lon], {
+		this.startMarker = L.circleMarker([startCoord[1], startCoord[0]], {
 			radius: 8,
 			fillColor: "#2ecc71",
 			color: "white",
@@ -113,13 +102,12 @@ class MapVisualization {
 		this.startMarker.bindPopup(`
             <div class="route-popup">
                 <strong>Start</strong><br>
-                Elevation: ${Math.round(startPoint.elevation)}m
+                Elevation: ${Math.round(startCoord[2] || 0)}m
             </div>
         `);
 
 		// Add end marker (red)
-		const endPoint = points[points.length - 1];
-		this.endMarker = L.circleMarker([endPoint.lat, endPoint.lon], {
+		this.endMarker = L.circleMarker([endCoord[1], endCoord[0]], {
 			radius: 8,
 			fillColor: "#e74c3c",
 			color: "white",
@@ -131,38 +119,23 @@ class MapVisualization {
 		this.endMarker.bindPopup(`
             <div class="route-popup">
                 <strong>Finish</strong><br>
-                Distance: ${this.formatDistance(endPoint.distance)}<br>
-                Elevation: ${Math.round(endPoint.elevation)}m
+                Elevation: ${Math.round(endCoord[2] || 0)}m
             </div>
         `);
 
 		// Add route info popup on click
+		const routeName = trackFeature.properties?.name || "Unnamed Route";
 		this.routeLayer.bindPopup(`
             <div class="route-popup">
-                <strong>${routeInfo.name}</strong><br>
-                Distance: ${this.formatDistance(routeInfo.stats.distance)}<br>
-                Elevation Gain: ${Math.round(routeInfo.stats.elevationGain)}m<br>
-                Elevation Loss: ${Math.round(routeInfo.stats.elevationLoss)}m<br>
-                Points: ${routeInfo.stats.pointCount}
+                <strong>${routeName}</strong><br>
+                Points: ${coordinates.length}
             </div>
         `);
+
+		// Fit map to route bounds
+		this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
 	}
 
-	/**
-	 * Fit map to route bounds
-	 * @param {Object} bounds
-	 */
-	fitToBounds(bounds) {
-		if (this.map) {
-			this.map.fitBounds(
-				[
-					[bounds.minLat, bounds.minLon],
-					[bounds.maxLat, bounds.maxLon],
-				],
-				{ padding: [20, 20] },
-			);
-		}
-	}
 
 	/**
 	 * Clear all route data from map
@@ -182,17 +155,6 @@ class MapVisualization {
 		}
 	}
 
-	/**
-	 * Format distance for display
-	 * @param {number} meters
-	 * @returns {string}
-	 */
-	formatDistance(meters) {
-		if (meters < 1000) {
-			return `${Math.round(meters)}m`;
-		}
-		return `${(meters / 1000).toFixed(1)}km`;
-	}
 
 	/**
 	 * Destroy the map

@@ -39,10 +39,12 @@ class ElevationChart {
 	}
 
 	/**
-	 * Create elevation profile chart
-	 * @param {Object} elevationData - Chart data with labels, elevations, distances
+	 * Create elevation profile chart from GeoJSON
+	 * @param {Object} geoJson - GeoJSON object
 	 */
-	createChart(elevationData) {
+	createChart(geoJson) {
+		// Extract elevation data from GeoJSON
+		const elevationData = this.extractElevationData(geoJson);
 		const ctx = document.createElement("canvas");
 		const container = document.getElementById(this.containerId);
 		container.innerHTML = "";
@@ -170,19 +172,62 @@ class ElevationChart {
 	}
 
 	/**
-	 * Update chart with new data
-	 * @param {Object} elevationData
+	 * Update chart with new GeoJSON data
+	 * @param {Object} geoJson - GeoJSON object
 	 */
-	updateChart(elevationData) {
+	updateChart(geoJson) {
 		if (this.chart) {
+			const elevationData = this.extractElevationData(geoJson);
 			this.chart.data.datasets[0].data = elevationData.elevations.map((elevation, index) => ({
 				x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
 				y: elevation
 			}));
 			this.chart.update();
 		} else {
-			this.createChart(elevationData);
+			this.createChart(geoJson);
 		}
+	}
+
+	/**
+	 * Extract elevation data from GeoJSON using Turf.js
+	 * @param {Object} geoJson - GeoJSON object
+	 * @returns {Object} Elevation chart data
+	 */
+	extractElevationData(geoJson) {
+		// Find the first LineString feature (track)
+		const trackFeature = geoJson.features.find(
+			(feature) => feature.geometry && feature.geometry.type === "LineString",
+		);
+
+		if (!trackFeature) {
+			throw new Error("No track LineString found in GeoJSON");
+		}
+
+		const coordinates = trackFeature.geometry.coordinates;
+		const elevations = [];
+		const distances = [];
+		let cumulativeDistance = 0;
+
+		for (let i = 0; i < coordinates.length; i++) {
+			const [lon, lat, elevation] = coordinates[i];
+
+			// Calculate distance from previous point using Turf.js
+			if (i > 0) {
+				const prevCoord = coordinates[i - 1];
+				const from = turf.point([prevCoord[0], prevCoord[1]]);
+				const to = turf.point([lon, lat]);
+				const distance = turf.distance(from, to, { units: 'meters' });
+				cumulativeDistance += distance;
+			}
+
+			elevations.push(elevation || 0);
+			distances.push(cumulativeDistance);
+		}
+
+		return {
+			elevations,
+			distances,
+		};
 	}
 
 	/**

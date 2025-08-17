@@ -35,9 +35,9 @@ class ProcessGPXApp {
 		try {
 			this.showLoading("Parsing GPX file...");
 
-			// Parse GPX file
-			const routeData = await this.gpxParser.parseFile(file);
-			this.currentRoute = routeData;
+			// Parse GPX file to GeoJSON
+			const geoJson = await this.gpxParser.parseFile(file);
+			this.currentRoute = geoJson;
 
 			this.updateLoadingMessage("Setting up visualization...");
 
@@ -45,7 +45,7 @@ class ProcessGPXApp {
 			this.showResultsScreen();
 
 			// Initialize map and chart
-			await this.initializeVisualization(routeData);
+			await this.initializeVisualization(geoJson);
 
 			this.hideLoading();
 		} catch (error) {
@@ -56,17 +56,17 @@ class ProcessGPXApp {
 
 	/**
 	 * Initialize map and elevation chart
-	 * @param {Object} routeData
+	 * @param {Object} geoJson - GeoJSON object
 	 */
-	async initializeVisualization(routeData) {
+	async initializeVisualization(geoJson) {
 		// Initialize map
 		this.mapVisualization = new MapVisualization("map");
-		this.mapVisualization.initializeMap(routeData.bounds);
-		this.mapVisualization.displayRoute(routeData.points, routeData);
+		this.mapVisualization.initializeMap();
+		this.mapVisualization.displayRoute(geoJson);
 
 		// Initialize elevation chart
 		this.elevationChart = new ElevationChart("elevationProfile");
-		this.elevationChart.createChart(routeData.elevationData);
+		this.elevationChart.createChart(geoJson);
 	}
 
 	/**
