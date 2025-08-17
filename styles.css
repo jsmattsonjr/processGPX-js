@@ -82,10 +82,22 @@ body {
 	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
+.main-container {
+	display: flex;
+	height: 100vh;
+	background: transparent;
+}
+
+.left-panel {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
 .split-container {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	height: 100%;
 	background: transparent;
 }
 
@@ -93,7 +105,7 @@ body {
 	flex: 1;
 	position: relative;
 	min-height: 50vh;
-	padding: 20px 20px 10px 20px;
+	padding: 20px 10px 10px 20px;
 }
 
 #map {
@@ -108,7 +120,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	padding: 10px 20px 20px 20px;
+	padding: 10px 10px 20px 20px;
 }
 
 .elevation-content {
@@ -123,6 +135,48 @@ body {
 	border-radius: 8px;
 	overflow: hidden;
 	background: rgba(255, 255, 255, 0.95);
+}
+
+/* Right sidebar */
+.right-sidebar {
+	width: 200px;
+	display: flex;
+	flex-direction: column;
+	padding: 20px 20px 20px 10px;
+}
+
+.sidebar-content {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	background: rgba(255, 255, 255, 0.95);
+	border-radius: 8px;
+	padding: 20px;
+}
+
+.process-button {
+	padding: 12px 24px;
+	background: #3498db;
+	color: white;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 1rem;
+	font-weight: 500;
+	transition: all 0.3s ease;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.process-button:hover {
+	background: #2980b9;
+	transform: translateY(-1px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.process-button:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Loading overlay */

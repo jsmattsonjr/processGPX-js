@@ -27,16 +27,28 @@
 
     <!-- Results screen with split layout -->
     <div id="resultsScreen" class="results-screen hidden">
-        <div class="split-container">
-            <!-- Top pane: Map -->
-            <div class="map-pane">
-                <div id="map"></div>
+        <div class="main-container">
+            <!-- Left side: Map and elevation -->
+            <div class="left-panel">
+                <div class="split-container">
+                    <!-- Top pane: Map -->
+                    <div class="map-pane">
+                        <div id="map"></div>
+                    </div>
+
+                    <!-- Bottom pane: Elevation profile -->
+                    <div class="elevation-pane">
+                        <div class="elevation-content">
+                            <div id="elevationProfile" class="elevation-chart"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Bottom pane: Elevation profile -->
-            <div class="elevation-pane">
-                <div class="elevation-content">
-                    <div id="elevationProfile" class="elevation-chart"></div>
+            <!-- Right sidebar -->
+            <div class="right-sidebar">
+                <div class="sidebar-content">
+                    <button id="processGpxBtn" class="process-button">processGPX</button>
                 </div>
             </div>
         </div>
