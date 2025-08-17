@@ -48,6 +48,14 @@ class ElevationChart {
 		container.innerHTML = "";
 		container.appendChild(ctx);
 
+		// Calculate elevation range for fixed y-axis
+		const elevations = elevationData.elevations;
+		const minElevation = Math.min(...elevations);
+		const maxElevation = Math.max(...elevations);
+		// Round to next multiple of 100m (handles negative elevations correctly)
+		const yMin = Math.floor(minElevation / 100) * 100;
+		const yMax = Math.ceil(maxElevation / 100) * 100;
+
 		this.chart = new Chart(ctx, {
 			type: "line",
 			data: {
@@ -107,7 +115,7 @@ class ElevationChart {
 					zoom: {
 						limits: {
 							x: {min: 'original', max: 'original'},
-							y: {min: 'original', max: 'original'},
+							y: {min: yMin, max: yMax},
 						},
 						pan: {
 							enabled: true,
@@ -142,7 +150,8 @@ class ElevationChart {
 						grid: {
 							color: "rgba(0, 0, 0, 0.1)",
 						},
-						beginAtZero: false,
+						min: yMin,
+						max: yMax,
 					},
 				},
 				elements: {
