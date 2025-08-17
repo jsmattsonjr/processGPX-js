@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>processGPX - GPX Route Processing</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <!-- Initial upload screen -->
+    <div id="uploadScreen" class="upload-screen">
+        <div class="upload-content">
+            <h1>processGPX</h1>
+
+            <div class="file-upload-area">
+                <input type="file" id="gpxFile" accept=".gpx" style="display: none;" />
+                <label for="gpxFile" class="file-upload-button">
+                    Click here to upload your route file
+                    <span class="file-types">Only .gpx accepted</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results screen with split layout -->
+    <div id="resultsScreen" class="results-screen hidden">
+        <div class="split-container">
+            <!-- Top pane: Map -->
+            <div class="map-pane">
+                <div id="map"></div>
+            </div>
+
+            <!-- Bottom pane: Elevation profile -->
+            <div class="elevation-pane">
+                <div class="elevation-content">
+                    <div id="elevationProfile" class="elevation-chart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loading" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingMessage">Processing GPX route...</p>
+        </div>
+    </div>
+
+    <!-- Error overlay -->
+    <div id="error" class="error-overlay hidden">
+        <div class="error-content">
+            <h3>Error</h3>
+            <p id="errorMessage"></p>
+            <button id="errorBackBtn">Back to Upload</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/gpxparser@3.0.8/dist/gpxparser.min.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/gpx-parser.js"></script>
+    <script src="js/elevation-chart.js"></script>
+    <script src="js/map-visualization.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
