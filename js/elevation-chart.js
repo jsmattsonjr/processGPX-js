@@ -5,9 +5,6 @@
 // Register the zoom plugin
 if (typeof ChartZoom !== 'undefined') {
 	Chart.register(ChartZoom);
-	console.log('Chart.js zoom plugin registered successfully');
-} else {
-	console.error('Chart.js zoom plugin not found');
 }
 
 class ElevationChart {
