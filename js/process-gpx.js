@@ -609,6 +609,76 @@ function processGPX(trackFeature, options = {}) {
 		}
 	}
 
+	// Auto: auto option will turn on options based on the course
+	if (options.auto) {
+		note("auto-setting options...");
+		
+		const courseDistance = calcCourseDistance({ points, isLoop });
+		
+		// Calculate position interpolation
+		if (options.spacing === undefined) {
+			options.spacing = 3 * Math.pow(1 + courseDistance / 250, 1/4);
+			note(`setting spacing to ${options.spacing.toFixed(3)} meters (distance = ${(courseDistance / 1000).toFixed(3)} km)`);
+		}
+		
+		// Smoothing
+		if (options.lSmooth === undefined) {
+			options.lSmooth = 5;
+			note(`setting smoothing to ${options.lSmooth} meters`);
+		}
+		
+		// Other options
+		if (options.autoSpacing === undefined) {
+			note("setting -autoSpacing...");
+			options.autoSpacing = 1;
+		}
+		
+		if (options.smoothAngle === undefined) {
+			options.smoothAngle = 10;
+			note(`setting -smoothAngle ${options.smoothAngle} ...`);
+		}
+		
+		if (options.minRadius === undefined) {
+			options.minRadius = 6;
+			note(`setting minimum corner radius to ${options.minRadius} ...`);
+		}
+		
+		if (options.prune === undefined) {
+			note("setting -prune ...");
+			options.prune = 1;
+		}
+		
+		if (options.zSmooth === undefined) {
+			options.zSmooth = 15;
+			note(`setting altitude smoothing to ${options.zSmooth} meters`);
+		}
+		
+		if (options.fixCrossings === undefined) {
+			note("setting -fixCrossings ...");
+			options.fixCrossings = 1;
+		}
+		
+		if (options.rUTurn === undefined) {
+			options.rUTurn = 6;
+			note(`setting -RUTurn ${options.rUTurn} (meters) ...`);
+		}
+		
+		if (options.snap === undefined) {
+			options.snap = 1;
+			note("setting -snap 1 ...");
+		}
+		
+		if (options.snapTransition === undefined) {
+			options.snapTransition = 10;
+			note(`setting -snapTransition ${options.snapTransition} meters...`);
+		}
+		
+		if (options.cornerCrop === undefined) {
+			options.cornerCrop = 6;
+			note(`setting -cornerCrop ${options.cornerCrop} meters...`);
+		}
+	}
+
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
 		type: trackFeature.type,
