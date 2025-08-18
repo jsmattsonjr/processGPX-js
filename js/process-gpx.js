@@ -10,6 +10,17 @@ const DEG2RAD = PI / 180;
 const LAT2Y = REARTH * DEG2RAD;
 
 /**
+ * JavaScript equivalent of Perl's spaceship operator (<=>)
+ * Returns -1, 0, or 1 based on comparison
+ * @param {number} a - First value
+ * @param {number} b - Second value
+ * @returns {number} -1 if a < b, 0 if a == b, 1 if a > b
+ */
+function spaceship(a, b) {
+	return (a > b) - (a < b);
+}
+
+/**
  * Logging function (equivalent to Perl's note function)
  * @param {...any} args - Arguments to log
  */
