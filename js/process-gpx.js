@@ -370,6 +370,18 @@ function processGPX(trackFeature, options = {}) {
 	// Eliminate duplicate x,y points
 	points = removeDuplicatePoints({ points, isLoop: options.isLoop || 0 });
 
+	// If repeat is specified, then create replicates
+	if ((options.repeat || 0) > 0) {
+		deleteField2({ points, field: "distance" });
+		const pNew = [...points];
+		for (let i = 1; i <= options.repeat; i++) {
+			for (const p of points) {
+				pNew.push({ ...p });
+			}
+		}
+		points = pNew;
+	}
+
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
 		type: trackFeature.type,
