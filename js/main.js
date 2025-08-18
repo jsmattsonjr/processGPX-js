@@ -7,6 +7,7 @@ class ProcessGPXApp {
 		this.mapVisualization = null;
 		this.elevationChart = null;
 		this.currentRoute = null;
+		this.processedRoute = null;
 
 		this.initializeEventListeners();
 	}
@@ -26,6 +27,10 @@ class ProcessGPXApp {
 		// ProcessGPX button
 		const processGpxBtn = document.getElementById("processGpxBtn");
 		processGpxBtn.addEventListener("click", () => this.handleProcessGPX());
+
+		// Export GPX button
+		const exportGpxBtn = document.getElementById("exportGpxBtn");
+		exportGpxBtn.addEventListener("click", () => this.handleExportGPX());
 	}
 
 	/**
@@ -90,16 +95,55 @@ class ProcessGPXApp {
 
 			// Process the current route
 			const processedRoute = processGPX(this.currentRoute);
+			this.processedRoute = processedRoute;
 
 			// Update visualizations to show both original and processed routes
 			this.mapVisualization.displayProcessedRoute(processedRoute);
 			this.elevationChart.addProcessedData(processedRoute);
+
+			// Enable export button
+			this.enableExportButton();
 
 			this.hideLoading();
 		} catch (error) {
 			console.error("Error processing GPX route:", error);
 			this.showError(error.message);
 		}
+	}
+
+	/**
+	 * Handle export processed GPX button click
+	 */
+	handleExportGPX() {
+		if (!this.processedRoute) {
+			console.error("No processed route available");
+			return;
+		}
+
+		// Get the original track name and create processed filename
+		const originalName = this.currentRoute?.properties?.name || "route";
+		const processedFilename = `${originalName}_processed`;
+
+		// Download the processed route
+		downloadTrackAsGPX(this.processedRoute, processedFilename);
+	}
+
+	/**
+	 * Enable the export button
+	 */
+	enableExportButton() {
+		const exportBtn = document.getElementById("exportGpxBtn");
+		exportBtn.disabled = false;
+		exportBtn.classList.remove("disabled");
+	}
+
+	/**
+	 * Disable the export button
+	 */
+	disableExportButton() {
+		const exportBtn = document.getElementById("exportGpxBtn");
+		exportBtn.disabled = true;
+		exportBtn.classList.add("disabled");
 	}
 
 	/**
@@ -123,6 +167,11 @@ class ProcessGPXApp {
 
 		// Clear file input
 		document.getElementById("gpxFile").value = "";
+
+		// Reset route data and disable export button
+		this.currentRoute = null;
+		this.processedRoute = null;
+		this.disableExportButton();
 
 		// Clean up visualizations
 		if (this.mapVisualization) {

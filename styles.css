@@ -175,6 +175,8 @@ body {
 	font-weight: 500;
 	transition: all 0.3s ease;
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	margin-bottom: 10px;
+	width: 100%;
 }
 
 .process-button:hover {
@@ -186,6 +188,20 @@ body {
 .process-button:active {
 	transform: translateY(0);
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.process-button.disabled {
+	background: #bdc3c7;
+	color: #7f8c8d;
+	cursor: not-allowed;
+	transform: none;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.process-button.disabled:hover {
+	background: #bdc3c7;
+	transform: none;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* Loading overlay */
