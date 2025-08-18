@@ -53,10 +53,10 @@ class MapVisualization {
 	}
 
 	/**
-	 * Display route on map from GeoJSON
-	 * @param {Object} geoJson - GeoJSON object
+	 * Display route on map from LineString feature
+	 * @param {Object} trackFeature - LineString feature object
 	 */
-	displayRoute(geoJson) {
+	displayRoute(trackFeature) {
 		if (!this.map) {
 			throw new Error("Map not initialized");
 		}
@@ -64,13 +64,9 @@ class MapVisualization {
 		// Clear existing route
 		this.clearRoute();
 
-		// Find the first LineString feature (track)
-		const trackFeature = geoJson.features.find(
-			(feature) => feature.geometry && feature.geometry.type === "LineString",
-		);
-
-		if (!trackFeature) {
-			throw new Error("No track LineString found in GeoJSON");
+		// Validate that we have a LineString feature
+		if (!trackFeature || !trackFeature.geometry || trackFeature.geometry.type !== "LineString") {
+			throw new Error("Invalid track feature provided");
 		}
 
 		// Use Leaflet's built-in GeoJSON layer

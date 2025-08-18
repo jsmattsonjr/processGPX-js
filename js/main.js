@@ -35,9 +35,9 @@ class ProcessGPXApp {
 		try {
 			this.showLoading("Parsing GPX file...");
 
-			// Parse GPX file to GeoJSON
-			const geoJson = await this.gpxParser.parseFile(file);
-			this.currentRoute = geoJson;
+			// Parse GPX file to get first LineString feature
+			const trackFeature = await this.gpxParser.parseFile(file);
+			this.currentRoute = trackFeature;
 
 			this.updateLoadingMessage("Setting up visualization...");
 
@@ -45,7 +45,7 @@ class ProcessGPXApp {
 			this.showResultsScreen();
 
 			// Initialize map and chart
-			await this.initializeVisualization(geoJson);
+			await this.initializeVisualization(trackFeature);
 
 			this.hideLoading();
 		} catch (error) {
@@ -56,17 +56,17 @@ class ProcessGPXApp {
 
 	/**
 	 * Initialize map and elevation chart
-	 * @param {Object} geoJson - GeoJSON object
+	 * @param {Object} trackFeature - LineString feature object
 	 */
-	async initializeVisualization(geoJson) {
+	async initializeVisualization(trackFeature) {
 		// Initialize map
 		this.mapVisualization = new MapVisualization("map");
 		this.mapVisualization.initializeMap();
-		this.mapVisualization.displayRoute(geoJson);
+		this.mapVisualization.displayRoute(trackFeature);
 
 		// Initialize elevation chart
 		this.elevationChart = new ElevationChart("elevationProfile");
-		this.elevationChart.createChart(geoJson);
+		this.elevationChart.createChart(trackFeature);
 	}
 
 	/**

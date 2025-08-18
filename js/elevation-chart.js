@@ -39,12 +39,12 @@ class ElevationChart {
 	}
 
 	/**
-	 * Create elevation profile chart from GeoJSON
-	 * @param {Object} geoJson - GeoJSON object
+	 * Create elevation profile chart from LineString feature
+	 * @param {Object} trackFeature - LineString feature object
 	 */
-	createChart(geoJson) {
-		// Extract elevation data from GeoJSON
-		const elevationData = this.extractElevationData(geoJson);
+	createChart(trackFeature) {
+		// Extract elevation data from track feature
+		const elevationData = this.extractElevationData(trackFeature);
 		const ctx = document.createElement("canvas");
 		const container = document.getElementById(this.containerId);
 		container.innerHTML = "";
@@ -178,35 +178,31 @@ class ElevationChart {
 	}
 
 	/**
-	 * Update chart with new GeoJSON data
-	 * @param {Object} geoJson - GeoJSON object
+	 * Update chart with new track feature data
+	 * @param {Object} trackFeature - LineString feature object
 	 */
-	updateChart(geoJson) {
+	updateChart(trackFeature) {
 		if (this.chart) {
-			const elevationData = this.extractElevationData(geoJson);
+			const elevationData = this.extractElevationData(trackFeature);
 			this.chart.data.datasets[0].data = elevationData.elevations.map((elevation, index) => ({
 				x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
 				y: elevation
 			}));
 			this.chart.update();
 		} else {
-			this.createChart(geoJson);
+			this.createChart(trackFeature);
 		}
 	}
 
 	/**
-	 * Extract elevation data from GeoJSON using Turf.js
-	 * @param {Object} geoJson - GeoJSON object
+	 * Extract elevation data from LineString feature using Turf.js
+	 * @param {Object} trackFeature - LineString feature object
 	 * @returns {Object} Elevation chart data
 	 */
-	extractElevationData(geoJson) {
-		// Find the first LineString feature (track)
-		const trackFeature = geoJson.features.find(
-			(feature) => feature.geometry && feature.geometry.type === "LineString",
-		);
-
-		if (!trackFeature) {
-			throw new Error("No track LineString found in GeoJSON");
+	extractElevationData(trackFeature) {
+		// Validate that we have a LineString feature
+		if (!trackFeature || !trackFeature.geometry || trackFeature.geometry.type !== "LineString") {
+			throw new Error("Invalid track feature provided");
 		}
 
 		const coordinates = trackFeature.geometry.coordinates;

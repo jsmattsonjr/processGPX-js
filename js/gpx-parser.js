@@ -7,9 +7,9 @@ class GPXParser {
 	}
 
 	/**
-	 * Parse GPX file to GeoJSON
+	 * Parse GPX file to GeoJSON and return first LineString feature
 	 * @param {File} file - GPX file to parse
-	 * @returns {Promise<Object>} GeoJSON object
+	 * @returns {Promise<Object>} First LineString feature from GeoJSON
 	 */
 	async parseFile(file) {
 		try {
@@ -21,7 +21,16 @@ class GPXParser {
 				throw new Error("No tracks found in GPX file");
 			}
 
-			return geoJson;
+			// Find the first LineString feature (track)
+			const trackFeature = geoJson.features.find(
+				(feature) => feature.geometry && feature.geometry.type === "LineString",
+			);
+
+			if (!trackFeature) {
+				throw new Error("No track LineString found in GPX file");
+			}
+
+			return trackFeature;
 		} catch (error) {
 			throw new Error(`Failed to parse GPX file: ${error.message}`);
 		}
