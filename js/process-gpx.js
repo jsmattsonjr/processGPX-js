@@ -731,6 +731,32 @@ function findLoops(points, isLoop) {
 }
 
 /**
+ * Reverse points and adjust distance, direction, curvature and laneshift fields
+ * @param {Array} points - Array of points to reverse
+ */
+function reversePoints(points) {
+	points.reverse();
+	if (!points.length) return;
+	
+	// Adjust distance field if it exists
+	if (points[0].distance !== undefined) {
+		const dLast = points[points.length - 1].distance;
+		for (const p of points) {
+			p.distance = dLast - p.distance;
+		}
+	}
+	
+	// Negate heading, curvature, and laneShift fields
+	for (const field of ["heading", "curvature", "laneShift"]) {
+		if (points[0][field] !== undefined) {
+			for (const p of points) {
+				p[field] = -p[field];
+			}
+		}
+	}
+}
+
+/**
  * Calculate quality score for a GPX track
  * @param {Object} options - Options object with points and isLoop properties
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -1033,6 +1059,13 @@ function processGPX(trackFeature, options = {}) {
 			}
 			p.ele += dz;
 		}
+	}
+
+	// Reverse the points of the original course
+	// Points reference segments so segments order is also reversed
+	if (options.reverse) {
+		note("reversing course direction..");
+		reversePoints(points);
 	}
 
 	// Convert processed points back to coordinates format for output
