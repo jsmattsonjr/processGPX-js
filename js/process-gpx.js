@@ -473,6 +473,108 @@ function cropPoints({ points, isLoop = 0, deleteRange = [], min: cropMin, max: c
 }
 
 /**
+ * Check whether two segments are in opposite direction (U-turn check)
+ * @param {Object} p1 - First point of first segment
+ * @param {Object} p2 - Second point of first segment  
+ * @param {Object} p3 - First point of second segment
+ * @param {Object} p4 - Second point of second segment
+ * @param {number} dotMax - Maximum dot product threshold (default -0.98)
+ * @returns {boolean} True if segments form a U-turn
+ */
+function UTurnCheck(p1, p2, p3, p4, dotMax = -0.98) {
+	const d = latlngDotProduct(p1, p2, p3, p4);
+	return d !== null && d < dotMax;
+}
+
+/**
+ * Fix zig-zag patterns in route by detecting and removing U-turn sequences
+ * @param {Array} points - Array of points
+ * @returns {Array} New array with zig-zags fixed
+ */
+function fixZigZags(points) {
+	note("checking for zig-zags...");
+	const dzigzag = 100;
+	const UTurns = [];
+	
+	// Find all U-turns
+	for (let i = 1; i < points.length - 1; i++) {
+		if (UTurnCheck(points[i - 1], points[i], points[i], points[i + 1], -0.9)) {
+			UTurns.push(i);
+		}
+	}
+	
+	addDistanceField({ points });
+	
+	if (UTurns.length > 0) {
+		let zigzagCount = 0;
+		
+		while (UTurns.length > 1) {
+			const U1 = UTurns.shift();
+			const U2 = UTurns[0];
+			const p1 = points[U1];
+			const p2 = points[U2];
+			
+			if (p2.distance - p1.distance < dzigzag) {
+				console.warn(`WARNING: zig-zag found on points (0, 2, 3 ...) : ${U1} and ${U2} : ` +
+					`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
+					`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
+					`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`);
+				
+				// Repairing zig-zags...
+				// zig-zags are two U-turns within a specified distance
+				// p1 -> p2 -> ... -> p3 -> p4
+				// U-turn @ p2, and U-turn @ p3
+				// 1. eliminate all points between p2 and p3
+				// 2. as long as P3 has a U-turn, delete it... there will be a new P3
+				// 3. as long as P2 has a U-turn, delete it...
+				// 4. go back step 2 if we deleted any U-turns
+				
+				console.warn("repairing zig-zag...");
+				let u = U1;            // keep points up to u
+				let v = U2 + 1;        // keep points starting with v
+				
+				while (v < points.length - 1 && 
+					   UTurnCheck(points[u], points[v], points[v], points[v + 1])) {
+					v++;
+				}
+				
+				console.warn(`eliminating ${v - u - 1} points`);
+				zigzagCount++;
+				
+				const pNew = [...points.slice(0, u + 1), ...points.slice(v)];
+				
+				// If we ran out of points, something is wrong
+				if (pNew.length < 2) {
+					throw new Error("repairing zig-zags eliminated entire route");
+				}
+				
+				points = pNew;
+				
+				// We've eliminated the next U-turn, so remove it
+				UTurns.shift();
+				
+				// Adjust coordinates of remaining U-turns
+				for (let i = 0; i < UTurns.length; i++) {
+					UTurns[i] += u - v + 1;
+				}
+				
+				// Get rid of obsolete U-turns
+				while (UTurns.length > 0 && UTurns[0] < 0) {
+					UTurns.shift();
+				}
+			}
+		}
+		
+		// May need to redo distance if zig-zag repair
+		if (zigzagCount > 0) {
+			addDistanceField({ points });
+		}
+	}
+	
+	return points;
+}
+
+/**
  * Calculate quality score for a GPX track
  * @param {Object} options - Options object with points and isLoop properties
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -731,6 +833,9 @@ function processGPX(trackFeature, options = {}) {
 	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
 		throw new Error("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
 	}
+
+	// Look for zig-zags
+	points = fixZigZags(points);
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
