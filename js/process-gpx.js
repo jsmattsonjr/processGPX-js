@@ -679,6 +679,59 @@ function processGPX(trackFeature, options = {}) {
 		}
 	}
 
+	// Set default values for options that are still undefined
+	options.fixCrossings = options.fixCrossings ?? 0;
+	options.laneShift = options.laneShift ?? 0;
+	options.minRadius = options.minRadius ?? 0;
+	options.prune = options.prune ?? 0;
+	options.rLap = options.rLap ?? 0;
+	options.spacing = options.spacing ?? 0;
+	options.zSmooth = options.zSmooth ?? 0;
+	options.snap = options.snap ?? 0;
+	options.snapTransition = options.snapTransition ?? 0;
+	options.lSmooth = options.lSmooth ?? 0;
+
+	// Check for invalid option combinations
+	if (options.snap > 0 && options.snapDistance > options.lSmooth) {
+		console.warn(`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`);
+	}
+
+	if (isLoop && (options.rTurnaround || 0) > 0) {
+		console.warn("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
+		isLoop = 0;
+	}
+
+	// AutoSpacing triggered if max angle specified
+	if (options.smoothAngle !== undefined && options.smoothAngle <= 0) {
+		options.smoothAngle = 10;
+		options.autoSpacing = options.autoSpacing ?? 1;
+	}
+	if (options.autoSpacing) {
+		options.smoothAngle = options.smoothAngle ?? 15;
+	}
+
+	// Convert angle options to radians
+	options.splineDegs = options.splineDegs ?? 0;
+	const splineRadians = options.splineDegs * DEG2RAD;
+	const splineMaxRadians = options.splineMaxDegs * DEG2RAD;
+
+	options.arcFitDegs = options.arcFitDegs ?? 0;
+	const arcFitRadians = options.arcFitDegs * DEG2RAD;
+	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
+
+	// Check if loop specified for apparent point-to-point
+	if (isLoop) {
+		const d = latlngDistance(points[0], points[points.length - 1]);
+		if (d > 150) {
+			console.warn(`WARNING: -loop or -lap specified, with large (${d} meter) distance between first and last point: are you sure you wanted -loop or -lap?`);
+		}
+	}
+
+	// If shiftSF is specified but not loop, that's an error
+	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
+		throw new Error("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
+	}
+
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
 		type: trackFeature.type,
