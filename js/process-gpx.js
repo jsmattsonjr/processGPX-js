@@ -5,9 +5,10 @@
 /**
  * Process a GPX track feature to optimize and improve the route
  * @param {Object} trackFeature - LineString feature object from GPX parsing
+ * @param {Object} options - Processing options dictionary
  * @returns {Object} Processed LineString feature object
  */
-function processGPX(trackFeature) {
+function processGPX(trackFeature, options = {}) {
 	// Validate input
 	if (!trackFeature || !trackFeature.geometry || trackFeature.geometry.type !== "LineString") {
 		throw new Error("Invalid track feature provided to processGPX");
@@ -23,7 +24,8 @@ function processGPX(trackFeature) {
 		properties: {
 			...trackFeature.properties,
 			processed: true,
-			processedAt: new Date().toISOString()
+			processedAt: new Date().toISOString(),
+			processOptions: { ...options }
 		}
 	};
 
