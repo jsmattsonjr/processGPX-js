@@ -6,6 +6,7 @@ class MapVisualization {
 		this.containerId = containerId;
 		this.map = null;
 		this.routeLayer = null;
+		this.processedRouteLayer = null;
 		this.startMarker = null;
 		this.endMarker = null;
 	}
@@ -132,6 +133,48 @@ class MapVisualization {
 		this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
 	}
 
+	/**
+	 * Display processed route on map alongside original route
+	 * @param {Object} processedTrackFeature - Processed LineString feature object
+	 */
+	displayProcessedRoute(processedTrackFeature) {
+		if (!this.map) {
+			throw new Error("Map not initialized");
+		}
+
+		// Validate that we have a LineString feature
+		if (!processedTrackFeature || !processedTrackFeature.geometry || processedTrackFeature.geometry.type !== "LineString") {
+			throw new Error("Invalid processed track feature provided");
+		}
+
+		// Remove existing processed route if any
+		if (this.processedRouteLayer) {
+			this.map.removeLayer(this.processedRouteLayer);
+		}
+
+		// Use Leaflet's built-in GeoJSON layer with different styling
+		this.processedRouteLayer = L.geoJSON(processedTrackFeature, {
+			style: {
+				color: "#e74c3c", // Red color for processed route
+				weight: 4,
+				opacity: 0.8,
+				lineJoin: "round",
+				lineCap: "round",
+			},
+		}).addTo(this.map);
+
+		// Add processed route info popup on click
+		const routeName = processedTrackFeature.properties?.name || "Processed Route";
+		const coordinates = processedTrackFeature.geometry.coordinates;
+		this.processedRouteLayer.bindPopup(`
+            <div class="route-popup">
+                <strong>${routeName}</strong><br>
+                Points: ${coordinates.length}<br>
+                <em>Processed Route</em>
+            </div>
+        `);
+	}
+
 
 	/**
 	 * Clear all route data from map
@@ -140,6 +183,10 @@ class MapVisualization {
 		if (this.routeLayer) {
 			this.map.removeLayer(this.routeLayer);
 			this.routeLayer = null;
+		}
+		if (this.processedRouteLayer) {
+			this.map.removeLayer(this.processedRouteLayer);
+			this.processedRouteLayer = null;
 		}
 		if (this.startMarker) {
 			this.map.removeLayer(this.startMarker);

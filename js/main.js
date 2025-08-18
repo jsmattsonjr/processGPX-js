@@ -22,6 +22,10 @@ class ProcessGPXApp {
 		// Error back button
 		const errorBackBtn = document.getElementById("errorBackBtn");
 		errorBackBtn.addEventListener("click", () => this.showUploadScreen());
+
+		// ProcessGPX button
+		const processGpxBtn = document.getElementById("processGpxBtn");
+		processGpxBtn.addEventListener("click", () => this.handleProcessGPX());
 	}
 
 	/**
@@ -67,6 +71,32 @@ class ProcessGPXApp {
 		// Initialize elevation chart
 		this.elevationChart = new ElevationChart("elevationProfile");
 		this.elevationChart.createChart(trackFeature);
+	}
+
+	/**
+	 * Handle processGPX button click
+	 */
+	async handleProcessGPX() {
+		if (!this.currentRoute) {
+			console.error("No route loaded");
+			return;
+		}
+
+		try {
+			this.showLoading("Processing GPX route...");
+
+			// Process the current route
+			const processedRoute = processGPX(this.currentRoute);
+
+			// Update visualizations to show both original and processed routes
+			this.mapVisualization.displayProcessedRoute(processedRoute);
+			this.elevationChart.addProcessedData(processedRoute);
+
+			this.hideLoading();
+		} catch (error) {
+			console.error("Error processing GPX route:", error);
+			this.showError(error.message);
+		}
 	}
 
 	/**

@@ -67,14 +67,14 @@ class ElevationChart {
 			data: {
 				datasets: [
 					{
-						label: "Elevation",
+						label: "Original Elevation",
 						data: elevationData.elevations.map((elevation, index) => ({
 							x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
 							y: elevation
 						})),
 						borderColor: "#3498db",
-						backgroundColor: "rgba(52, 152, 219, 0.1)",
-						fill: true,
+						backgroundColor: "rgba(52, 152, 219, 0.3)",
+						fill: "origin",
 						tension: 0.1,
 						pointRadius: 0,
 						pointHoverRadius: 4,
@@ -105,7 +105,8 @@ class ElevationChart {
 				},
 				plugins: {
 					legend: {
-						display: false,
+						display: true,
+						position: 'top',
 					},
 					tooltip: {
 						callbacks: {
@@ -230,6 +231,61 @@ class ElevationChart {
 			elevations,
 			distances,
 		};
+	}
+
+	/**
+	 * Add processed route data to existing chart
+	 * @param {Object} processedTrackFeature - Processed LineString feature object
+	 */
+	addProcessedData(processedTrackFeature) {
+		if (!this.chart) {
+			throw new Error("Chart not initialized");
+		}
+
+		// Extract elevation data from processed track feature
+		const processedElevationData = this.extractElevationData(processedTrackFeature);
+		
+		// Get original data
+		const originalData = this.chart.data.datasets[0].data;
+		
+		// Create datasets for the differential fill effect
+		const processedData = processedElevationData.elevations.map((elevation, index) => ({
+			x: processedElevationData.distances ? processedElevationData.distances[index] / 1000 : index,
+			y: elevation
+		}));
+
+		// Clear existing datasets and rebuild
+		this.chart.data.datasets = [];
+
+		// 1. Processed elevation with full fill (background layer)
+		this.chart.data.datasets.push({
+			label: "Processed Elevation",
+			data: processedData,
+			borderColor: "#e74c3c",
+			backgroundColor: "rgba(231, 76, 60, 0.3)",
+			fill: "origin",
+			tension: 0.1,
+			pointRadius: 0,
+			pointHoverRadius: 4,
+			borderWidth: 2,
+			order: 1,
+		});
+
+		// 2. Original elevation with full fill (will overlay processed where higher)
+		this.chart.data.datasets.push({
+			label: "Original Elevation", 
+			data: originalData,
+			borderColor: "#3498db",
+			backgroundColor: "rgba(52, 152, 219, 0.3)",
+			fill: "origin",
+			tension: 0.1,
+			pointRadius: 0,
+			pointHoverRadius: 4,
+			borderWidth: 2,
+			order: 2,
+		});
+
+		this.chart.update();
 	}
 
 	/**
