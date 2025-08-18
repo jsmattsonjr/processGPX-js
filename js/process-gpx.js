@@ -123,6 +123,159 @@ function latlngAngle(p1, p2, p3) {
 }
 
 /**
+ * Regular expression for matching numeric values (equivalent to Perl's $number_regexp)
+ */
+const NUMBER_REGEXP = /^[+-]?\d*(?:\d|(?:\.\d+))(?:[eE][-+]?\d+)?$/;
+
+/**
+ * Check if a value is numeric
+ * @param {any} value - Value to check
+ * @returns {boolean} True if numeric
+ */
+function isNumeric(value) {
+	return typeof value === 'string' && NUMBER_REGEXP.test(value);
+}
+
+/**
+ * Delete a field from all points in array
+ * @param {Array} points - Array of points
+ * @param {string} field - Field name to delete
+ */
+function deleteField({ points, field }) {
+	if (!field) return;
+	for (const p of points) {
+		if (field in p) {
+			delete p[field];
+		}
+	}
+}
+
+/**
+ * Delete an extension field from all points in array
+ * @param {Array} points - Array of points
+ * @param {string} field - Extension field name to delete
+ */
+function deleteExtensionField({ points, field }) {
+	if (!field) return;
+	for (const p of points) {
+		if (p.extensions && typeof p.extensions === 'object' && field in p.extensions) {
+			delete p.extensions[field];
+		}
+	}
+}
+
+/**
+ * Delete both regular and extension fields
+ * @param {Array} points - Array of points
+ * @param {string} field - Field name to delete
+ */
+function deleteField2({ points, field }) {
+	deleteField({ points, field });
+	deleteExtensionField({ points, field });
+}
+
+/**
+ * Delete derived fields from points array
+ * @param {Array} points - Array of points
+ * @param {Array} fields - Fields to delete (default: curvature, distance, gradient, heading)
+ */
+function deleteDerivedFields(points, fields = ["curvature", "distance", "gradient", "heading"]) {
+	for (const field of fields) {
+		deleteField2({ points, field });
+	}
+}
+
+/**
+ * Remove duplicate points that have identical lat/lon coordinates
+ * @param {Object} options - Options object with points and isLoop properties
+ * @returns {Array} New array of points with duplicates removed
+ */
+function removeDuplicatePoints({ points, isLoop = 0 }) {
+	note("removing duplicate points...");
+	
+	const pNew = [];
+	let removedCount = 0;
+	let i = 0;
+	
+	while (i < points.length) {
+		const p = points[i];
+		if (!p || p.lat === undefined) break;
+		
+		const lat0 = p.lat;
+		const lng0 = p.lon;
+		
+		// Find all consecutive points with same coordinates
+		let i1 = i;
+		let iNext = (i1 + 1) % points.length;
+		
+		while (
+			((iNext > i) || (isLoop && iNext !== i)) &&
+			Math.abs(points[iNext].lat - lat0) < 1e-9 &&
+			Math.abs(points[iNext].lon - lng0) < 1e-9 &&
+			((iNext + 1) % points.length !== i)
+		) {
+			i1 = iNext;
+			iNext = (iNext + 1) % points.length;
+		}
+		
+		if (i1 === i) {
+			// No duplicates, keep the point
+			pNew.push({ ...p });
+		} else {
+			// Found duplicates - average them together
+			if (removedCount === 0) {
+				// Clean out derived fields on first removal
+				deleteDerivedFields(points);
+				deleteDerivedFields(pNew);
+			}
+			removedCount += (i1 - i);
+			
+			const sum1 = {};
+			const sum0 = {};
+			const newPoint = { ...p };
+			
+			// Average numeric fields from duplicate points
+			let j = i;
+			while (j !== (i1 + 1) % points.length) {
+				for (const key in points[j]) {
+					if (key !== "segment" && 
+						typeof points[j][key] !== 'object' && 
+						isNumeric(points[j][key])) {
+						sum1[key] = (sum1[key] || 0) + parseFloat(points[j][key]);
+						sum0[key] = (sum0[key] || 0) + 1;
+					}
+				}
+				j = (j + 1) % points.length;
+			}
+			
+			// Apply averages to new point
+			for (const key in sum1) {
+				if (sum0[key] > 1) {
+					newPoint[key] = sum1[key] / sum0[key];
+				}
+			}
+			
+			pNew.push(newPoint);
+			
+			// If we wrapped around, also replace the first point
+			if (i1 < i) {
+				pNew[0] = { ...newPoint };
+				break;
+			}
+		}
+		
+		if (iNext < i) break;
+		i = iNext;
+	}
+	
+	if (removedCount > 0) {
+		console.warn(`Removed ${removedCount} duplicate points`);
+	}
+	
+	return pNew;
+}
+
+/**
  * Calculate quality score for a GPX track
  * @param {Object} options - Options object with points and isLoop properties
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -200,8 +353,8 @@ function processGPX(trackFeature, options = {}) {
 		throw new Error("Invalid track feature provided to processGPX");
 	}
 
-	// Convert coordinates to points format expected by quality score calculation
-	const points = trackFeature.geometry.coordinates.map(coord => ({
+	// Convert coordinates to points format expected by processing functions
+	let points = trackFeature.geometry.coordinates.map(coord => ({
 		lat: coord[1],
 		lon: coord[0],
 		ele: coord[2] || 0
@@ -214,12 +367,15 @@ function processGPX(trackFeature, options = {}) {
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
 
-	// For now, implement as identity function - return a deep copy of the input
+	// Eliminate duplicate x,y points
+	points = removeDuplicatePoints({ points, isLoop: options.isLoop || 0 });
+
+	// Convert processed points back to coordinates format for output
 	const processedFeature = {
 		type: trackFeature.type,
 		geometry: {
 			type: trackFeature.geometry.type,
-			coordinates: trackFeature.geometry.coordinates.map(coord => [...coord])
+			coordinates: points.map(p => [p.lon, p.lat, p.ele])
 		},
 		properties: {
 			...trackFeature.properties,
