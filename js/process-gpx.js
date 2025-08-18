@@ -575,6 +575,152 @@ function fixZigZags(points) {
 }
 
 /**
+ * Calculate direction from p1 to p2 in radians
+ * @param {Object} p1 - First point
+ * @param {Object} p2 - Second point
+ * @returns {number} Direction in radians (0 = east, π/2 = north)
+ */
+function latlngDirection(p1, p2) {
+	const [dx, dy] = latlng2dxdy(p1, p2);
+	return Math.atan2(dy, dx);
+}
+
+/**
+ * Average two angles, handling wraparound correctly
+ * @param {number} d1 - First angle in radians
+ * @param {number} d2 - Second angle in radians
+ * @returns {number} Average angle in radians
+ */
+function averageAngles(d1, d2) {
+	return reduceAngle(d1 + 0.5 * reduceAngle(d2 - d1));
+}
+
+/**
+ * Calculate direction of point p2 as average of adjacent segments
+ * @param {Object} p1 - Previous point
+ * @param {Object} p2 - Current point
+ * @param {Object} p3 - Next point
+ * @returns {number} Direction in radians
+ */
+function pointDirection(p1, p2, p3) {
+	return averageAngles(latlngDirection(p1, p2), latlngDirection(p2, p3));
+}
+
+/**
+ * Check if two points are close together
+ * @param {Object} p1 - First point
+ * @param {Object} p2 - Second point
+ * @param {number} sMax - Maximum distance threshold (default 0.05m)
+ * @param {number} zMax - Maximum altitude difference (default 1m)
+ * @returns {boolean} True if points are close
+ */
+function pointsAreClose(p1, p2, sMax = 0.05, zMax = 1) {
+	const dz = (p1.ele !== undefined && p2.ele !== undefined) ? (p2.ele - p1.ele) : 0;
+	return Math.abs(dz) < zMax && latlngDistance(p1, p2) < sMax;
+}
+
+/**
+ * Add direction (heading) field to all points
+ * @param {Object} options - Options object with points and isLoop properties
+ */
+function addDirectionField({ points, isLoop = 0 }) {
+	if (!points.length) return;
+	
+	let u = isLoop ? points.length - 1 : 0;
+	let v = 0;
+	let w = 1;
+	let dPrev;
+	
+	while (v < points.length) {
+		u = v;
+		w = v;
+		
+		// Find previous point that's not too close
+		while (pointsAreClose(points[u], points[v])) {
+			if (isLoop ? ((u - 1 + points.length) % points.length !== w) : (u > 0)) {
+				u = (u - 1 + points.length) % points.length;
+			} else {
+				u = v;
+				break;
+			}
+		}
+		
+		// Find next point that's not too close
+		while (pointsAreClose(points[w], points[v])) {
+			if (isLoop ? ((w + 1) % points.length !== u) : (w < points.length - 1)) {
+				w = (w + 1) % points.length;
+			} else {
+				w = v;
+				break;
+			}
+		}
+		
+		let d = dPrev ?? 0;
+		if (u === v) {
+			if (v !== w) {
+				d = latlngDirection(points[v], points[w]);
+			}
+		} else {
+			if (v === w) {
+				d = latlngDirection(points[u], points[v]);
+			} else {
+				d = pointDirection(points[u], points[v], points[w]);
+			}
+		}
+		
+		if (dPrev !== undefined) {
+			d = dPrev + reduceAngle(d - dPrev);
+		}
+		dPrev = d;
+		points[v].heading = d;
+		v++;
+	}
+}
+
+/**
+ * Find and report loops in the route
+ * @param {Array} points - Array of points
+ * @param {number} isLoop - Whether route is a loop
+ */
+function findLoops(points, isLoop) {
+	note("checking for loops...");
+	const loopDistance = 100;
+	
+	// Add direction field: distance field was just calculated by zig-zag check
+	addDirectionField({ points, isLoop });
+	
+	let u = 0;
+	let v = 0;
+	const loopAngle = 0.7 * TWOPI;
+	
+	while (v < points.length - 1) {
+		const p = points[u];
+		
+		// Find endpoint within loop distance
+		while (v < points.length - 1 && points[v + 1].distance < p.distance + loopDistance) {
+			v++;
+		}
+		
+		if (Math.abs(p.heading - points[v].heading) > loopAngle) {
+			// Find starting point of loop
+			while (u + 1 < v && Math.abs(points[u + 1].heading - points[v].heading) > loopAngle) {
+				u++;
+			}
+			
+			console.warn(`WARNING: loop between distance: ` +
+				`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`);
+			
+			u = v;
+			continue;
+		}
+		u++;
+	}
+	
+	// Clean up heading field
+	deleteField({ points, field: "heading" });
+}
+
+/**
  * Calculate quality score for a GPX track
  * @param {Object} options - Options object with points and isLoop properties
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -836,6 +982,9 @@ function processGPX(trackFeature, options = {}) {
 
 	// Look for zig-zags
 	points = fixZigZags(points);
+
+	// Look for loops
+	findLoops(points, isLoop);
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
