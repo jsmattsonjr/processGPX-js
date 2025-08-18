@@ -21,6 +21,16 @@ function spaceship(a, b) {
 }
 
 /**
+ * Transition function: 1 (x = -1) to 1/2 (x = 0) to 0 (x = 1)
+ * @param {number} x - Input value
+ * @returns {number} Transition value
+ */
+function transition(x) {
+	const PI2 = Math.atan2(1, 0); // π/2
+	return x < -1 ? 1 : x > 1 ? 0 : (1 - Math.sin(x * PI2)) / 2;
+}
+
+/**
  * Logging function (equivalent to Perl's note function)
  * @param {...any} args - Arguments to log
  */
@@ -985,6 +995,45 @@ function processGPX(trackFeature, options = {}) {
 
 	// Look for loops
 	findLoops(points, isLoop);
+
+	// Adjust altitudes if requested
+	if (((options.zShift !== undefined && options.zShift !== 0) || 
+		 (options.zScale !== undefined && options.zScale !== 1))) {
+		// Transition set to change gradient by up to 5%
+		note(`applying z shift = ${options.zShift || 0}, and z scale = ${options.zScale || 1}`);
+		if (options.zShiftStart !== undefined) {
+			note(`zShift start = ${options.zShiftStart}`);
+		}
+		if (options.zShiftEnd !== undefined) {
+			note(`zShift end = ${options.zShiftEnd}`);
+		}
+		
+		const zShift = options.zShift || 0;
+		const zScale = options.zScale || 1;
+		const zOffset = options.zOffset || 0;
+		const zScaleRef = options.zScaleRef || 0;
+		const zShiftDistance = 20 * (1 + Math.abs(zShift));
+		
+		for (const p of points) {
+			const s = p.distance;
+			let dz = (p.ele + zOffset - zScaleRef) * zScale + zShift + zScaleRef - p.ele;
+			
+			if (options.zShiftStart !== undefined && 
+				options.zShiftEnd !== undefined && 
+				options.zShiftEnd < options.zShiftStart) {
+				dz *= transition((options.zShiftStart - s) / zShiftDistance) * 
+					  transition((s - options.zShiftEnd) / zShiftDistance);
+			} else {
+				if (options.zShiftStart !== undefined) {
+					dz *= transition((options.zShiftStart - s) / zShiftDistance);
+				}
+				if (options.zShiftEnd !== undefined) {
+					dz *= transition((s - options.zShiftEnd) / zShiftDistance);
+				}
+			}
+			p.ele += dz;
+		}
+	}
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
