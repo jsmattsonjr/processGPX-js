@@ -30,6 +30,15 @@ class GPXParser {
 				throw new Error("No track LineString found in GPX file");
 			}
 
+			// If track has no name, use filename without .gpx extension
+			if (!trackFeature.properties || !trackFeature.properties.name) {
+				const basename = file.name.replace(/\.gpx$/i, '');
+				if (!trackFeature.properties) {
+					trackFeature.properties = {};
+				}
+				trackFeature.properties.name = basename;
+			}
+
 			return trackFeature;
 		} catch (error) {
 			throw new Error(`Failed to parse GPX file: ${error.message}`);
