@@ -591,6 +591,24 @@ function processGPX(trackFeature, options = {}) {
 		max: options.cropMax
 	});
 
+	// AutoLoop: automatically determine if -loop should be invoked
+	let isLoop = options.isLoop || 0;
+	let copyPoint = options.copyPoint || 0;
+	const autoLoop = options.autoLoop !== undefined ? options.autoLoop : options.auto;
+	
+	if (autoLoop) {
+		if (!isLoop &&
+			options.cropMin === undefined &&
+			options.cropMax === undefined &&
+			latlngDistance(points[0], points[points.length - 1]) < 150 &&
+			points.length > 3 &&
+			latlngDotProduct(points[points.length - 2], points[points.length - 1], points[0], points[1]) > -0.1) {
+			isLoop = 1;
+			copyPoint = 0;
+			note("setting -loop");
+		}
+	}
+
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
 		type: trackFeature.type,
