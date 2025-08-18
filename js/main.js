@@ -48,6 +48,9 @@ class ProcessGPXApp {
 			// Show results screen
 			this.showResultsScreen();
 
+			// Update track name in sidebar
+			this.updateTrackName(trackFeature);
+
 			// Initialize map and chart
 			await this.initializeVisualization(trackFeature);
 
@@ -97,6 +100,16 @@ class ProcessGPXApp {
 			console.error("Error processing GPX route:", error);
 			this.showError(error.message);
 		}
+	}
+
+	/**
+	 * Update track name display in sidebar
+	 * @param {Object} trackFeature - LineString feature object
+	 */
+	updateTrackName(trackFeature) {
+		const trackNameElement = document.getElementById("trackName");
+		const trackName = trackFeature.properties?.name || "Unnamed Route";
+		trackNameElement.textContent = trackName;
 	}
 
 	/**

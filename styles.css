@@ -149,10 +149,19 @@ body {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
 	background: rgba(255, 255, 255, 0.95);
 	border-radius: 8px;
 	padding: 20px;
+}
+
+.track-name {
+	font-size: 1.2rem;
+	font-weight: 600;
+	color: #2c3e50;
+	margin-bottom: 20px;
+	text-align: center;
+	word-wrap: break-word;
+	line-height: 1.3;
 }
 
 .process-button {
