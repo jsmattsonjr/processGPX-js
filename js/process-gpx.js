@@ -276,6 +276,203 @@ function removeDuplicatePoints({ points, isLoop = 0 }) {
 }
 
 /**
+ * Add distance field to points array (cumulative distance from start)
+ * @param {Array} points - Array of points
+ */
+function addDistanceField({ points }) {
+	if (!points.length) return;
+	points[0].distance = 0;
+	for (let i = 1; i < points.length; i++) {
+		points[i].distance = points[i - 1].distance + latlngDistance(points[i - 1], points[i]);
+	}
+}
+
+/**
+ * Calculate total course distance
+ * @param {Object} options - Options object with points and isLoop properties
+ * @returns {number} Total distance in meters
+ */
+function calcCourseDistance({ points, isLoop }) {
+	if (!points.length) return 0;
+	if (points[points.length - 1].distance === undefined) {
+		addDistanceField({ points });
+	}
+	let distance = points[points.length - 1].distance;
+	if (isLoop && points.length > 1) {
+		distance += latlngDistance(points[points.length - 1], points[0]);
+	}
+	return distance;
+}
+
+/**
+ * Interpolate point between two points at fraction f
+ * @param {Object} p1 - First point
+ * @param {Object} p2 - Second point  
+ * @param {number} f - Fraction (0 = p1, 1 = p2)
+ * @returns {Object} Interpolated point
+ */
+function interpolatePoint(p1, p2, f) {
+	const newPoint = {};
+	for (const k in p1) {
+		if (p1[k] !== undefined && p2[k] !== undefined) {
+			if (k === "segment") {
+				if (p1[k] === p2[k]) {
+					newPoint[k] = p1[k];
+				} else {
+					newPoint[k] = 0;
+				}
+			} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
+				newPoint[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
+			} else {
+				newPoint[k] = (f < 0.5) ? p1[k] : p2[k];
+			}
+		}
+	}
+	return newPoint;
+}
+
+/**
+ * Crop points based on distance ranges and delete ranges
+ * @param {Object} options - Options object with points, isLoop, deleteRange, min, max
+ * @returns {Array} New array of cropped points
+ */
+function cropPoints({ points, isLoop = 0, deleteRange = [], min: cropMin, max: cropMax }) {
+	const ranges = [];
+	
+	const courseDistance = calcCourseDistance({ points, isLoop });
+	
+	// If cropMin and cropMax are reversed, treat them as a delete range
+	if (cropMin !== undefined && cropMax !== undefined && cropMax < cropMin) {
+		ranges.push([cropMax, cropMin]);
+		cropMin = undefined;
+		cropMax = undefined;
+	}
+	
+	// Process deleteRange pairs
+	for (let i = 0; i < deleteRange.length; i += 2) {
+		let r1 = deleteRange[i];
+		let r2 = deleteRange[i + 1];
+		
+		// Points reversed: acts like cropMin, cropMax
+		if (r1 === undefined || r2 === undefined || r2 < r1) {
+			if (r1 !== undefined && (cropMax === undefined || r1 < cropMax)) {
+				cropMax = r1;
+			}
+			if (r2 !== undefined && (cropMin === undefined || r2 > cropMin)) {
+				cropMin = r2;
+			}
+		} else {
+			// Check to see if range overlaps beginning or end of the course
+			let s1 = points[0].distance;
+			if (cropMin !== undefined && cropMin > s1) s1 = cropMin;
+			let s2 = courseDistance;
+			if (cropMax !== undefined && cropMax < s2) s2 = cropMax;
+			
+			// Skip if range outside of course
+			if ((r1 < s1 && r2 < s1) || (r1 > s2 && r2 > s2)) continue;
+			
+			// Adjust crop limits if range overlaps edge of course
+			let overlap = 0;
+			if (r1 < s1) {
+				cropMin = r2;
+				overlap++;
+			}
+			if (r2 > s2) {
+				cropMax = r1;
+				overlap++;
+			}
+			if (overlap) continue;
+			
+			// Check if existing points overlap any ranges so far
+			let doOverlaps = true;
+			while (doOverlaps) {
+				doOverlaps = false;
+				for (let j = 0; j < ranges.length; j++) {
+					const r = ranges[j];
+					const r3 = r[0];
+					const r4 = r[1];
+					
+					let rangeOverlap = 0;
+					// New range straddles beginning of old range
+					if (r1 < r3 && r2 > r3) {
+						rangeOverlap++;
+						if (r4 > r2) r2 = r4;
+					} else if (r2 < r4 && r2 > r4) {
+						// Extend existing range
+						r1 = r3;
+						rangeOverlap++;
+					}
+					
+					// If overlap, delete the existing range and continue
+					if (rangeOverlap) {
+						ranges.splice(j, 1);
+						doOverlaps = true;
+						break;
+					}
+				}
+			}
+			ranges.push([r1, r2]);
+		}
+	}
+	
+	if (cropMin !== undefined || cropMax !== undefined) {
+		note("cropping ", 
+			cropMin !== undefined ? `from ${cropMin} ` : "",
+			cropMax !== undefined ? `to ${cropMax} ` : "", 
+			"meters...");
+	}
+	
+	for (const r of ranges) {
+		note(`deleting range from ${r[0]} meters to ${r[1]} meters.`);
+	}
+	
+	// Interpolate needed points
+	const interpolatePoints = [];
+	if (cropMin !== undefined) interpolatePoints.push(cropMin);
+	if (cropMax !== undefined) interpolatePoints.push(cropMax);
+	for (const r of ranges) {
+		if (r[0] !== undefined) interpolatePoints.push(r[0]);
+		if (r[1] !== undefined) interpolatePoints.push(r[1]);
+	}
+	
+	const pNew = [];
+	let s;
+	
+	pointLoop: for (let i = 0; i < points.length; i++) {
+		const p = points[i];
+		const sPrev = s;
+		s = p.distance;
+		
+		// Add interpolated points if needed
+		for (const s0 of interpolatePoints) {
+			if (i > 0 && s0 > 0 && s > s0 && sPrev < s0) {
+				const ds = s - sPrev;
+				const f = (s0 - sPrev) / ds;
+				const d1 = f * ds;
+				const d2 = (1 - f) * ds;
+				if (d1 > 0.01 && d2 > 0.01) {
+					pNew.push(interpolatePoint(points[i - 1], p, f));
+				}
+			}
+		}
+		
+		// Skip points outside crop bounds
+		if (cropMin !== undefined && s < cropMin) continue pointLoop;
+		if (cropMax !== undefined && s > cropMax) continue pointLoop;
+		
+		// Skip points inside delete ranges
+		for (const r of ranges) {
+			if (s > r[0] && s < r[1]) continue pointLoop;
+		}
+		
+		pNew.push(p);
+	}
+	
+	deleteDerivedFields(pNew);
+	return pNew;
+}
+
+/**
  * Calculate quality score for a GPX track
  * @param {Object} options - Options object with points and isLoop properties
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -381,6 +578,18 @@ function processGPX(trackFeature, options = {}) {
 		}
 		points = pNew;
 	}
+
+	// Skip 'join' functionality and convert unnamed segments to 0
+
+	// Crop ranges if specified
+	// This is done before auto-options since it may change whether the course is a loop
+	points = cropPoints({ 
+		points, 
+		isLoop: options.isLoop || 0, 
+		deleteRange: options.deleteRange || [],
+		min: options.cropMin,
+		max: options.cropMax
+	});
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
