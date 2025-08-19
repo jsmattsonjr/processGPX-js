@@ -94,7 +94,7 @@ export class ElevationChart {
 				hover: {
 					mode: null,
 				},
-				onHover: (event, activeElements, chart) => {
+				onHover: (event, _activeElements, chart) => {
 					const canvasPosition = Chart.helpers.getRelativePosition(
 						event,
 						chart,

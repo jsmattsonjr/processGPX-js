@@ -25,7 +25,7 @@ function int(x) {
  * @param {number} b - Second value
  * @returns {number} -1 if a < b, 0 if a == b, 1 if a > b
  */
-function spaceship(a, b) {
+function _spaceship(a, b) {
 	return (a > b) - (a < b);
 }
 
@@ -1153,11 +1153,11 @@ function addVectorToPoint(point, vector) {
 /**
  * Straighten points between indices
  * @param {Array} points - Array of points
- * @param {boolean} isLoop - Whether route is a loop
+ * @param {boolean} _isLoop - Whether route is a loop
  * @param {number} startIndex - Start index
  * @param {number} endIndex - End index
  */
-function straightenPoints(points, isLoop, startIndex, endIndex) {
+function straightenPoints(points, _isLoop, startIndex, endIndex) {
 	// Ensure distance field exists
 	if (points[0].distance === undefined) {
 		addDistanceField({ points });
@@ -1243,17 +1243,17 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 
 		// Check if points meet the alignment test
 		if (!alignmentTest(points, i, j, maxDeviation)) {
-			continue iLoop;
+			continue;
 		}
 
 		// We've got a line: try to extend it
-		kLoop: while (true) {
+		while (true) {
 			const k = j + 1;
 			if (!isLoop && k > points.length - 1) {
 				break;
 			}
 			if (!alignmentTest(points, i, k, maxDeviation)) {
-				break kLoop;
+				break;
 			}
 			j = k;
 		}
@@ -1261,17 +1261,17 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		// See if we can improve the score by removing points from the ends
 		// There's a tendency for the algorithm to extend the straight into turns, which affects
 		// the direction of the straight, so try to back down on that
-		let [avg, max, rms] = calcDeviationStats(points, i, j);
+		let [_avg, _max, rms] = calcDeviationStats(points, i, j);
 		let L = latlngDistance(
 			points[i % points.length],
 			points[j % points.length],
 		);
 
-		kLoop: while (true) {
+		while (true) {
 			let count = 0;
 			let k = j - 1;
 			if (k < i + 2) {
-				break kLoop;
+				break;
 			}
 			const L2 = latlngDistance(
 				points[i % points.length],
@@ -1282,8 +1282,8 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 				if (rms2 * L < rms * L2) {
 					j = k;
 					L = L2;
-					avg = avg2;
-					max = max2;
+					_avg = avg2;
+					_max = max2;
 					rms = rms2;
 					count++;
 				}
@@ -1291,7 +1291,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 
 			k = i + 1;
 			if (k > j - 2) {
-				break kLoop;
+				break;
 			}
 			const L3 = latlngDistance(
 				points[k % points.length],
@@ -1302,14 +1302,14 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 				if (rms3 * L < rms * L3) {
 					j = k;
 					L = L3;
-					avg = avg3;
-					max = max3;
+					_avg = avg3;
+					_max = max3;
 					rms = rms3;
 					count++;
 				}
 			}
 			if (count === 0) {
-				break kLoop;
+				break;
 			}
 		}
 
@@ -1377,7 +1377,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Loop sign
-	const loopSign = options.loopLeft
+	const _loopSign = options.loopLeft
 		? -1
 		: options.loopRight
 			? 1
@@ -1392,10 +1392,10 @@ export function processGPX(trackFeature, options = {}) {
 		options.autoStraightenLength ?? options.autoStraighten?.[1] ?? 100;
 
 	// Named segments
-	const namedSegments = (options.namedSegments || "").split(/[;]/);
-	const autoSegmentNames = (options.autoSegmentNames || "")
-		.split(/[,;]/)
-		.map((s) => s.replace(/^\s*(.*?)\s*$/, "$1"));
+	// const namedSegments = (options.namedSegments || "").split(/[;]/);
+	// const autoSegmentNames = (options.autoSegmentNames || "")
+	// 	.split(/[,;]/)
+	// 	.map((s) => s.replace(/^\s*(.*?)\s*$/, "$1"));
 
 	// Convert max slope to percent
 	if (options.maxSlope !== undefined && options.maxSlope < 1) {
@@ -1598,12 +1598,12 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Convert angle options to radians
 	options.splineDegs = options.splineDegs ?? 0;
-	const splineRadians = options.splineDegs * DEG2RAD;
-	const splineMaxRadians = options.splineMaxDegs * DEG2RAD;
+	const _splineRadians = options.splineDegs * DEG2RAD;
+	const _splineMaxRadians = options.splineMaxDegs * DEG2RAD;
 
 	options.arcFitDegs = options.arcFitDegs ?? 0;
-	const arcFitRadians = options.arcFitDegs * DEG2RAD;
-	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
+	const _arcFitRadians = options.arcFitDegs * DEG2RAD;
+	const _arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
 
 	// Check if loop specified for apparent point-to-point
 	if (options.isLoop) {
