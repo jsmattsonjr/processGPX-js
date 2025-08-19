@@ -1,7 +1,7 @@
 /**
  * Map visualization using Leaflet for route display
  */
-class MapVisualization {
+export class MapVisualization {
 	constructor(containerId) {
 		this.containerId = containerId;
 		this.map = null;
@@ -66,7 +66,11 @@ class MapVisualization {
 		this.clearRoute();
 
 		// Validate that we have a LineString feature
-		if (!trackFeature || !trackFeature.geometry || trackFeature.geometry.type !== "LineString") {
+		if (
+			!trackFeature ||
+			!trackFeature.geometry ||
+			trackFeature.geometry.type !== "LineString"
+		) {
 			throw new Error("Invalid track feature provided");
 		}
 
@@ -143,7 +147,11 @@ class MapVisualization {
 		}
 
 		// Validate that we have a LineString feature
-		if (!processedTrackFeature || !processedTrackFeature.geometry || processedTrackFeature.geometry.type !== "LineString") {
+		if (
+			!processedTrackFeature ||
+			!processedTrackFeature.geometry ||
+			processedTrackFeature.geometry.type !== "LineString"
+		) {
 			throw new Error("Invalid processed track feature provided");
 		}
 
@@ -164,7 +172,8 @@ class MapVisualization {
 		}).addTo(this.map);
 
 		// Add processed route info popup on click
-		const routeName = processedTrackFeature.properties?.name || "Processed Route";
+		const routeName =
+			processedTrackFeature.properties?.name || "Processed Route";
 		const coordinates = processedTrackFeature.geometry.coordinates;
 		this.processedRouteLayer.bindPopup(`
             <div class="route-popup">
@@ -174,7 +183,6 @@ class MapVisualization {
             </div>
         `);
 	}
-
 
 	/**
 	 * Clear all route data from map
@@ -197,7 +205,6 @@ class MapVisualization {
 			this.endMarker = null;
 		}
 	}
-
 
 	/**
 	 * Destroy the map

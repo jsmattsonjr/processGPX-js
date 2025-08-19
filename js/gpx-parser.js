@@ -1,11 +1,10 @@
 /**
  * GPX parsing using togeojson
  */
-class GPXParser {
+export class GPXParser {
 	constructor() {
 		// togeojson is loaded from CDN
 	}
-
 	/**
 	 * Parse GPX file to GeoJSON and return first LineString feature
 	 * @param {File} file - GPX file to parse
@@ -32,7 +31,7 @@ class GPXParser {
 
 			// If track has no name, use filename without .gpx extension
 			if (!trackFeature.properties || !trackFeature.properties.name) {
-				const basename = file.name.replace(/\.gpx$/i, '');
+				const basename = file.name.replace(/\.gpx$/i, "");
 				if (!trackFeature.properties) {
 					trackFeature.properties = {};
 				}

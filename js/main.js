@@ -1,3 +1,9 @@
+import { ElevationChart } from "./elevation-chart.js";
+import { downloadTrackAsGPX } from "./gpx-export.js";
+import { GPXParser } from "./gpx-parser.js";
+import { MapVisualization } from "./map-visualization.js";
+import { processGPX } from "./process-gpx.js";
+
 /**
  * Main application controller for processGPX
  */
@@ -221,7 +227,7 @@ class ProcessGPXApp {
 				straightStart: [],
 
 				// shortcut options
-				auto: 1 // TODO: hardcoded for now
+				auto: 1, // TODO: hardcoded for now
 			};
 
 			// Process the current route with options
@@ -364,3 +370,4 @@ class ProcessGPXApp {
 document.addEventListener("DOMContentLoaded", () => {
 	new ProcessGPXApp();
 });
+// Import necessary modules

@@ -8,18 +8,8 @@ This is a JavaScript port of the original Perl processGPX tool (v0.52) designed 
 
 ## Code Standards and Formatting
 
-**Biome is used for all formatting and linting**. Before committing any `.js`, `.css`, or `.html` files:
-
-```bash
-# Format all supported files
-npx biome format --write .
-
-# Check formatting and linting
-npx biome check .
-
-# Fix auto-fixable issues  
-npx biome check --apply .
-```
+Prefer "" for string literals.
+Add a newline at EOF.
 
 ## Planned Architecture
 

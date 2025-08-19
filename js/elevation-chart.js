@@ -3,36 +3,36 @@
  */
 
 // Register the zoom plugin
-if (typeof ChartZoom !== 'undefined') {
+if (typeof ChartZoom !== "undefined") {
 	Chart.register(ChartZoom);
 }
 
 // Custom crosshair plugin
 const crosshairPlugin = {
-	id: 'crosshair',
+	id: "crosshair",
 	afterDatasetsDraw(chart) {
 		if (chart.crosshair) {
 			const ctx = chart.ctx;
 			const { top, bottom } = chart.chartArea;
-			
+
 			ctx.save();
-			ctx.strokeStyle = 'rgba(255, 107, 107, 0.8)';
+			ctx.strokeStyle = "rgba(255, 107, 107, 0.8)";
 			ctx.lineWidth = 2;
 			ctx.setLineDash([5, 5]);
-			
+
 			ctx.beginPath();
 			ctx.moveTo(chart.crosshair.x, top);
 			ctx.lineTo(chart.crosshair.x, bottom);
 			ctx.stroke();
-			
+
 			ctx.restore();
 		}
-	}
+	},
 };
 
 Chart.register(crosshairPlugin);
 
-class ElevationChart {
+export class ElevationChart {
 	constructor(containerId) {
 		this.containerId = containerId;
 		this.chart = null;
@@ -69,8 +69,10 @@ class ElevationChart {
 					{
 						label: "Original Elevation",
 						data: elevationData.elevations.map((elevation, index) => ({
-							x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
-							y: elevation
+							x: elevationData.distances
+								? elevationData.distances[index] / 1000
+								: index,
+							y: elevation,
 						})),
 						borderColor: "#3498db",
 						backgroundColor: "rgba(52, 152, 219, 0.3)",
@@ -93,12 +95,19 @@ class ElevationChart {
 					mode: null,
 				},
 				onHover: (event, activeElements, chart) => {
-					const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+					const canvasPosition = Chart.helpers.getRelativePosition(
+						event,
+						chart,
+					);
 					const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
-					
-					if (dataX !== null && canvasPosition.x >= chart.chartArea.left && canvasPosition.x <= chart.chartArea.right) {
+
+					if (
+						dataX !== null &&
+						canvasPosition.x >= chart.chartArea.left &&
+						canvasPosition.x <= chart.chartArea.right
+					) {
 						chart.crosshair = {
-							x: canvasPosition.x
+							x: canvasPosition.x,
 						};
 						chart.draw();
 					}
@@ -106,39 +115,37 @@ class ElevationChart {
 				plugins: {
 					legend: {
 						display: true,
-						position: 'top',
+						position: "top",
 					},
 					tooltip: {
 						callbacks: {
-							title: function (context) {
+							title: (context) => {
 								const distance = context[0].parsed.x;
 								return `Distance: ${distance.toFixed(2)}km`;
 							},
-							label: function (context) {
-								return `Elevation: ${Math.round(context.parsed.y)}m`;
-							},
+							label: (context) => `Elevation: ${Math.round(context.parsed.y)}m`,
 						},
 					},
 					zoom: {
 						limits: {
-							x: {min: 0, max: maxDistance},
-							y: {min: yMin, max: yMax},
+							x: { min: 0, max: maxDistance },
+							y: { min: yMin, max: yMax },
 						},
 						pan: {
 							enabled: true,
-							mode: 'x',
+							mode: "x",
 						},
 						zoom: {
 							wheel: {
 								enabled: true,
 							},
-							mode: 'x',
-						}
+							mode: "x",
+						},
 					},
 				},
 				scales: {
 					x: {
-						type: 'linear',
+						type: "linear",
 						display: true,
 						title: {
 							display: true,
@@ -172,7 +179,7 @@ class ElevationChart {
 		});
 
 		// Add mouse leave event to hide crosshair
-		ctx.addEventListener('mouseleave', () => {
+		ctx.addEventListener("mouseleave", () => {
 			this.chart.crosshair = null;
 			this.chart.draw();
 		});
@@ -185,10 +192,14 @@ class ElevationChart {
 	updateChart(trackFeature) {
 		if (this.chart) {
 			const elevationData = this.extractElevationData(trackFeature);
-			this.chart.data.datasets[0].data = elevationData.elevations.map((elevation, index) => ({
-				x: elevationData.distances ? elevationData.distances[index] / 1000 : index,
-				y: elevation
-			}));
+			this.chart.data.datasets[0].data = elevationData.elevations.map(
+				(elevation, index) => ({
+					x: elevationData.distances
+						? elevationData.distances[index] / 1000
+						: index,
+					y: elevation,
+				}),
+			);
 			this.chart.update();
 		} else {
 			this.createChart(trackFeature);
@@ -202,7 +213,11 @@ class ElevationChart {
 	 */
 	extractElevationData(trackFeature) {
 		// Validate that we have a LineString feature
-		if (!trackFeature || !trackFeature.geometry || trackFeature.geometry.type !== "LineString") {
+		if (
+			!trackFeature ||
+			!trackFeature.geometry ||
+			trackFeature.geometry.type !== "LineString"
+		) {
 			throw new Error("Invalid track feature provided");
 		}
 
@@ -219,7 +234,7 @@ class ElevationChart {
 				const prevCoord = coordinates[i - 1];
 				const from = turf.point([prevCoord[0], prevCoord[1]]);
 				const to = turf.point([lon, lat]);
-				const distance = turf.distance(from, to, { units: 'meters' });
+				const distance = turf.distance(from, to, { units: "meters" });
 				cumulativeDistance += distance;
 			}
 
@@ -243,16 +258,22 @@ class ElevationChart {
 		}
 
 		// Extract elevation data from processed track feature
-		const processedElevationData = this.extractElevationData(processedTrackFeature);
-		
+		const processedElevationData = this.extractElevationData(
+			processedTrackFeature,
+		);
+
 		// Get original data
 		const originalData = this.chart.data.datasets[0].data;
-		
+
 		// Create datasets for the differential fill effect
-		const processedData = processedElevationData.elevations.map((elevation, index) => ({
-			x: processedElevationData.distances ? processedElevationData.distances[index] / 1000 : index,
-			y: elevation
-		}));
+		const processedData = processedElevationData.elevations.map(
+			(elevation, index) => ({
+				x: processedElevationData.distances
+					? processedElevationData.distances[index] / 1000
+					: index,
+				y: elevation,
+			}),
+		);
 
 		// Clear existing datasets and rebuild
 		this.chart.data.datasets = [];
@@ -273,7 +294,7 @@ class ElevationChart {
 
 		// 2. Original elevation with full fill (will overlay processed where higher)
 		this.chart.data.datasets.push({
-			label: "Original Elevation", 
+			label: "Original Elevation",
 			data: originalData,
 			borderColor: "#3498db",
 			backgroundColor: "rgba(52, 152, 219, 0.3)",
