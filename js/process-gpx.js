@@ -10,6 +10,15 @@ const DEG2RAD = PI / 180;
 const LAT2Y = REARTH * DEG2RAD;
 
 /**
+ * Perl-style int() function that truncates towards zero
+ * @param {number} x - Number to truncate
+ * @returns {number} Truncated integer
+ */
+function int(x) {
+	return x < 0 ? Math.ceil(x) : Math.floor(x);
+}
+
+/**
  * JavaScript equivalent of Perl's spaceship operator (<=>)
  * Returns -1, 0, or 1 based on comparison
  * @param {number} a - First value
@@ -547,9 +556,9 @@ function fixZigZags(points) {
 			if (p2.distance - p1.distance < dzigzag) {
 				console.warn(
 					`WARNING: zig-zag found on points (0, 2, 3 ...) : ${U1} and ${U2} : ` +
-						`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
-						`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
-						`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
+					`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
+					`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
+					`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
 				);
 
 				// Repairing zig-zags...
@@ -749,7 +758,7 @@ function findLoops(points, isLoop) {
 
 			console.warn(
 				`WARNING: loop between distance: ` +
-					`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`,
+				`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`,
 			);
 
 			u = v;
@@ -1037,10 +1046,10 @@ function calcQualityScore({ points, isLoop }) {
 			!isLoop && i === 0
 				? 0
 				: latlngAngle(
-						points[(i - 1 + points.length) % points.length],
-						points[i],
-						points[(i + 1) % points.length],
-					),
+					points[(i - 1 + points.length) % points.length],
+					points[i],
+					points[(i + 1) % points.length],
+				),
 		);
 
 		if (
@@ -1074,6 +1083,255 @@ function calcQualityScore({ points, isLoop }) {
 }
 
 /**
+ * Calculate deviation statistics for a range of points relative to connection of endpoints
+ * @param {Array} points - Array of points
+ * @param {number} startIndex - Start index
+ * @param {number} endIndex - End index
+ * @returns {Array} [avg, max, rms] deviation statistics
+ */
+function calcDeviationStats(points, startIndex, endIndex) {
+	let max = 0;
+	const p1 = points[startIndex % points.length];
+	const p2 = points[endIndex % points.length];
+	const c = Math.cos(((p1.lat + p2.lat) * DEG2RAD) / 2.0);
+	const dx0 = (p2.lon - p1.lon) * LAT2Y * c;
+	const dy0 = (p2.lat - p1.lat) * LAT2Y;
+	const L = Math.sqrt(dx0 ** 2 + dy0 ** 2);
+
+	if (Math.abs(L) < 0.001 || endIndex < startIndex + 1) {
+		return [0, 0, 0];
+	}
+
+	const du0 = dx0 / L;
+	const dv0 = dy0 / L;
+	let sum = 0;
+	let sum2 = 0;
+
+	for (let i = startIndex + 1; i <= endIndex - 1; i++) {
+		const dx = (points[i % points.length].lon - p1.lon) * LAT2Y * c;
+		const dy = (points[i % points.length].lat - p1.lat) * LAT2Y;
+		// deviation to the right
+		const deviation = dx * dv0 - dy * du0;
+		sum += deviation;
+		sum2 += deviation ** 2;
+		if (Math.abs(deviation) > max) {
+			max = Math.abs(deviation);
+		}
+	}
+
+	const avg = sum / (endIndex - startIndex - 1);
+	const rms = Math.sqrt(sum2 / (endIndex - startIndex - 1));
+	return [avg, max, rms];
+}
+
+/**
+ * Add vector to point to get new lat/lon position
+ * @param {Object} point - Point with lat, lon properties
+ * @param {Array} vector - [dx, dy] vector in meters
+ * @returns {Object} New point with lat, lon properties
+ */
+function addVectorToPoint(point, vector) {
+	const [dx, dy] = vector;
+	const lon0 = point.lon;
+	const lat0 = point.lat;
+	const dlat = dy / LAT2Y; // this is independent of latitude
+	let lat = lat0 + dlat;
+	lat -= 360 * Math.floor(0.5 + lat / 360);
+
+	if (Math.abs(lat) > 90) {
+		throw new Error("ERROR -- attempted to cross beyond pole!");
+	}
+
+	const c = Math.cos(DEG2RAD * (lat0 + dlat / 2));
+	const dlon = dx / c / LAT2Y;
+	let lon = lon0 + dlon;
+	lon -= 360 * Math.floor(0.5 + lon / 360);
+
+	return { lat: lat, lon: lon };
+}
+
+/**
+ * Straighten points between indices
+ * @param {Array} points - Array of points
+ * @param {boolean} isLoop - Whether route is a loop
+ * @param {number} startIndex - Start index
+ * @param {number} endIndex - End index
+ */
+function straightenPoints(points, isLoop, startIndex, endIndex) {
+	// Ensure distance field exists
+	if (points[0].distance === undefined) {
+		addDistanceField({ points });
+	}
+
+	// If we wrap around, then use a negative number for the start index
+	if (startIndex > endIndex) {
+		startIndex -= points.length;
+	}
+
+	const [rx, ry] = latlng2dxdy(points[startIndex], points[endIndex]);
+
+	// If neither rx nor ry is nonzero, do nothing
+	if (rx === 0 && ry === 0) {
+		return;
+	}
+
+	const r2 = rx ** 2 + ry ** 2;
+
+	// For each point, find the projection of the point on the segment
+	for (let i = startIndex + 1; i <= endIndex - 1; i++) {
+		const [dx, dy] = latlng2dxdy(points[startIndex], points[i]);
+		// Find the projection onto the line
+		// projection: r dot rLine / r
+		const f = (dx * rx + dy * ry) / r2;
+		const pNew = addVectorToPoint(points[startIndex], [rx * f, ry * f]);
+		points[i].lat = pNew.lat;
+		points[i].lon = pNew.lon;
+	}
+}
+
+/**
+ * Automatically find segments to be straightened
+ * segments have a maximum deviation and also a check on
+ * the correlation of the deviations
+ * step through the route (perhaps with wrap-around for a loop)
+ * with first index at each point, a second index at the minimum
+ * length, keeping track of the maximum, rms, and average deviations
+ * if the minimum length meets the criteria, then extend the length
+ * until the criteria are broken, then jump to the endpoint
+ * and continue (straight segments cannot overlap)
+ * @param {Array} points - Array of points
+ * @param {boolean} isLoop - Whether route is a loop
+ * @param {number} minLength - Minimum length for straightening
+ * @param {number} maxDeviation - Maximum deviation for straightening
+ */
+function autoStraighten(points, isLoop, minLength, maxDeviation) {
+	const courseDistance =
+		points[0].distance !== undefined
+			? calcCourseDistance(points, isLoop)
+			: (() => {
+				addDistanceField({ points });
+				return calcCourseDistance(points, isLoop);
+			})();
+
+	function alignmentTest(points, i, j, maxDeviation) {
+		const [avg, max, rms] = calcDeviationStats(points, i, j);
+		return (
+			max < maxDeviation &&
+			Math.abs(avg) < maxDeviation / 4 &&
+			rms < maxDeviation / 2
+		);
+	}
+
+	let j = 1;
+	let pointCount = 0;
+
+	iLoop: for (let i = 0; i <= points.length - 1; i++) {
+		// Keep point j ahead of i at min distance
+		while (
+			j < i + 2 ||
+			points[j].distance +
+			int(j / points.length) * courseDistance -
+			points[i].distance <
+			minLength
+		) {
+			j++;
+			// If we cannot get a segment long enough on point-to-point, we're too close to the finish
+			if (!(isLoop || j <= points.length - 1)) {
+				break iLoop;
+			}
+		}
+
+		// Check if points meet the alignment test
+		if (!alignmentTest(points, i, j, maxDeviation)) {
+			continue iLoop;
+		}
+
+		// We've got a line: try to extend it
+		kLoop: while (true) {
+			const k = j + 1;
+			if (!isLoop && k > points.length - 1) {
+				break;
+			}
+			if (!alignmentTest(points, i, k, maxDeviation)) {
+				break kLoop;
+			}
+			j = k;
+		}
+
+		// See if we can improve the score by removing points from the ends
+		// There's a tendency for the algorithm to extend the straight into turns, which affects
+		// the direction of the straight, so try to back down on that
+		let [avg, max, rms] = calcDeviationStats(points, i, j);
+		let L = latlngDistance(
+			points[i % points.length],
+			points[j % points.length],
+		);
+
+		kLoop: while (true) {
+			let count = 0;
+			let k = j - 1;
+			if (k < i + 2) {
+				break kLoop;
+			}
+			const L2 = latlngDistance(
+				points[i % points.length],
+				points[k % points.length],
+			);
+			if (L2 > minLength) {
+				const [avg2, max2, rms2] = calcDeviationStats(points, i, k);
+				if (rms2 * L < rms * L2) {
+					j = k;
+					L = L2;
+					avg = avg2;
+					max = max2;
+					rms = rms2;
+					count++;
+				}
+			}
+
+			k = i + 1;
+			if (k > j - 2) {
+				break kLoop;
+			}
+			const L3 = latlngDistance(
+				points[k % points.length],
+				points[j % points.length],
+			);
+			if (L3 > minLength) {
+				const [avg3, max3, rms3] = calcDeviationStats(points, k, j);
+				if (rms3 * L < rms * L3) {
+					j = k;
+					L = L3;
+					avg = avg3;
+					max = max3;
+					rms = rms3;
+					count++;
+				}
+			}
+			if (count === 0) {
+				break kLoop;
+			}
+		}
+
+		// We found a straight section! Now straighten it, and start over with the last straightened point
+		// This deletes the distance field
+		straightenPoints(points, isLoop, i, j);
+		pointCount += j - i - 2;
+		// Jump to end of straightened portion
+		i = j;
+	}
+
+	// These fields are now invalid
+	if (pointCount > 0) {
+		note(`autoStraighten: total straightened points = ${pointCount}`);
+		deleteField({ points, field: "distance" });
+		if (points[0].heading !== undefined) {
+			deleteField({ points, field: "heading" });
+		}
+	}
+}
+
+/**
  * Process a GPX track feature to optimize and improve the route
  * @param {Object} trackFeature - LineString feature object from GPX parsing
  * @param {Object} options - Processing options dictionary
@@ -1088,6 +1346,81 @@ export function processGPX(trackFeature, options = {}) {
 	) {
 		throw new Error("Invalid track feature provided to processGPX");
 	}
+
+	// Make sure repeat is in range
+	if ((options.repeat || 0) > 99) {
+		throw new Error("-repeat limited to range 0 to 99");
+	}
+
+	// Check loopLeft and loopRight
+	if (options.loopLeft && options.loopRight) {
+		throw new Error("ERROR: you cannot specify both -loopLeft and -loopRight");
+	}
+
+	// Short-cut for out-and-back
+	if (options.outAndBack || options.outAndBackLap) {
+		if (options.outAndBackLap) {
+			options.rLap = options.rLap ?? 8;
+		} else {
+			options.rLap = options.rLap ?? 0;
+		}
+		options.autoSpacing = options.autoSpacing ?? 1;
+		options.lSmooth = options.lSmooth ?? 5;
+		options.laneShift =
+			options.laneShift ?? (options.selectiveLaneShift?.length ? 0 : 6);
+		options.minRadius = options.minRadius ?? 6;
+		options.prune = options.prune ?? 1;
+		options.rTurnaround = options.rTurnaround ?? 8;
+		options.rUTurn = options.rUTurn ?? 8;
+		options.spacing = options.spacing ?? 10;
+		options.splineDegs = options.splineDegs ?? 0;
+	}
+
+	// Loop sign
+	const loopSign = options.loopLeft
+		? -1
+		: options.loopRight
+			? 1
+			: options.laneShift !== undefined && options.laneShift < 0
+				? -1
+				: 1;
+
+	// Auto-straighten
+	options.autoStraightenDeviation =
+		options.autoStraightenDeviation ?? options.autoStraighten?.[0] ?? 0;
+	options.autoStraightenLength =
+		options.autoStraightenLength ?? options.autoStraighten?.[1] ?? 100;
+
+	// Named segments
+	const namedSegments = (options.namedSegments || "").split(/[;]/);
+	const autoSegmentNames = (options.autoSegmentNames || "")
+		.split(/[,;]/)
+		.map((s) => s.replace(/^\s*(.*?)\s*$/, "$1"));
+
+	// Convert max slope to percent
+	if (options.maxSlope !== undefined && options.maxSlope < 1) {
+		options.maxSlope *= 100;
+	}
+
+	// If extendBack is specified, we need a turnaround loop... calculate crop later
+	options.extendBack = options.extendBack ?? 0;
+	options.rTurnaround = options.rTurnaround ?? 0;
+	if (options.extendBack > 0 && options.rTurnaround <= 0) {
+		options.rTurnaround = 5;
+	}
+
+	if (
+		options.cropMin !== undefined &&
+		options.cropMax !== undefined &&
+		options.cropMax > 0 &&
+		options.cropMin > options.cropMax
+	) {
+		throw new Error("Crop window minimum exceeds crop window maximum");
+	}
+
+	// Apply extend
+	options.prepend = (options.prepend || 0) + (options.extend || 0);
+	options.append = (options.append || 0) + (options.extend || 0);
 
 	// Convert coordinates to points format expected by processing functions
 	let points = trackFeature.geometry.coordinates.map((coord) => ({
@@ -1369,6 +1702,17 @@ export function processGPX(trackFeature, options = {}) {
 			options.cornerCropStart,
 			options.cornerCropEnd,
 			options.isLoop,
+		);
+	}
+
+	// Auto-straighten
+	if ((options.autoStraightenDeviation || 0) > 0) {
+		note("auto-Straightening...");
+		autoStraighten(
+			points,
+			options.isLoop,
+			options.autoStraightenLength || 100,
+			options.autoStraightenDeviation,
 		);
 	}
 

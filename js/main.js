@@ -208,7 +208,7 @@ class ProcessGPXApp {
 
 				// Arrays (initialized as empty)
 				autoSegments: [],
-				autoStraighten: [],
+				autoStraighten: [100],
 				circle: [],
 				circleEnd: [],
 				circleStart: [],
@@ -227,7 +227,7 @@ class ProcessGPXApp {
 				straightStart: [],
 
 				// shortcut options
-				auto: 1, // TODO: hardcoded for now
+				auto: 0, // TODO: hardcoded for now
 			};
 
 			// Process the current route with options
