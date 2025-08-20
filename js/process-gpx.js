@@ -154,7 +154,7 @@ const NUMBER_REGEXP = /^[+-]?\d*(?:\d|(?:\.\d+))(?:[eE][-+]?\d+)?$/;
  * @returns {boolean} True if numeric
  */
 function isNumeric(value) {
-	return typeof value === "string" && NUMBER_REGEXP.test(value);
+	return typeof value === "number" || (typeof value === "string" && NUMBER_REGEXP.test(value));
 }
 
 /**
