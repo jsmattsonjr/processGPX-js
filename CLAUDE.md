@@ -6,14 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a JavaScript port of the original Perl processGPX tool (v0.52) designed to improve and create GPX files for cycling emulation platforms like BikeTerra. The project is in early development, porting comprehensive GPX processing algorithms from Perl to JavaScript for client-side browser usage and Node.js environments.
 
-## Code Standards and Formatting
+## Development Guidelines
 
-Prefer "" for string literals.
-Add a newline at EOF.
+### Code Standards and Formatting
+- Prefer `""` for string literals
+- Add a newline at EOF
+- Replace `console.warn()` with `console.log()` for translations of Perl's `warn()` - Perl's `warn()` doesn't dump a backtrace
+- Use biome format --write before git commit
 
-## Planned Architecture
+### Testing and Development Commands
+- Use biome check --fix before git commit, and fix any remaining issues 
+- Use `node process-cli.js <filename>` to test the processGPX pipeline
+- Sample input file: `Twin_Bridges_Scenic_Bikeway.gpx`
+- Feel free to modify the local copy (`./processGPX`) of the Perl reference script for debugging
 
-The JavaScript port will implement a dual-target architecture:
+## Architecture
+
+The JavaScript port implements a dual-target architecture:
 
 ### Browser Environment
 - Client-side GPX processing without server dependencies
@@ -26,17 +35,14 @@ The JavaScript port will implement a dual-target architecture:
 - Programmatic API for server-side GPX processing
 - Batch processing capabilities
 
-### Core Processing Pipeline (To Be Implemented)
-
+### Core Processing Pipeline
 1. **GPX Parsing** - Parse XML GPX format into JavaScript objects
 2. **Track Processing** - Extract and process track points, segments
 3. **Algorithm Application** - Apply smoothing, interpolation, and optimization
 4. **Quality Assessment** - Calculate route quality metrics
 5. **GPX Generation** - Export processed data back to GPX format
 
-## Key Components to Implement
-
-Based on the original processGPX functionality:
+## Implementation Details
 
 ### Core Algorithms
 - **Position Smoothing** - Gaussian smoothing for route coordinates
@@ -71,8 +77,10 @@ The original Perl implementation is located in `reference/processGPX/` and provi
 - Test GPX files for validation
 - Comprehensive option documentation
 
-### Known Issues in Reference Code
+### Working with Reference Code
+- When searching for `sub <function_name>` in the Perl reference, read several lines above that line to capture any function header comment that might precede the string match
 
+### Known Issues in Reference Code
 When crossporting code from `reference/processGPX/processGPX`, be watchful for bugs that have been identified in the Perl source:
 
 1. **Floating point precision issue** in `cropCorners()` modulo operations (commit 338961b)
@@ -121,7 +129,7 @@ When porting Perl code to JavaScript, be aware of these subtle but critical diff
 
 These issues can cause infinite loops or incorrect behavior that's difficult to debug.
 
-Key algorithms to port:
+### Key Algorithms to Port
 - Gaussian smoothing for position and altitude
 - Spline interpolation for corner rounding  
 - Point density optimization
@@ -158,4 +166,3 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: Jim Mattson <jsmattsonjr@gmail.com>"
 ```
 
-- to memorize When searching for 'sub <function_name>' in the Perl reference, be sure to read several lines above that line, so you capture any function header comment that might precede the string match.
