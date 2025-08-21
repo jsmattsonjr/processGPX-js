@@ -105,6 +105,22 @@ function processPoints({
 
 This approach maintains consistency with the `autoStraighten()` pattern and provides cleaner function signatures.
 
+#### Critical Perl to JavaScript Translation Issues
+
+When porting Perl code to JavaScript, be aware of these subtle but critical differences:
+
+1. **Array Length vs Last Index**:
+   - Perl: `$#array` = last valid index (length - 1)
+   - JavaScript: `array.length` = number of elements
+   - When translating `$#points - 1` use `points.length - 2`
+
+2. **Array Auto-vivification**:
+   - Perl: `$array[index]++` automatically creates array elements and treats `undef` as 0
+   - JavaScript: `array[index]++` on undefined results in `NaN`, breaking numeric logic
+   - Solution: Use `array[index] = (array[index] || 0) + 1; if (array[index] > 1) ...`
+
+These issues can cause infinite loops or incorrect behavior that's difficult to debug.
+
 Key algorithms to port:
 - Gaussian smoothing for position and altitude
 - Spline interpolation for corner rounding  

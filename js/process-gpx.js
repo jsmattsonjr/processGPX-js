@@ -1347,7 +1347,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 	
 	// i is on the "earlier" segment, j on the "later" segment
 	// note this excludes starting point and end point
-	iLoop: for (let i = 0; i < points.length - 1; i += snapStep) {
+	iLoop: for (let i = 0; i < points.length - 2; i += snapStep) {
 		const p1 = points[i];
 		const jCount = [];
 		
@@ -1374,7 +1374,8 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 		// Keep moving until j comes back into snap range of i
 		jLoop1: while (j < points.length) {
 			// Make sure we don't try the same value twice (moving forward and backward could cause this)
-			if (jCount[j]++) continue iLoop;
+			jCount[j] = (jCount[j] || 0) + 1;
+			if (jCount[j] > 1) continue iLoop;
 			
 			// Looking for j sufficiently close to i and connected with less than a 30% slope
 			// Slope requirement avoids snapping across tight switchbacks or a hypothetical "spiral"
