@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 
-import fs from "fs";
-import path from "path";
-import { DOMParser } from "@xmldom/xmldom";
+import fs from "node:fs";
+import path from "node:path";
 import { gpx } from "@tmcw/togeojson";
+import { DOMParser } from "@xmldom/xmldom";
 import togpx from "togpx";
-
-import { processGPX } from "./js/process-gpx.js";
 import { defaultOptions } from "./js/options.js";
+import { processGPX } from "./js/process-gpx.js";
 
 /**
  * Main function for the CLI tool

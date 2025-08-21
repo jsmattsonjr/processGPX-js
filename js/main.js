@@ -2,8 +2,8 @@ import { ElevationChart } from "./elevation-chart.js";
 import { downloadTrackAsGPX } from "./gpx-export.js";
 import { GPXParser } from "./gpx-parser.js";
 import { MapVisualization } from "./map-visualization.js";
-import { processGPX } from "./process-gpx.js";
 import { defaultOptions } from "./options.js";
+import { processGPX } from "./process-gpx.js";
 
 /**
  * Main application controller for processGPX

@@ -4652,6 +4652,31 @@ sub note {
   warn(@_) unless ($quiet);
 }
 
+# Debug function to dump points array to file in consistent format
+# Compatible with JavaScript processGPX dumpPoints() function
+sub dumpPoints {
+  my ($points_ref, $filename) = @_;
+  my @points = @$points_ref;
+  
+  open(my $fh, '>', $filename) or die "Cannot open $filename: $!";
+  
+  print $fh "# Points dump: " . scalar(@points) . " points\n";
+  print $fh "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
+  
+  for my $i (0..$#points) {
+    my $p = $points[$i];
+    my $lat = sprintf("%.8f", $p->{lat});
+    my $lon = sprintf("%.8f", $p->{lon});
+    my $ele = sprintf("%.2f", $p->{ele} // 0);
+    my $dist = sprintf("%.2f", $p->{distance} // 0);
+    
+    print $fh "$i\t$lat\t$lon\t$ele\t\t$dist\n";
+  }
+  
+  close($fh);
+  note("Dumped " . scalar(@points) . " points to $filename\n");
+}
+
 # if extendBack is specified, we need a turnaround loop... calculate crop
 # later
 $extendBack //= 0;
@@ -4995,7 +5020,9 @@ for my $file ( @files ) {
   $points = fixZigZags($points);
 
   # look for loops
+  dumpPoints($points, "perl-before-findLoops.txt");
   findLoops($points, $isLoop);
+  dumpPoints($points, "perl-after-findLoops.txt");
 
   # adjust altitudes if requested
   if ( ((defined $zShift) && ($zShift != 0)) || ((defined $zScale) && ($zScale != 1)) ) {

@@ -48,6 +48,52 @@ function note(...args) {
 }
 
 /**
+ * Debug function to dump points array to file in consistent format
+ * Compatible with Perl processGPX dumpPoints() function
+ * @param {Array} points - Array of point objects with lat, lon, ele, distance properties
+ * @param {string} filename - Output filename
+ */
+function dumpPoints(points, filename) {
+	let output = `# Points dump: ${points.length} points\n`;
+	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
+
+	for (let i = 0; i < points.length; i++) {
+		const p = points[i];
+		const lat = p.lat.toFixed(8);
+		const lon = p.lon.toFixed(8);
+		const ele = (p.ele || 0).toFixed(2);
+		const dist = (p.distance || 0).toFixed(2);
+
+		output += `${i}\t${lat}\t${lon}\t${ele}\t\t${dist}\n`;
+	}
+
+	// Check if running in Node.js environment
+	if (
+		typeof process !== "undefined" &&
+		process.versions &&
+		process.versions.node
+	) {
+		// Use dynamic import for ES modules compatibility
+		import("node:fs")
+			.then((fs) => {
+				fs.writeFileSync(filename, output);
+				note(`Dumped ${points.length} points to ${filename}`);
+			})
+			.catch(() => {
+				// Fallback to console
+				console.log(`=== Points dump to ${filename} ===`);
+				console.log(output);
+				console.log(`=== End dump ${filename} ===`);
+			});
+	} else {
+		// Browser environment - log to console instead
+		console.log(`=== Points dump to ${filename} ===`);
+		console.log(output);
+		console.log(`=== End dump ${filename} ===`);
+	}
+}
+
+/**
  * Reduce angle to range [-π, π]
  * @param {number} theta - Angle in radians
  * @returns {number} Reduced angle
@@ -2358,7 +2404,9 @@ export function processGPX(trackFeature, options = {}) {
 	points = fixZigZags(points);
 
 	// Look for loops
+	dumpPoints(points, "js-before-findLoops.txt");
 	findLoops(points, options.isLoop);
+	dumpPoints(points, "js-after-findLoops.txt");
 
 	// Adjust altitudes if requested
 	if (
