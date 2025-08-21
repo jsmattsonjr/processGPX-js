@@ -154,10 +154,14 @@ const NUMBER_REGEXP = /^[+-]?\d*(?:\d|(?:\.\d+))(?:[eE][-+]?\d+)?$/;
  * @returns {boolean} True if numeric
  */
 function isNumeric(value) {
-	return (
-		typeof value === "number" ||
-		(typeof value === "string" && NUMBER_REGEXP.test(value))
-	);
+	if (typeof value === "number") {
+		// Reject NaN and Infinity
+		return Number.isFinite(value);
+	}
+	if (typeof value === "string") {
+		return NUMBER_REGEXP.test(value);
+	}
+	return false;
 }
 
 /**
