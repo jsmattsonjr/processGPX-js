@@ -208,7 +208,7 @@ class ProcessGPXApp {
 
 				// Arrays (initialized as empty)
 				autoSegments: [],
-				autoStraighten: [100],
+				autoStraighten: [],
 				circle: [],
 				circleEnd: [],
 				circleStart: [],
