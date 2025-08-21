@@ -84,8 +84,9 @@ function _dumpPoints(points, filename) {
 		// Use dynamic import for ES modules compatibility
 		import("node:fs")
 			.then((fs) => {
-				fs.writeFileSync(filename, output);
-				note(`Dumped ${points.length} points to ${filename}`);
+				const debugPath = `debug/${filename}`;
+				fs.writeFileSync(debugPath, output);
+				note(`Dumped ${points.length} points to ${debugPath}`);
 			})
 			.catch(() => {
 				// Fallback to console
@@ -2461,9 +2462,11 @@ export function processGPX(trackFeature, options = {}) {
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
+	_dumpPoints(points, "js-00-original.txt");
 
 	// Eliminate duplicate x,y points
 	points = removeDuplicatePoints(points, options.isLoop || 0);
+	_dumpPoints(points, "js-01-duplicates-removed.txt");
 
 	// If repeat is specified, then create replicates
 	if ((options.repeat || 0) > 0) {
@@ -2475,6 +2478,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 		}
 		points = pNew;
+		_dumpPoints(points, "js-02-repeated.txt");
 	}
 
 	// Skip 'join' functionality and convert unnamed segments to 0
@@ -2488,6 +2492,7 @@ export function processGPX(trackFeature, options = {}) {
 		options.cropMin,
 		options.cropMax,
 	);
+	_dumpPoints(points, "js-03-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
 	options.isLoop = options.isLoop || 0;
@@ -2647,6 +2652,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Look for zig-zags
 	points = fixZigZags(points);
+	_dumpPoints(points, "js-04-zigzags-fixed.txt");
 
 	// Look for loops
 	findLoops(points, options.isLoop);
@@ -2696,6 +2702,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 			p.ele += dz;
 		}
+		_dumpPoints(points, "js-05-altitude-adjusted.txt");
 	}
 
 	// Reverse the points of the original course
@@ -2703,6 +2710,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.reverse) {
 		note("reversing course direction..");
 		reversePoints(points);
+		_dumpPoints(points, "js-06-reversed.txt");
 	}
 
 	// Corner cropping
@@ -2726,6 +2734,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.cornerCropEnd,
 			options.isLoop,
 		);
+		_dumpPoints(points, "js-07-corners-cropped.txt");
 	}
 
 	// Auto-straighten
@@ -2737,6 +2746,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
+		_dumpPoints(points, "js-08-auto-straightened.txt");
 	}
 
 	// Check for snapping
@@ -2750,11 +2760,12 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
+		_dumpPoints(points, "js-09-snapped.txt");
 	}
 
 	// spline of corners
 	if (_splineRadians > 0) {
-		_dumpPoints(points, "js-points-before-splines.txt");
+		_dumpPoints(points, "js-10-before-splines.txt");
 		note("corner splines, pre-smoothing...");
 		points = addSplines(
 			points,
@@ -2765,7 +2776,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.isLoop || 0,
 			"spline",
 		);
-		_dumpPoints(points, "js-points-after-splines.txt");
+		_dumpPoints(points, "js-11-after-splines.txt");
 	}
 
 	// Skip circuit processing

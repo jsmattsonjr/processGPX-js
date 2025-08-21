@@ -4590,7 +4590,7 @@ GetOptions (
            )
   or die("$0: ERROR processing command line options\n");
 
-
+# Main processing starts here
 if ($needHelp) {
   pod2usage(-exitval=>0, -verbose=>2);
 }
@@ -4658,7 +4658,13 @@ sub dumpPoints {
   my ($points_ref, $filename) = @_;
   my @points = @$points_ref;
   
-  open(my $fh, '>', $filename) or die "Cannot open $filename: $!";
+  # Create debug directory if it doesn't exist
+  unless (-d "debug") {
+    mkdir "debug" or die "Cannot create debug directory: $!";
+  }
+  
+  my $debug_path = "debug/$filename";
+  open(my $fh, '>', $debug_path) or die "Cannot open $debug_path: $!";
   
   print $fh "# Points dump: " . scalar(@points) . " points\n";
   print $fh "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
@@ -4674,7 +4680,7 @@ sub dumpPoints {
   }
   
   close($fh);
-  note("Dumped " . scalar(@points) . " points to $filename\n");
+  note("Dumped " . scalar(@points) . " points to $debug_path\n");
 }
 
 # if extendBack is specified, we need a turnaround loop... calculate crop
@@ -4778,9 +4784,11 @@ for my $file ( @files ) {
   note("quality score of original course = ", sprintf("%.4f", $score), "\n");
   note("direction score of original course = ", sprintf("%.4f", $scoreD), "\n");
   note("altitude score of original course = ", sprintf("%.4f", $scoreZ), "\n");
+  dumpPoints($points, "perl-00-original.txt");
 
   # eliminate duplicate x,y points
   $points = removeDuplicatePoints(points=> $points, isLoop=> $isLoop);
+  dumpPoints($points, "perl-01-duplicates-removed.txt");
 
   # if repeat is specified, then create replicates
   if ( $repeat > 0 ) {
@@ -4793,6 +4801,7 @@ for my $file ( @files ) {
       }
     }
     $points = \@pNew;
+    dumpPoints($points, "perl-02-repeated.txt");
   }
 
   # if join was specified, join points from a second file
@@ -4873,6 +4882,7 @@ for my $file ( @files ) {
   # this is done before auto-options since it may change whether the course is a loop, for example
   #
   $points = cropPoints(points=> $points, isLoop=> $isLoop, deleteRange=> \@deleteRange);
+  dumpPoints($points, "perl-03-cropped.txt");
 
 
   #
@@ -5018,6 +5028,7 @@ for my $file ( @files ) {
 
   # look for zig-zags
   $points = fixZigZags($points);
+  dumpPoints($points, "perl-04-zigzags-fixed.txt");
 
   # look for loops
   findLoops($points, $isLoop);
@@ -5040,6 +5051,7 @@ for my $file ( @files ) {
       }
       $p->{ele} += $dz;
     }
+    dumpPoints($points, "perl-05-altitude-adjusted.txt");
   }
 
   # reverse the points of the original course
@@ -5047,6 +5059,7 @@ for my $file ( @files ) {
   if ($reverse) {
     note("reversing course direction..\n");
     reversePoints($points);
+    dumpPoints($points, "perl-06-reversed.txt");
   }
 
 
@@ -5072,6 +5085,7 @@ for my $file ( @files ) {
 		  end        => $cornerCropEnd,
 		  isLoop     => $isLoop
 		 );
+    dumpPoints($points, "perl-07-corners-cropped.txt");
   }
 
   # auto-straighten
@@ -5083,6 +5097,7 @@ for my $file ( @files ) {
                    minLength=> $autoStraightenLength,
                    maxDeviation=> $autoStraightenDeviation,
                   );
+    dumpPoints($points, "perl-08-auto-straightened.txt");
   }
 
   # circuits at position
@@ -5172,15 +5187,15 @@ for my $file ( @files ) {
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
-
+    dumpPoints($points, "perl-09-snapped.txt");
   }
 
   # spline of corners
   if ( $splineRadians > 0 ) {
-    dumpPoints($points, "perl-points-before-splines.txt");
+    dumpPoints($points, "perl-10-before-splines.txt");
     note("corner splines, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
-    dumpPoints($points, "perl-points-after-splines.txt");
+    dumpPoints($points, "perl-11-after-splines.txt");
   }
 
   # arc fit of corners
