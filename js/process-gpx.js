@@ -1191,6 +1191,590 @@ function straightenPoints(points, _isLoop, startIndex, endIndex) {
 }
 
 /**
+ * Calculate difference between two angles
+ * @param {number} d1 - First angle in radians
+ * @param {number} d2 - Second angle in radians
+ * @returns {number} Angle difference in radians
+ */
+function deltaAngle(d1, d2) {
+	return reduceAngle(d2 - d1);
+}
+
+/**
+ * Calculate closest point on line segment from p1 to p2 to test point p3
+ * @param {Array} p1 - First point [x, y]
+ * @param {Array} p2 - Second point [x, y]
+ * @param {Array} p3 - Test point [x, y]
+ * @returns {Array} [f, d] where f is fraction along line, d is distance
+ */
+function xyPointOnLine(p1, p2, p3) {
+	const [x1, y1] = p1;
+	const [x2, y2] = p2;
+	const [x3, y3] = p3;
+	
+	if (x1 === x2 && y1 === y2) {
+		return [undefined, undefined];
+	}
+	
+	const f = ((y3 - y1) * (y2 - y1) + (x3 - x1) * (x2 - x1)) / 
+			  ((y2 - y1) ** 2 + (x2 - x1) ** 2);
+	const d = Math.sqrt((x1 - x3 + f * (x2 - x1)) ** 2 + (y1 - y3 + f * (y2 - y1)) ** 2);
+	
+	return [f, d];
+}
+
+/**
+ * Check if point px is on the line segment from p1 to p2
+ * @param {Object} p1 - First point with {lat, lon} properties
+ * @param {Object} p2 - Second point with {lat, lon} properties
+ * @param {Object} px - Test point with {lat, lon} properties
+ * @param {number} dmax - Maximum distance threshold (default 1m)
+ * @returns {boolean} True if point is on the road segment
+ */
+function isPointOnRoad(p1, p2, px, dmax = 1) {
+	// If point is "on" an endpoint (within 10 cm) then true
+	if (pointsAreClose(p1, px) || pointsAreClose(p2, px)) {
+		return true;
+	}
+	
+	// Check if it is within the margin of the line
+	const [dx1, dy1] = latlng2dxdy(px, p1);
+	const [dx2, dy2] = latlng2dxdy(px, p2);
+	const [f, d] = xyPointOnLine([dx1, dy1], [dx2, dy2], [0, 0]);
+	
+	return f !== undefined && d !== undefined && f >= 0 && f <= 1 && d <= dmax;
+}
+
+/**
+ * Corner version of isPointOnRoad - checks if point px lies on corner formed by 4 points
+ * @param {Object} p1 - First reference point
+ * @param {Object} p2 - Second reference point
+ * @param {Object} p3 - Third reference point
+ * @param {Object} p4 - Fourth reference point
+ * @param {Object} px - Test point
+ * @returns {boolean} True if point is on the road corner
+ */
+function isPointOnRoadCorner(p1, p2, p3, p4, px) {
+	if (!px || !p2 || !p3) return false;
+	
+	if (pointsAreClose(px, p2) || pointsAreClose(px, p3)) {
+		return true;
+	}
+	
+	if (!p1 || !p4) return false;
+	
+	if (pointsAreClose(p2, p3) || pointsAreClose(p1, p2) || pointsAreClose(p3, p4)) {
+		return false;
+	}
+	
+	const d12 = latlngDirection(p1, p2);
+	const d34 = latlngDirection(p3, p4);
+	const d2x = latlngDirection(p2, px);
+	const dx3 = latlngDirection(px, p3);
+	
+	// These angles are between -pi/2 and +pi/2
+	const dA = deltaAngle(d12, d2x);
+	const dB = deltaAngle(d12, dx3);
+	const dC = deltaAngle(d12, d34);
+	
+	// If angles are monotonic, success
+	return ((dA >= 0) && (dB >= dA) && (dC >= dB)) ||
+		   ((dA <= 0) && (dB <= dA) && (dC <= dB));
+}
+
+/**
+ * Test if point i falls on line or corner formed by points j, k, l, m
+ * @param {Array} points - Array of points
+ * @param {number} j - Point before first point
+ * @param {number} k - First point
+ * @param {number} l - Second point
+ * @param {number} m - Point after second point
+ * @param {number} i - Test point index
+ * @param {number} d - Distance error margin
+ * @returns {boolean} True if point passes road test
+ */
+function roadTest(points, j, k, l, m, i, d) {
+	// First check to see if the point i falls in the range k .. l
+	if (!(i > 0 && k > 0 && l > 0 && 
+		  i < points.length && k < points.length && l < points.length)) {
+		return false;
+	}
+	
+	if (isPointOnRoad(points[k], points[l], points[i], d)) {
+		return true;
+	}
+	
+	if (!(j > 0 && m > 0 && j < points.length && m < points.length)) {
+		return false;
+	}
+	
+	return isPointOnRoadCorner(points[j], points[k], points[l], points[m], points[i]);
+}
+
+/**
+ * Snap overlapping segments of a GPS track to align with earlier segments
+ * @param {Array} points - Array of GPS points with lat, lon, ele properties
+ * @param {Array} snap - Reference points to snap to (usually same as points)
+ * @param {number} snapDistance - Maximum distance threshold for snapping (default: 2m)
+ * @param {number} snapAltitude - Maximum altitude difference for snapping (default: 1m)
+ * @param {number} snapTransition - Distance for altitude transition smoothing (default: 0m)
+ * @param {number} spacing - Point spacing parameter (default: 0)
+ * @returns {Array} New array with snapped points
+ */
+function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransition = 0, spacing = 0) {
+	if (!points.length) return points;
+	
+	// Ensure distance field exists
+	addDistanceField(points);
+	
+	// snap = 1: subsequent laps snap to position of earlier laps
+	// snap = 2: earlier laps snap to position of later laps
+	// snap 2 can be handled by reversing points, then doing snap, then reversing back
+	
+	// If we're snapping later for earlier, flip points
+	if (snap === 2) {
+		points.reverse();
+	}
+	
+	// On large courses, since initial search is O(N-squared), step thru multiple points, then refine
+	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2
+	const snapStep = 2 + int(points.length / 200);
+	
+	// Maximum range at which we check for snapping...
+	// so if colinear points are spaced more than twice this, we may miss snapping onto that interval
+	let snapRange = spacing > 0 ? snapStep * spacing : 100;
+	snapRange = Math.min(snapRange, 100);
+	
+	// Threshold for checking if points are close for snapping
+	const dsClose = snapDistance / 2;
+	
+	// i is on the "earlier" segment, j on the "later" segment
+	// note this excludes starting point and end point
+	iLoop: for (let i = 0; i < points.length - 2; i += snapStep) {
+		const p1 = points[i];
+		const jCount = new Array(points.length).fill(0);
+		
+		let j = i + snapStep;
+		if (j > points.length - 1) continue iLoop;
+		
+		// Get out of snap range: get point j beyond the snap range of point i
+		// This is geometric distance, not course distance, which could potentially be an issue
+		let d = 0;
+		while ((d = latlngDistance(p1, points[j])) <= snapRange) {
+			j += snapStep;
+			if (j >= points.length) continue iLoop;
+		}
+		
+		// Keep going until distance between j and i stops increasing
+		while (j <= points.length - 1) {
+			const d2 = latlngDistance(p1, points[j]);
+			if (d2 < d) break;
+			d = d2;
+			j += snapStep;
+			if (j >= points.length) continue iLoop;
+		}
+		
+		// Keep moving until j comes back into snap range of i
+		jLoop1: while (j <= points.length - 1) {
+			// Make sure we don't try the same value twice (moving forward and backward could cause this)
+			if (jCount[j] > 0) {
+				continue iLoop;
+			}
+			jCount[j]++;
+			
+			// Looking for j sufficiently close to i and connected with less than a 30% slope
+			// Slope requirement avoids snapping across tight switchbacks or a hypothetical "spiral"
+			while ((d = latlngDistance(p1, points[j])) > snapRange || 
+				   Math.abs(p1.ele - points[j].ele) > snapAltitude + 0.3 * d) {
+				j += snapStep;
+				if (j >= points.length) continue iLoop;
+			}
+			
+			// Find local minimum of distance... reduced step distance to 1
+			jLoop2: while (j <= points.length - 1) {
+				d = latlngDistance(p1, points[j]);
+				
+				// Distance to point forward
+				const df = j < points.length - 1 ? latlngDistance(p1, points[j + 1]) : undefined;
+				// Distance to point backward
+				const db = j > 0 ? latlngDistance(p1, points[j - 1]) : undefined;
+				
+				if (df !== undefined && df < d) {
+					j++;
+					continue jLoop2;
+				}
+				if (db !== undefined && db < d) {
+					j--;
+					continue jLoop2;
+				}
+				break jLoop2;
+			}
+			
+			// We've now brought point j close to point i. This could be fooled with a sufficiently complicated
+			// route, but so far it seems to work fairly well
+			
+			// Check altitude. If altitude is out of range, maybe we're across a tight switchback, or there's a bridge or tunnel
+			// This was already done previously, but now we're closer
+			if (Math.abs(p1.ele - points[j].ele) > 1 + 0.3 * d) {
+				j += snapStep;
+				continue jLoop1;
+			}
+			
+			// We've got a possible point match between two points.
+			// Check dot products - the lines need to be in similar directions
+			
+			// Set direction for checking dot product
+			let di = 0;
+			if (j < points.length - 1 && i < points.length - 1) {
+				di = 1;
+			} else if (j > 0 && i > 0) {
+				di = -1;
+			} else {
+				continue iLoop;
+			}
+			
+			const p2 = points[i + di];
+			const p3 = points[j];
+			const p4 = points[j + di];
+			
+			// Dot product
+			// dot product = 1: same direction
+			// dot product = -1: opposite direction
+			// dot product close to zero: intersection, perhaps -- ignore
+			// Set for 45 degree angle right now
+			const dot = latlngDotProduct(p1, p2, p3, p4) ?? 0;
+			let sign;
+			if (dot > 0.7) {
+				sign = 1;
+			} else if (dot < -0.7) {
+				sign = -1;
+			} else {
+				// Vectors are relatively perpendicular, move on
+				j += snapStep;
+				continue jLoop1;
+			}
+			
+			// Point i is matched to point j, and the two are moving in the same direction
+			// For each point j, if it falls on a line of points i, then replace the nearest point i
+			// First we need to find values of j which are encapsulated by i
+			// j will be replaced by i
+			let ja, jb;
+			
+			jLoop2_2: while (true) {
+				// Search range near j: j was point nearest i so it should be close
+				// Nearest found the nearest point, but we're looking for the segment,
+				// and the nearest point may not mark the intersecting segment, so check proximity
+				for (ja of [j, j - sign, j + sign, j - 2 * sign]) {
+					jb = ja + sign;
+					
+					// Checking if point i falls on the line between ja and jb
+					if (roadTest(points, ja - 1, ja, jb, jb + 1, i, snapDistance)) {
+						j = jb;
+						break jLoop2_2;
+					}
+				}
+				// Didn't find a match... move to next point
+				continue iLoop;
+			}
+			
+			let j1 = j - sign;
+			let j2 = j;
+			
+			// Starting point:
+			// j1 ... i1 ... i2 ... j2
+			// i's are encapsulated by j's
+			// Initial point is we have only a single point i1 = i2 = i
+			// j2 = j1 + 1
+			
+			let i1 = i;
+			let i2 = i;
+			
+			// Keep shifting boundaries until we don't expand them anymore
+			let flag1, flag2;
+			
+			do {
+				// Shift i1 down as long as along line from j1 to j2
+				while (i1 > 0 && 
+					   roadTest(points, j1 - sign, j1, j2, j2 + sign, i1 - 1, snapDistance)) {
+					i1--;
+				}
+				
+				// As long as they are coincident, increase i1 and j1 together (short cut)
+				while (i1 > 0 && j1 > i2 && j1 <= points.length - 1 && 
+					   pointsAreClose(points[i1 - 1], points[j1 - sign], dsClose, snapAltitude)) {
+					i1--;
+					j1 -= sign;
+				}
+				
+				// Shift up i2 as long as along line from j1 to j2
+				while (i2 < j1 && 
+					   roadTest(points, j1 - sign, j1, j2, j2 + sign, i2 + 1, snapDistance)) {
+					i2++;
+				}
+				
+				// As long as they are coincident, increase i2 and j2 together (short cut)
+				while (i2 < j1 && j2 > i2 && j2 <= points.length - 1 && 
+					   pointsAreClose(points[i2 + 1], points[j2 + sign], dsClose, snapAltitude)) {
+					i2++;
+					j2 += sign;
+				}
+				
+				flag1 = false;
+				const iTest = i1 - 1;
+				if (iTest > 0) {
+					// Push jTest up against iTest
+					let jTest = j1;
+					while (jTest > i2 && jTest <= points.length - 1 && 
+						   roadTest(points, iTest - 1, iTest, iTest + 1, iTest + 2, jTest - sign, snapDistance)) {
+						jTest -= sign;
+					}
+					
+					// Hop jTest past iTest: test that iTest lays in line of j points
+					if (jTest > i2 && jTest <= points.length - 1 && 
+						(flag1 = roadTest(points, jTest - 2 * sign, jTest - sign, jTest, jTest + sign, iTest, snapDistance))) {
+						jTest -= sign;
+					}
+					
+					if (flag1) {
+						j1 = jTest;
+						i1 = iTest;
+					}
+				}
+				
+				flag2 = false;
+				const iTest2 = i2 + 1;
+				if (iTest2 >= j1) {
+					let jTest = j2;
+					
+					// Push jTest up against iTest2 (it's between j2 and jTest)
+					while (jTest > iTest2 && jTest <= points.length - 1 && 
+						   roadTest(points, iTest2 - 2, iTest2 - 1, iTest2, iTest2 + 1, jTest + sign, snapDistance)) {
+						jTest += sign;
+					}
+					
+					// Hop past iTest2
+					if (jTest > iTest2 && jTest <= points.length - 1 && 
+						(flag2 = roadTest(points, jTest - sign, jTest, jTest + sign, jTest + 2 * sign, iTest2, snapDistance))) {
+						jTest += sign;
+					}
+					
+					if (flag2) {
+						j2 = jTest;
+						i2 = iTest2;
+					}
+				}
+			} while (flag1 || flag2);
+			
+			// Splice in the snapped points
+			// irange encapsulates j range
+			// May need to retain outer points of j range if they're not duplicated by points in irange
+			
+			// Avoid duplicate points at ends of range
+			// This is the same independent of sign: i1 connects with j1, i2 connects with j2
+			while (i1 < i2 && pointsAreClose(points[i1], points[j1])) {
+				i1++;
+			}
+			while (i2 > i1 && pointsAreClose(points[i2], points[j2])) {
+				i2--;
+			}
+			
+			if (i1 >= i2) {
+				j += snapStep;
+				continue jLoop1;
+			}
+			
+			if (sign === 0) {
+				throw new Error("Zero sign encountered");
+			}
+			
+			// Now check for zig-zags at start... algorithm shouldn't allow them.
+			while (true) {
+				const p1_zig = points[j1];
+				const p2_zig = points[i1];
+				const p3_zig = points[i1 + 1];
+				if (p1_zig && p2_zig && p3_zig) {
+					const dot_zig = latlngDotProduct(p1_zig, p2_zig, p2_zig, p3_zig);
+					if (dot_zig !== null && dot_zig > -0.9) break;
+				}
+				i1++;
+				if (i1 >= i2) {
+					j += snapStep;
+					continue jLoop1;
+				}
+			}
+			
+			// Now check for zig-zags at end... algorithm shouldn't allow them.
+			while (true) {
+				const p1_zig = points[j2];
+				const p2_zig = points[i2];
+				const p3_zig = points[i2 - 1];
+				if (p1_zig && p2_zig && p3_zig) {
+					const dot_zig = latlngDotProduct(p1_zig, p2_zig, p2_zig, p3_zig);
+					if (dot_zig !== null && dot_zig > -0.9) break;
+				}
+				i2--;
+				if (i1 >= i2) {
+					j += snapStep;
+					continue jLoop1;
+				}
+			}
+			
+			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
+				note(`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`);
+				
+				const pNew = [];
+				if (sign > 0) {
+					// Keep everything up to start of j range
+					pNew.push(...points.slice(0, j1 + 1));
+					
+					// Splice in i range (exclude end-points)
+					// Try to match up segments if possible
+					// Segment matching by relative distance, but we need to nudge if we encounter a duplicate
+					let j_seg = j1;
+					for (let i_seg = i1; i_seg <= i2; i_seg++) {
+						if (j_seg < j2 && Math.abs(points[i_seg].distance - points[i_seg - 1].distance) < 0.05) {
+							j_seg++;
+						}
+						
+						while (j_seg < j2 && 
+							   Math.abs(Math.abs(points[j_seg + 1].distance - points[j1].distance) - Math.abs(points[i_seg].distance - points[i1].distance)) <
+							   Math.abs(Math.abs(points[j_seg].distance - points[j1].distance) - Math.abs(points[i_seg].distance - points[i1].distance))) {
+							j_seg++;
+						}
+						
+						const p = { ...points[i_seg] };
+						p.segment = points[j_seg].segment;
+						pNew.push(p);
+					}
+					
+					pNew.push(...points.slice(j2)); // Keep everything which follows j range
+				} else {
+					pNew.push(...points.slice(0, j2 + 1));
+					
+					let j_seg = j2;
+					for (let i_seg = i2; i_seg >= i1; i_seg--) {
+						if (j_seg < j1 && Math.abs(points[i_seg].distance - points[i_seg - 1].distance) < 0.05) {
+							j_seg++;
+						}
+						
+						while (j_seg < j1 && 
+							   Math.abs(Math.abs(points[j_seg + 1].distance - points[j1].distance) - Math.abs(points[i_seg].distance - points[i1].distance)) <
+							   Math.abs(Math.abs(points[j_seg].distance - points[j1].distance) - Math.abs(points[i_seg].distance - points[i1].distance))) {
+							j_seg++;
+						}
+						
+						const p = { ...points[i_seg] };
+						p.segment = points[j_seg].segment;
+						pNew.push(p);
+					}
+					
+					pNew.push(...points.slice(j1));
+				}
+				
+				points = pNew;
+			}
+			
+			// Snap transition...
+			// Adjust altitude...
+			// The first pass goes from i1 to i2
+			// The replaced portion goes from j3 to j4
+			// For points beyond this range, transition the altitude
+			// This presently does not work with loops
+			if (snapTransition > 0) {
+				const j3 = (sign > 0 ? j1 : j2) + 1;
+				const j4 = j3 + i2 - i1 + 1;
+				
+				// d = 1: forward direction, -1: backward direction
+				for (const d of [-1, 1]) {
+					let s = 0;
+					let i_trans = d > 0 ? i2 : i1;
+					const sis = [0];
+					const is = [i_trans];
+					
+					while (s < snapTransition && i_trans > 0 && i_trans <= points.length - 1) {
+						s += latlngDistance(points[i_trans], points[i_trans + d]);
+						i_trans += d;
+						sis.push(s);
+						is.push(i_trans);
+					}
+					
+					const jd = d * sign;
+					let j_trans = jd > 0 ? j4 : j3;
+					const sjs = [0];
+					const js = [j_trans];
+					
+					s = 0;
+					while (s < snapTransition && j_trans > 0 && j_trans <= points.length - 1) {
+						s += latlngDistance(points[j_trans], points[j_trans + jd]);
+						j_trans += jd;
+						sjs.push(s);
+						js.push(j_trans);
+					}
+					
+					// Step thru and adjust altitudes
+					let u = 0;
+					let v = 0;
+					const zis = [points[is[0]].ele];
+					const zjs = [points[js[0]].ele];
+					
+					while (u < sis.length - 1 && v < sjs.length - 1) {
+						const i_alt = is[u];
+						const j_alt = js[v];
+						
+						if (sis[u + 1] < sjs[v + 1]) {
+							u++;
+							// Interpolate the point onto the other interval
+							const f = (sis[u] - sjs[v]) / (sjs[v + 1] - sjs[v]);
+							const z0 = (1 - f) * points[js[v]].ele + f * points[js[v + 1]].ele;
+							// Note: in limit of being close to the snapped section, altitude is average of two branches, then it diverges
+							const g = (1 + Math.cos(PI * sis[u] / snapTransition)) / 4; // From 0.5 to 0
+							if (g < 0) throw new Error("Negative g!");
+							const z1 = points[is[u]].ele;
+							zis[u] = g * z0 + (1 - g) * z1;
+						} else {
+							v++;
+							const f = (sjs[v] - sis[u]) / (sis[u + 1] - sis[u]);
+							const z0 = (1 - f) * points[is[u]].ele + f * points[is[u + 1]].ele;
+							const g = (1 + Math.cos(PI * sjs[v] / snapTransition)) / 4; // From 0.5 to 0
+							if (g < 0) throw new Error("Negative g!");
+							// Note: in limit of being close to the snapped section, altitude is average of two branches, then it diverges
+							const z1 = points[js[v]].ele;
+							zjs[v] = g * z0 + (1 - g) * z1;
+						}
+					}
+					
+					// Assign the new elevations to the appropriate points
+					for (let u_assign = 0; u_assign < zis.length; u_assign++) {
+						points[is[u_assign]].ele = zis[u_assign];
+					}
+					for (let v_assign = 0; v_assign < zjs.length; v_assign++) {
+						points[js[v_assign]].ele = zjs[v_assign];
+					}
+				}
+			}
+			// End of snap transition
+			
+			// Jump to next ivalue outside of range if we did replacement
+			// This isn't perfect, but note points in j range are changed, so
+			// j indices are no longer valid: this is why need to jump to outer loop
+			if (i2 > i) {
+				i = i2;
+			}
+			continue iLoop;
+		}
+		
+		// If we get here without continuing iLoop, we need to advance j to avoid infinite loop
+		j += snapStep;
+	}
+	
+	if (snap === 2) {
+		points.reverse();
+	}
+	
+	return points;
+}
+
+/**
  * Automatically find segments to be straightened
  * segments have a maximum deviation and also a check on
  * the correlation of the deviations
@@ -1714,6 +2298,19 @@ export function processGPX(trackFeature, options = {}) {
 			options.isLoop,
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
+		);
+	}
+
+	// Check for snapping
+	if ((options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
+		note("snapping repeated points (pass 1)...");
+		points = snapPoints(
+			points,
+			options.snap,
+			options.snapDistance || 2,
+			options.snapAltitude || 1,
+			options.snapTransition || 0,
+			options.spacing || 0
 		);
 	}
 
