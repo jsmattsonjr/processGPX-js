@@ -275,6 +275,15 @@ export class ElevationChart {
 			}),
 		);
 
+		// Calculate the maximum distance from both original and processed data
+		const originalMaxDistance = Math.max(...originalData.map(point => point.x));
+		const processedMaxDistance = Math.max(...processedData.map(point => point.x));
+		const maxDistance = Math.max(originalMaxDistance, processedMaxDistance);
+
+		// Update chart limits to accommodate the longer track
+		this.chart.options.plugins.zoom.limits.x.max = maxDistance;
+		this.chart.options.scales.x.max = maxDistance;
+
 		// Clear existing datasets and rebuild
 		this.chart.data.datasets = [];
 
