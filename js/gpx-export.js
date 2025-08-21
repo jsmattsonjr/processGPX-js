@@ -1,61 +1,30 @@
 /**
- * GPX export functionality
+ * GPX export functionality using togpx
  */
 
 /**
- * Convert a track feature to GPX XML format
+ * Convert a track feature to GPX XML format using togpx
  * @param {Object} trackFeature - LineString feature object
  * @returns {string} GPX XML string
  */
 function trackFeatureToGPX(trackFeature) {
-	const coordinates = trackFeature.geometry.coordinates;
-	const trackName = trackFeature.properties?.name || "Processed Route";
-	const timestamp = new Date().toISOString();
+	// Create a FeatureCollection with the track feature
+	const featureCollection = {
+		type: "FeatureCollection",
+		features: [trackFeature],
+	};
 
-	// Generate track points XML
-	const trackPoints = coordinates
-		.map((coord) => {
-			const [lon, lat, ele] = coord;
-			const elevation =
-				ele !== undefined ? `    <ele>${ele.toFixed(2)}</ele>\n` : "";
-			return `  <trkpt lat="${lat.toFixed(7)}" lon="${lon.toFixed(7)}">\n${elevation}  </trkpt>`;
-		})
-		.join("\n");
-
-	// Generate complete GPX XML
-	const gpxXml = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="processGPX-js" xmlns="http://www.topografix.com/GPX/1/1">
-  <metadata>
-    <name>${escapeXml(trackName)}</name>
-    <time>${timestamp}</time>
-    <author>
-      <name>processGPX-js</name>
-    </author>
-  </metadata>
-  <trk>
-    <name>${escapeXml(trackName)}</name>
-    <trkseg>
-${trackPoints}
-    </trkseg>
-  </trk>
-</gpx>`;
-
-	return gpxXml;
-}
-
-/**
- * Escape XML special characters
- * @param {string} text - Text to escape
- * @returns {string} Escaped text
- */
-function escapeXml(text) {
-	if (!text) return "";
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;");
+	// Convert to GPX using togpx
+	return togpx(featureCollection, {
+		creator: "processGPX-js",
+		metadata: {
+			name: trackFeature.properties?.name || "Processed Route",
+			time: new Date(),
+			author: {
+				name: "processGPX-js",
+			},
+		},
+	});
 }
 
 /**

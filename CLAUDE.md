@@ -71,6 +71,17 @@ The original Perl implementation is located in `reference/processGPX/` and provi
 - Test GPX files for validation
 - Comprehensive option documentation
 
+### Known Issues in Reference Code
+
+When crossporting code from `reference/processGPX/processGPX`, be watchful for bugs that have been identified in the Perl source:
+
+1. **Floating point precision issue** in `cropCorners()` modulo operations (commit 338961b)
+2. **L2 assignment bug** in `autoStraighten()` function (commit c679fd6)
+3. **Elevation differences ignored** in `pointsAreClose()` function (commit ee3854f)
+4. **Inconsistent documentation** - `-auto` sets `-RUTurn 6` (commit e777e96)
+
+The Perl reference code, while comprehensive, is not perfect and should be reviewed carefully during porting.
+
 Key algorithms to port:
 - Gaussian smoothing for position and altitude
 - Spline interpolation for corner rounding  
