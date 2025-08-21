@@ -162,7 +162,7 @@ function isNumeric(value) {
  * @param {Array} points - Array of points
  * @param {string} field - Field name to delete
  */
-function deleteField({ points, field }) {
+function deleteField(points, field) {
 	if (!field) return;
 	for (const p of points) {
 		if (field in p) {
@@ -176,7 +176,7 @@ function deleteField({ points, field }) {
  * @param {Array} points - Array of points
  * @param {string} field - Extension field name to delete
  */
-function deleteExtensionField({ points, field }) {
+function deleteExtensionField(points, field) {
 	if (!field) return;
 	for (const p of points) {
 		if (
@@ -194,9 +194,9 @@ function deleteExtensionField({ points, field }) {
  * @param {Array} points - Array of points
  * @param {string} field - Field name to delete
  */
-function deleteField2({ points, field }) {
-	deleteField({ points, field });
-	deleteExtensionField({ points, field });
+function deleteField2(points, field) {
+	deleteField(points, field);
+	deleteExtensionField(points, field);
 }
 
 /**
@@ -209,16 +209,17 @@ function deleteDerivedFields(
 	fields = ["curvature", "distance", "gradient", "heading"],
 ) {
 	for (const field of fields) {
-		deleteField2({ points, field });
+		deleteField2(points, field);
 	}
 }
 
 /**
  * Remove duplicate points that have identical lat/lon coordinates
- * @param {Object} options - Options object with points and isLoop properties
+ * @param {Array} points - Array of points to process
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @returns {Array} New array of points with duplicates removed
  */
-function removeDuplicatePoints({ points, isLoop = 0 }) {
+function removeDuplicatePoints(points, isLoop = 0) {
 	note("removing duplicate points...");
 
 	const pNew = [];
@@ -309,7 +310,7 @@ function removeDuplicatePoints({ points, isLoop = 0 }) {
  * Add distance field to points array (cumulative distance from start)
  * @param {Array} points - Array of points
  */
-function addDistanceField({ points }) {
+function addDistanceField(points) {
 	if (!points.length) return;
 	points[0].distance = 0;
 	for (let i = 1; i < points.length; i++) {
@@ -326,7 +327,7 @@ function addDistanceField({ points }) {
 function calcCourseDistance(points, isLoop) {
 	if (!points.length) return 0;
 	if (points[points.length - 1].distance === undefined) {
-		addDistanceField({ points });
+		addDistanceField(points);
 	}
 	let distance = points[points.length - 1].distance;
 	if (isLoop && points.length > 1) {
@@ -364,16 +365,14 @@ function interpolatePoint(p1, p2, f) {
 
 /**
  * Crop points based on distance ranges and delete ranges
- * @param {Object} options - Options object with points, isLoop, deleteRange, min, max
+ * @param {Array} points - Array of points to crop
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
+ * @param {Array} deleteRange - Array of distance ranges to delete
+ * @param {number} cropMin - Minimum distance to keep
+ * @param {number} cropMax - Maximum distance to keep
  * @returns {Array} New array of cropped points
  */
-function cropPoints({
-	points,
-	isLoop = 0,
-	deleteRange = [],
-	min: cropMin,
-	max: cropMax,
-}) {
+function cropPoints(points, isLoop = 0, deleteRange = [], cropMin, cropMax) {
 	const ranges = [];
 
 	const courseDistance = calcCourseDistance(points, isLoop);
@@ -542,7 +541,7 @@ function fixZigZags(points) {
 		}
 	}
 
-	addDistanceField({ points });
+	addDistanceField(points);
 
 	if (UTurns.length > 0) {
 		let zigzagCount = 0;
@@ -610,7 +609,7 @@ function fixZigZags(points) {
 
 		// May need to redo distance if zig-zag repair
 		if (zigzagCount > 0) {
-			addDistanceField({ points });
+			addDistanceField(points);
 		}
 	}
 
@@ -664,9 +663,10 @@ function pointsAreClose(p1, p2, sMax = 0.05, zMax = 1) {
 
 /**
  * Add direction (heading) field to all points
- * @param {Object} options - Options object with points and isLoop properties
+ * @param {Array} points - Array of points to process
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
  */
-function addDirectionField({ points, isLoop = 0 }) {
+function addDirectionField(points, isLoop = 0) {
 	if (!points.length) return;
 
 	let u = isLoop ? points.length - 1 : 0;
@@ -730,7 +730,7 @@ function findLoops(points, isLoop) {
 	const loopDistance = 100;
 
 	// Add direction field: distance field was just calculated by zig-zag check
-	addDirectionField({ points, isLoop });
+	addDirectionField(points, isLoop);
 
 	let u = 0;
 	let v = 0;
@@ -768,7 +768,7 @@ function findLoops(points, isLoop) {
 	}
 
 	// Clean up heading field
-	deleteField({ points, field: "heading" });
+	deleteField(points, "heading");
 }
 
 /**
@@ -825,7 +825,7 @@ function cropCorners(
 	}
 
 	// Create a direction field
-	addDirectionField({ points, isLoop });
+	addDirectionField(points, isLoop);
 
 	// Find indices of corners meeting the cropping criteria
 	const cropCorners = [];
@@ -850,7 +850,7 @@ function cropCorners(
 		points[0].distance === undefined &&
 		(start !== undefined || end !== undefined)
 	) {
-		addDistanceField({ points });
+		addDistanceField(points);
 	}
 
 	// Corners which are too close get pruned
@@ -1016,10 +1016,11 @@ function cropCorners(
 
 /**
  * Calculate quality score for a GPX track
- * @param {Object} options - Options object with points and isLoop properties
+ * @param {Array} points - Array of points to analyze
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @returns {Array} [totalScore, directionScore, altitudeScore]
  */
-function calcQualityScore({ points, isLoop }) {
+function calcQualityScore(points, isLoop) {
 	const sines = [];
 	const ddirs = [];
 	note("calculating altitude quality score..");
@@ -1160,7 +1161,7 @@ function addVectorToPoint(point, vector) {
 function straightenPoints(points, _isLoop, startIndex, endIndex) {
 	// Ensure distance field exists
 	if (points[0].distance === undefined) {
-		addDistanceField({ points });
+		addDistanceField(points);
 	}
 
 	// If we wrap around, then use a negative number for the start index
@@ -1209,7 +1210,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		points[0].distance !== undefined
 			? calcCourseDistance(points, isLoop)
 			: (() => {
-				addDistanceField({ points });
+				addDistanceField(points);
 				return calcCourseDistance(points, isLoop);
 			})();
 
@@ -1324,9 +1325,9 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 	// These fields are now invalid
 	if (pointCount > 0) {
 		note(`autoStraighten: total straightened points = ${pointCount}`);
-		deleteField({ points, field: "distance" });
+		deleteField(points, "distance");
 		if (points[0].heading !== undefined) {
-			deleteField({ points, field: "heading" });
+			deleteField(points, "heading");
 		}
 	}
 }
@@ -1431,20 +1432,20 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Calculate quality score of original course
 	note("points in original GPX track = ", points.length);
-	const [score, scoreD, scoreZ] = calcQualityScore({
+	const [score, scoreD, scoreZ] = calcQualityScore(
 		points,
-		isLoop: options.isLoop || 0,
-	});
+		options.isLoop || 0,
+	);
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
 
 	// Eliminate duplicate x,y points
-	points = removeDuplicatePoints({ points, isLoop: options.isLoop || 0 });
+	points = removeDuplicatePoints(points, options.isLoop || 0);
 
 	// If repeat is specified, then create replicates
 	if ((options.repeat || 0) > 0) {
-		deleteField2({ points, field: "distance" });
+		deleteField2(points, "distance");
 		const pNew = [...points];
 		for (let i = 1; i <= options.repeat; i++) {
 			for (const p of points) {
@@ -1458,13 +1459,13 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Crop ranges if specified
 	// This is done before auto-options since it may change whether the course is a loop
-	points = cropPoints({
+	points = cropPoints(
 		points,
-		isLoop: options.isLoop || 0,
-		deleteRange: options.deleteRange || [],
-		min: options.cropMin,
-		max: options.cropMax,
-	});
+		options.isLoop || 0,
+		options.deleteRange || [],
+		options.cropMin,
+		options.cropMax,
+	);
 
 	// AutoLoop: automatically determine if -loop should be invoked
 	options.isLoop = options.isLoop || 0;
@@ -1715,6 +1716,8 @@ export function processGPX(trackFeature, options = {}) {
 			options.autoStraightenDeviation,
 		);
 	}
+
+	// Skip circuit processing
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {

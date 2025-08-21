@@ -82,6 +82,29 @@ When crossporting code from `reference/processGPX/processGPX`, be watchful for b
 
 The Perl reference code, while comprehensive, is not perfect and should be reviewed carefully during porting.
 
+### JavaScript Porting Guidelines
+
+When translating Perl function signatures to JavaScript, use named positional parameters rather than destructured object parameters:
+
+```javascript
+// Preferred - like autoStraighten()
+function processPoints(points, isLoop, minLength, maxDeviation) {
+    // Function body
+}
+
+// Avoid - like cropPoints()  
+function processPoints({
+    points,
+    isLoop = 0,
+    minLength,
+    maxDeviation
+}) {
+    // Function body
+}
+```
+
+This approach maintains consistency with the `autoStraighten()` pattern and provides cleaner function signatures.
+
 Key algorithms to port:
 - Gaussian smoothing for position and altitude
 - Spline interpolation for corner rounding  
