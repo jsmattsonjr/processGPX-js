@@ -111,7 +111,7 @@ function reduceAngle(theta) {
 	theta -= TWOPI * Math.floor(0.5 + theta / TWOPI);
 
 	// Ensure π maps to -π to match Perl behavior
-	if (Math.abs(theta - PI) < Number.EPSILON) {
+	if (Math.abs(theta - PI) < PI * Number.EPSILON) {
 		theta = -PI;
 	}
 
