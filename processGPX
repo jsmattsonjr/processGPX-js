@@ -5177,8 +5177,10 @@ for my $file ( @files ) {
 
   # spline of corners
   if ( $splineRadians > 0 ) {
+    dumpPoints($points, "perl-points-before-splines.txt");
     note("corner splines, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
+    dumpPoints($points, "perl-points-after-splines.txt");
   }
 
   # arc fit of corners

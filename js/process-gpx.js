@@ -2127,6 +2127,237 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 }
 
 /**
+ * for splines... p1 projects to p3, p2 projects to p4
+ * interpolate and do a weighted average
+ * @param {Array} points - Array of 4 points [p1, p2, p3, p4]
+ * @param {number} f - interpolation factor (0-1)
+ * @returns {Object} interpolated point
+ */
+function interpolateCorner(points, f) {
+	const [p1, p2, p3, p4] = points;
+	const px1 = interpolatePoint(p1, p3, f);
+	const px2 = interpolatePoint(p4, p2, f);
+	const px = interpolatePoint(px1, px2, f);
+	return px;
+}
+
+/**
+ * return points between p1 and p2 using a spline
+ * using angles at beginning and end of the interval
+ * @param {Object} p1 - start point
+ * @param {Object} p2 - end point
+ * @param {number} d1 - direction at p1 (radians)
+ * @param {number} d2 - direction at p2 (radians)
+ * @param {number} dd - minimum angle for spline (default PI/16)
+ * @returns {Array} array of interpolated points
+ */
+function splineInterpolation(p1, p2, d1, d2, dd = PI / 16) {
+	const sqrt2 = Math.sqrt(2);
+
+	// calculate number of points based on the angle
+	const deltad = reduceAngle(d2 - d1);
+	let NPoints = Math.floor(Math.abs(deltad) / dd);
+
+	// if the points are close, reduce the number of points: 1 point per 10 cm separation
+	const NPointsMax = Math.floor(latlngDistance(p1, p2) / 0.1);
+	if (NPoints > NPointsMax) {
+		NPoints = NPointsMax;
+	}
+
+	if (NPoints <= 0) {
+		return [];
+	}
+
+	const points = [];
+
+	// distance to control points
+	const r = latlngDistance(p1, p2) / sqrt2;
+
+	// find projections of points along the directions
+	const dx1 = Math.cos(d1) * r;
+	const dy1 = Math.sin(d1) * r;
+	const dx2 = -Math.cos(d2) * r;
+	const dy2 = -Math.sin(d2) * r;
+	const px1 = addVectorToPoint(p1, [dx1, dy1]);
+	const px2 = addVectorToPoint(p2, [dx2, dy2]);
+
+	// create points along asymptotes
+	for (let i = 1; i <= NPoints; i++) {
+		const f = i / (NPoints + 1);
+		const p = interpolateCorner([p1, p2, px1, px2], f);
+		points.push(p);
+	}
+
+	// adjust non-position fields to be linear with distance
+	// since points are not necessarily equally spaced
+	if (points.length > 0) {
+		const ss = [latlngDistance(p1, points[0])];
+		for (let i = 0; i < points.length - 1; i++) {
+			ss.push(ss[ss.length - 1] + latlngDistance(points[i], points[i + 1]));
+		}
+		ss.push(ss[ss.length - 1] + latlngDistance(points[points.length - 1], p2));
+
+		for (let i = 0; i < points.length; i++) {
+			const f = ss[i] / ss[ss.length - 1];
+			const p = points[i];
+			for (const k in p1) {
+				if (k !== "lat" && k !== "lon") {
+					if (k === "segment") {
+						if (p1[k] === p2[k]) {
+							p[k] = p1[k];
+						} else {
+							p[k] = 0;
+						}
+					} else if (
+						p1[k] !== undefined &&
+						p2[k] !== undefined &&
+						isNumeric(p1[k]) &&
+						isNumeric(p2[k])
+					) {
+						p[k] = (1 - f) * p1[k] + f * p2[k];
+					} else {
+						p[k] = p1[k];
+					}
+				}
+			}
+		}
+	}
+
+	return points;
+}
+
+/**
+ * adds splines to points
+ * this can also be used for arc fitting
+ * @param {Array} points - array of points to process
+ * @param {number} minRadians - minimum angle for spline processing
+ * @param {number} maxRadians - maximum angle for spline processing
+ * @param {number} start - start distance (optional)
+ * @param {number} end - end distance (optional)
+ * @param {number} isLoop - whether the track is a loop (0 or 1)
+ * @param {string} splineType - type of spline ("spline" or "arcFit")
+ * @returns {Array} new array of points with splines added
+ */
+function addSplines(
+	points,
+	minRadians,
+	maxRadians,
+	start,
+	end,
+	isLoop = 0,
+	splineType = "spline",
+) {
+	note(`starting ${splineType} processing...`);
+
+	// create a direction field
+	addDirectionField(points, isLoop);
+
+	// add a distance field if needed
+	if (!points[0].distance && (start !== undefined || end !== undefined)) {
+		addDistanceField(points);
+	}
+
+	// find corners which meet spline criteria
+	// two turns in the same direction, both less than max
+	// assume sharper or single-point turns are intentional
+	const pNew = [];
+	const isArcFit = splineType === "arcFit";
+
+	let count = 0;
+
+	// i : first point on interpolation interval
+	iLoop: for (let i = 0; i < points.length; i++) {
+		pNew.push(points[i]);
+
+		// add points if appropriate
+		// splines cannot be fit to first or last interval unless it's a loop
+		if (isLoop || (i > 0 && i < points.length - 2)) {
+			const j = (i + 1) % points.length;
+			if (pointsAreClose(points[i], points[j], 1)) {
+				continue;
+			}
+
+			// if start and stop points are specified, then check these
+			// both points i and j must pass the test
+			if (start !== undefined && end !== undefined && end < start) {
+				if (points[i].distance > start || points[j].distance > start) continue;
+				if (points[i].distance < end || points[j].distance < end) continue;
+			} else {
+				if (
+					start !== undefined &&
+					(points[i].distance < start || points[j].distance < start)
+				)
+					continue;
+				if (
+					end !== undefined &&
+					(points[i].distance > end || points[j].distance > end)
+				)
+					continue;
+			}
+
+			let k = (i - 1 + points.length) % points.length;
+			while (pointsAreClose(points[i], points[k], 1)) {
+				if (k === (isLoop ? j : 0)) continue iLoop;
+				k = (k - 1 + points.length) % points.length;
+			}
+
+			let l = (j + 1) % points.length;
+			while (pointsAreClose(points[j], points[l], 1)) {
+				l = (l + 1) % points.length;
+				if (isLoop) {
+					if (l <= i && l >= k) continue iLoop;
+				} else {
+					if (l <= j) continue iLoop;
+				}
+			}
+			if (isLoop) {
+				if (l <= j && l >= k) continue;
+			} else {
+				if (l <= j) continue;
+			}
+
+			// turn angles
+			const a1 = latlngAngle(points[k], points[i], points[j]);
+			const a2 = latlngAngle(points[i], points[j], points[l]);
+			if (a1 === null || a2 === null) continue;
+
+			const turn = (a1 + a2) / 2;
+			if (Math.abs(turn) > minRadians && Math.abs(turn) <= maxRadians) {
+				let newPoints;
+				if (isArcFit) {
+					// arcFitInterpolation not implemented yet - skip for now
+					warn("arcFitInterpolation not implemented, skipping");
+					newPoints = [];
+				} else {
+					newPoints = splineInterpolation(
+						points[i],
+						points[j],
+						points[i].heading,
+						points[j].heading,
+						minRadians,
+					);
+				}
+				count += newPoints.length;
+				for (const p of newPoints) {
+					pNew.push(p);
+				}
+			}
+		}
+	}
+
+	// remove distance field if we've added any points
+	if (pNew.length > 0 && count > 0) {
+		for (const field of ["direction", "distance"]) {
+			if (pNew[0][field] !== undefined) {
+				deleteField2(pNew, field);
+			}
+		}
+	}
+
+	return pNew;
+}
+
+/**
  * Process a GPX track feature to optimize and improve the route
  * @param {Object} trackFeature - LineString feature object from GPX parsing
  * @param {Object} options - Processing options dictionary
@@ -2519,6 +2750,22 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
+	}
+
+	// spline of corners
+	if (_splineRadians > 0) {
+		_dumpPoints(points, "js-points-before-splines.txt");
+		note("corner splines, pre-smoothing...");
+		points = addSplines(
+			points,
+			_splineRadians,
+			_splineMaxRadians,
+			options.splineStart,
+			options.splineEnd,
+			options.isLoop || 0,
+			"spline",
+		);
+		_dumpPoints(points, "js-points-after-splines.txt");
 	}
 
 	// Skip circuit processing
