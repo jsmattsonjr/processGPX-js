@@ -9,6 +9,9 @@ export class MapVisualization {
 		this.processedRouteLayer = null;
 		this.startMarker = null;
 		this.endMarker = null;
+		this.crosshairMarkers = [];
+		this.originalTrackFeature = null;
+		this.processedTrackFeature = null;
 	}
 
 	/**
@@ -73,6 +76,9 @@ export class MapVisualization {
 		) {
 			throw new Error("Invalid track feature provided");
 		}
+
+		// Store the original track feature
+		this.originalTrackFeature = trackFeature;
 
 		// Use Leaflet's built-in GeoJSON layer
 		this.routeLayer = L.geoJSON(trackFeature, {
@@ -155,6 +161,9 @@ export class MapVisualization {
 			throw new Error("Invalid processed track feature provided");
 		}
 
+		// Store the processed track feature
+		this.processedTrackFeature = processedTrackFeature;
+
 		// Remove existing processed route if any
 		if (this.processedRouteLayer) {
 			this.map.removeLayer(this.processedRouteLayer);
@@ -204,6 +213,127 @@ export class MapVisualization {
 			this.map.removeLayer(this.endMarker);
 			this.endMarker = null;
 		}
+		this.clearCrosshairs();
+		this.originalTrackFeature = null;
+		this.processedTrackFeature = null;
+	}
+
+	/**
+	 * Update crosshair positions based on distance from elevation chart
+	 * @param {number} distanceKm - Distance in kilometers from chart hover
+	 */
+	updateCrosshairs(distanceKm) {
+		if (!this.map) return;
+		
+		// Clear existing crosshairs
+		this.clearCrosshairs();
+
+		// Convert distance to meters for calculations
+		const distanceM = distanceKm * 1000;
+
+		// Find positions on both routes at the given distance
+		const positions = [];
+		
+		if (this.originalTrackFeature) {
+			const pos = this.findPositionAtDistance(this.originalTrackFeature, distanceM);
+			if (pos) {
+				positions.push({
+					position: pos,
+					color: "#3498db", // Blue for original route
+					label: "Original"
+				});
+			}
+		}
+
+		if (this.processedTrackFeature) {
+			const pos = this.findPositionAtDistance(this.processedTrackFeature, distanceM);
+			if (pos) {
+				positions.push({
+					position: pos,
+					color: "#e74c3c", // Red for processed route
+					label: "Processed"
+				});
+			}
+		}
+
+		// Create crosshair markers for each position found
+		positions.forEach(({ position, color, label }) => {
+			const marker = L.circleMarker([position.lat, position.lon], {
+				radius: 6,
+				fillColor: color,
+				color: "black",
+				weight: 2,
+				opacity: 1,
+				fillOpacity: 0.8,
+			}).addTo(this.map);
+
+			marker.bindPopup(`
+				<div class="route-popup">
+					<strong>${label} Route</strong><br>
+					Distance: ${distanceKm.toFixed(2)}km<br>
+					Elevation: ${Math.round(position.elevation || 0)}m
+				</div>
+			`);
+
+			this.crosshairMarkers.push(marker);
+		});
+	}
+
+	/**
+	 * Clear all crosshair markers from the map
+	 */
+	clearCrosshairs() {
+		this.crosshairMarkers.forEach(marker => {
+			this.map.removeLayer(marker);
+		});
+		this.crosshairMarkers = [];
+	}
+
+	/**
+	 * Find position at given cumulative distance along a track
+	 * @param {Object} trackFeature - LineString feature object
+	 * @param {number} targetDistance - Target distance in meters
+	 * @returns {Object|null} Position object with lat, lon, elevation
+	 */
+	findPositionAtDistance(trackFeature, targetDistance) {
+		const coordinates = trackFeature.geometry.coordinates;
+		let cumulativeDistance = 0;
+
+		for (let i = 1; i < coordinates.length; i++) {
+			const prev = coordinates[i - 1];
+			const curr = coordinates[i];
+			
+			// Calculate distance between consecutive points using Turf.js
+			const from = turf.point([prev[0], prev[1]]);
+			const to = turf.point([curr[0], curr[1]]);
+			const segmentDistance = turf.distance(from, to, { units: "meters" });
+			
+			if (cumulativeDistance + segmentDistance >= targetDistance) {
+				// Target distance is within this segment - interpolate position
+				const segmentProgress = (targetDistance - cumulativeDistance) / segmentDistance;
+				
+				// Linear interpolation
+				const lat = prev[1] + (curr[1] - prev[1]) * segmentProgress;
+				const lon = prev[0] + (curr[0] - prev[0]) * segmentProgress;
+				const elevation = prev[2] + (curr[2] - prev[2]) * segmentProgress;
+				
+				return { lat, lon, elevation };
+			}
+			
+			cumulativeDistance += segmentDistance;
+		}
+
+		// If target distance exceeds track length, return last point
+		if (coordinates.length > 0) {
+			const lastCoord = coordinates[coordinates.length - 1];
+			return {
+				lat: lastCoord[1],
+				lon: lastCoord[0],
+				elevation: lastCoord[2] || 0
+			};
+		}
+
+		return null;
 	}
 
 	/**

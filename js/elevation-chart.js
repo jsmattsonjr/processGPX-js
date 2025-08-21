@@ -33,9 +33,10 @@ const crosshairPlugin = {
 Chart.register(crosshairPlugin);
 
 export class ElevationChart {
-	constructor(containerId) {
+	constructor(containerId, mapVisualization = null) {
 		this.containerId = containerId;
 		this.chart = null;
+		this.mapVisualization = mapVisualization;
 	}
 
 	/**
@@ -110,6 +111,11 @@ export class ElevationChart {
 							x: canvasPosition.x,
 						};
 						chart.draw();
+
+						// Update map crosshairs if mapVisualization is available
+						if (this.mapVisualization) {
+							this.mapVisualization.updateCrosshairs(dataX);
+						}
 					}
 				},
 				plugins: {
@@ -182,6 +188,11 @@ export class ElevationChart {
 		ctx.addEventListener("mouseleave", () => {
 			this.chart.crosshair = null;
 			this.chart.draw();
+			
+			// Clear map crosshairs when leaving chart
+			if (this.mapVisualization) {
+				this.mapVisualization.clearCrosshairs();
+			}
 		});
 	}
 
