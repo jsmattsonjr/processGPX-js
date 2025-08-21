@@ -5020,9 +5020,7 @@ for my $file ( @files ) {
   $points = fixZigZags($points);
 
   # look for loops
-  dumpPoints($points, "perl-before-findLoops.txt");
   findLoops($points, $isLoop);
-  dumpPoints($points, "perl-after-findLoops.txt");
 
   # adjust altitudes if requested
   if ( ((defined $zShift) && ($zShift != 0)) || ((defined $zScale) && ($zScale != 1)) ) {

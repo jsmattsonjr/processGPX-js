@@ -61,7 +61,7 @@ function warn(...args) {
  * @param {Array} points - Array of point objects with lat, lon, ele, distance properties
  * @param {string} filename - Output filename
  */
-function dumpPoints(points, filename) {
+function _dumpPoints(points, filename) {
 	let output = `# Points dump: ${points.length} points\n`;
 	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
 
@@ -108,6 +108,12 @@ function dumpPoints(points, filename) {
  */
 function reduceAngle(theta) {
 	theta -= TWOPI * Math.floor(0.5 + theta / TWOPI);
+
+	// Ensure π maps to -π to match Perl behavior
+	if (Math.abs(theta - PI) < 1e-10) {
+		theta = -PI;
+	}
+
 	return theta;
 }
 
@@ -2412,9 +2418,7 @@ export function processGPX(trackFeature, options = {}) {
 	points = fixZigZags(points);
 
 	// Look for loops
-	dumpPoints(points, "js-before-findLoops.txt");
 	findLoops(points, options.isLoop);
-	dumpPoints(points, "js-after-findLoops.txt");
 
 	// Adjust altitudes if requested
 	if (

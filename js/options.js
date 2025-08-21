@@ -128,5 +128,5 @@ export const defaultOptions = {
 	straightStart: [],
 
 	// shortcut options
-	auto: 0, // TODO: hardcoded for now
+	auto: 1, // TODO: hardcoded for now
 };
