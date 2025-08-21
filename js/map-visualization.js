@@ -224,7 +224,7 @@ export class MapVisualization {
 	 */
 	updateCrosshairs(distanceKm) {
 		if (!this.map) return;
-		
+
 		// Clear existing crosshairs
 		this.clearCrosshairs();
 
@@ -233,25 +233,31 @@ export class MapVisualization {
 
 		// Find positions on both routes at the given distance
 		const positions = [];
-		
+
 		if (this.originalTrackFeature) {
-			const pos = this.findPositionAtDistance(this.originalTrackFeature, distanceM);
+			const pos = this.findPositionAtDistance(
+				this.originalTrackFeature,
+				distanceM,
+			);
 			if (pos) {
 				positions.push({
 					position: pos,
 					color: "#3498db", // Blue for original route
-					label: "Original"
+					label: "Original",
 				});
 			}
 		}
 
 		if (this.processedTrackFeature) {
-			const pos = this.findPositionAtDistance(this.processedTrackFeature, distanceM);
+			const pos = this.findPositionAtDistance(
+				this.processedTrackFeature,
+				distanceM,
+			);
 			if (pos) {
 				positions.push({
 					position: pos,
 					color: "#e74c3c", // Red for processed route
-					label: "Processed"
+					label: "Processed",
 				});
 			}
 		}
@@ -283,7 +289,7 @@ export class MapVisualization {
 	 * Clear all crosshair markers from the map
 	 */
 	clearCrosshairs() {
-		this.crosshairMarkers.forEach(marker => {
+		this.crosshairMarkers.forEach((marker) => {
 			this.map.removeLayer(marker);
 		});
 		this.crosshairMarkers = [];
@@ -302,24 +308,25 @@ export class MapVisualization {
 		for (let i = 1; i < coordinates.length; i++) {
 			const prev = coordinates[i - 1];
 			const curr = coordinates[i];
-			
+
 			// Calculate distance between consecutive points using Turf.js
 			const from = turf.point([prev[0], prev[1]]);
 			const to = turf.point([curr[0], curr[1]]);
 			const segmentDistance = turf.distance(from, to, { units: "meters" });
-			
+
 			if (cumulativeDistance + segmentDistance >= targetDistance) {
 				// Target distance is within this segment - interpolate position
-				const segmentProgress = (targetDistance - cumulativeDistance) / segmentDistance;
-				
+				const segmentProgress =
+					(targetDistance - cumulativeDistance) / segmentDistance;
+
 				// Linear interpolation
 				const lat = prev[1] + (curr[1] - prev[1]) * segmentProgress;
 				const lon = prev[0] + (curr[0] - prev[0]) * segmentProgress;
 				const elevation = prev[2] + (curr[2] - prev[2]) * segmentProgress;
-				
+
 				return { lat, lon, elevation };
 			}
-			
+
 			cumulativeDistance += segmentDistance;
 		}
 
@@ -329,7 +336,7 @@ export class MapVisualization {
 			return {
 				lat: lastCoord[1],
 				lon: lastCoord[0],
-				elevation: lastCoord[2] || 0
+				elevation: lastCoord[2] || 0,
 			};
 		}
 

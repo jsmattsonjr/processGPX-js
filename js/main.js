@@ -83,7 +83,10 @@ class ProcessGPXApp {
 		this.mapVisualization.displayRoute(trackFeature);
 
 		// Initialize elevation chart with map visualization reference
-		this.elevationChart = new ElevationChart("elevationProfile", this.mapVisualization);
+		this.elevationChart = new ElevationChart(
+			"elevationProfile",
+			this.mapVisualization,
+		);
 		this.elevationChart.createChart(trackFeature);
 	}
 

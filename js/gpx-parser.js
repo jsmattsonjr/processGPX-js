@@ -2,7 +2,6 @@
  * GPX parsing using togeojson
  */
 export class GPXParser {
-
 	/**
 	 * Parse GPX file to GeoJSON and return first LineString feature
 	 * @param {File} file - GPX file to parse

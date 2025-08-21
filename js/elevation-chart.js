@@ -188,7 +188,7 @@ export class ElevationChart {
 		ctx.addEventListener("mouseleave", () => {
 			this.chart.crosshair = null;
 			this.chart.draw();
-			
+
 			// Clear map crosshairs when leaving chart
 			if (this.mapVisualization) {
 				this.mapVisualization.clearCrosshairs();
@@ -287,8 +287,12 @@ export class ElevationChart {
 		);
 
 		// Calculate the maximum distance from both original and processed data
-		const originalMaxDistance = Math.max(...originalData.map(point => point.x));
-		const processedMaxDistance = Math.max(...processedData.map(point => point.x));
+		const originalMaxDistance = Math.max(
+			...originalData.map((point) => point.x),
+		);
+		const processedMaxDistance = Math.max(
+			...processedData.map((point) => point.x),
+		);
 		const maxDistance = Math.max(originalMaxDistance, processedMaxDistance);
 
 		// Update chart limits to accommodate the longer track
