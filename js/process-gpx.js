@@ -739,11 +739,8 @@ function findLoops(points, isLoop) {
 	while (v < points.length - 1) {
 		const p = points[u];
 
-		// Find endpoint within loop distance
-		while (
-			v < points.length - 1 &&
-			points[v + 1].distance < p.distance + loopDistance
-		) {
+		// Find endpoint within loop distance  
+		while ((v < points.length - 1) && (points[v + 1].distance < p.distance + loopDistance)) {
 			v++;
 		}
 
@@ -1355,7 +1352,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 		const jCount = new Array(points.length).fill(0);
 		
 		let j = i + snapStep;
-		if (j > points.length - 1) continue iLoop;
+		if (j >= points.length) continue iLoop;
 		
 		// Get out of snap range: get point j beyond the snap range of point i
 		// This is geometric distance, not course distance, which could potentially be an issue
@@ -1366,7 +1363,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 		}
 		
 		// Keep going until distance between j and i stops increasing
-		while (j <= points.length - 1) {
+		while (j < points.length) {
 			const d2 = latlngDistance(p1, points[j]);
 			if (d2 < d) break;
 			d = d2;
@@ -1375,7 +1372,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 		}
 		
 		// Keep moving until j comes back into snap range of i
-		jLoop1: while (j <= points.length - 1) {
+		jLoop1: while (j < points.length) {
 			// Make sure we don't try the same value twice (moving forward and backward could cause this)
 			if (jCount[j] > 0) {
 				continue iLoop;
@@ -1391,7 +1388,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 			}
 			
 			// Find local minimum of distance... reduced step distance to 1
-			jLoop2: while (j <= points.length - 1) {
+			jLoop2: while (j < points.length) {
 				d = latlngDistance(p1, points[j]);
 				
 				// Distance to point forward
@@ -1500,7 +1497,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 				}
 				
 				// As long as they are coincident, increase i1 and j1 together (short cut)
-				while (i1 > 0 && j1 > i2 && j1 <= points.length - 1 && 
+				while (i1 > 0 && j1 > i2 && j1 < points.length && 
 					   pointsAreClose(points[i1 - 1], points[j1 - sign], dsClose, snapAltitude)) {
 					i1--;
 					j1 -= sign;
@@ -1513,7 +1510,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 				}
 				
 				// As long as they are coincident, increase i2 and j2 together (short cut)
-				while (i2 < j1 && j2 > i2 && j2 <= points.length - 1 && 
+				while (i2 < j1 && j2 > i2 && j2 < points.length && 
 					   pointsAreClose(points[i2 + 1], points[j2 + sign], dsClose, snapAltitude)) {
 					i2++;
 					j2 += sign;
@@ -1524,13 +1521,13 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 				if (iTest > 0) {
 					// Push jTest up against iTest
 					let jTest = j1;
-					while (jTest > i2 && jTest <= points.length - 1 && 
+					while (jTest > i2 && jTest < points.length && 
 						   roadTest(points, iTest - 1, iTest, iTest + 1, iTest + 2, jTest - sign, snapDistance)) {
 						jTest -= sign;
 					}
 					
 					// Hop jTest past iTest: test that iTest lays in line of j points
-					if (jTest > i2 && jTest <= points.length - 1 && 
+					if (jTest > i2 && jTest < points.length && 
 						(flag1 = roadTest(points, jTest - 2 * sign, jTest - sign, jTest, jTest + sign, iTest, snapDistance))) {
 						jTest -= sign;
 					}
@@ -1547,13 +1544,13 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 					let jTest = j2;
 					
 					// Push jTest up against iTest2 (it's between j2 and jTest)
-					while (jTest > iTest2 && jTest <= points.length - 1 && 
+					while (jTest > iTest2 && jTest < points.length && 
 						   roadTest(points, iTest2 - 2, iTest2 - 1, iTest2, iTest2 + 1, jTest + sign, snapDistance)) {
 						jTest += sign;
 					}
 					
 					// Hop past iTest2
-					if (jTest > iTest2 && jTest <= points.length - 1 && 
+					if (jTest > iTest2 && jTest < points.length && 
 						(flag2 = roadTest(points, jTest - sign, jTest, jTest + sign, jTest + 2 * sign, iTest2, snapDistance))) {
 						jTest += sign;
 					}
@@ -1691,7 +1688,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 					const sis = [0];
 					const is = [i_trans];
 					
-					while (s < snapTransition && i_trans > 0 && i_trans <= points.length - 1) {
+					while (s < snapTransition && i_trans > 0 && i_trans < points.length) {
 						s += latlngDistance(points[i_trans], points[i_trans + d]);
 						i_trans += d;
 						sis.push(s);
@@ -1704,7 +1701,7 @@ function snapPoints(points, snap, snapDistance = 2, snapAltitude = 1, snapTransi
 					const js = [j_trans];
 					
 					s = 0;
-					while (s < snapTransition && j_trans > 0 && j_trans <= points.length - 1) {
+					while (s < snapTransition && j_trans > 0 && j_trans < points.length) {
 						s += latlngDistance(points[j_trans], points[j_trans + jd]);
 						j_trans += jd;
 						sjs.push(s);
