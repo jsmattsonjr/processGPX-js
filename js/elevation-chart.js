@@ -16,7 +16,7 @@ const crosshairPlugin = {
 			const { top, bottom } = chart.chartArea;
 
 			ctx.save();
-			ctx.strokeStyle = "rgba(255, 107, 107, 0.8)";
+			ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
 			ctx.lineWidth = 2;
 			ctx.setLineDash([5, 5]);
 
