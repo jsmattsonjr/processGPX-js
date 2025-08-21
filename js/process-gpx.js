@@ -58,7 +58,7 @@ function reduceAngle(theta) {
 }
 
 /**
- * Calculate distance between two lat/lng points using haversine formula
+ * find distance between lat, lng points
  * @param {Object} p1 - First point with {lat, lon} properties
  * @param {Object} p2 - Second point with {lat, lon} properties
  * @returns {number} Distance in meters
@@ -130,7 +130,7 @@ function latlngCrossProduct(p1, p2, p3, p4) {
 }
 
 /**
- * Calculate angle between three points
+ * given 3 points, return the subtended angle
  * @param {Object} p1 - First point
  * @param {Object} p2 - Vertex point
  * @param {Object} p3 - Third point
@@ -165,7 +165,7 @@ function isNumeric(value) {
 }
 
 /**
- * Delete a field from all points in array
+ * delete a field from the points
  * @param {Array} points - Array of points
  * @param {string} field - Field name to delete
  */
@@ -179,7 +179,7 @@ function deleteField(points, field) {
 }
 
 /**
- * Delete an extension field from all points in array
+ * delete an extension field
  * @param {Array} points - Array of points
  * @param {string} field - Extension field name to delete
  */
@@ -197,7 +197,7 @@ function deleteExtensionField(points, field) {
 }
 
 /**
- * Delete both regular and extension fields
+ * delete field and any extension
  * @param {Array} points - Array of points
  * @param {string} field - Field name to delete
  */
@@ -207,7 +207,7 @@ function deleteField2(points, field) {
 }
 
 /**
- * Delete derived fields from points array
+ * strip fields which are derived: needed if route has been changed by processing
  * @param {Array} points - Array of points
  * @param {Array} fields - Fields to delete (default: curvature, distance, gradient, heading)
  */
@@ -221,7 +221,7 @@ function deleteDerivedFields(
 }
 
 /**
- * Remove duplicate points that have identical lat/lon coordinates
+ * remove duplicate points of the same segment, and reduce point triplets
  * @param {Array} points - Array of points to process
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @returns {Array} New array of points with duplicates removed
@@ -314,7 +314,7 @@ function removeDuplicatePoints(points, isLoop = 0) {
 }
 
 /**
- * Add distance field to points array (cumulative distance from start)
+ * add distance field to points
  * @param {Array} points - Array of points
  */
 function addDistanceField(points) {
@@ -327,8 +327,10 @@ function addDistanceField(points) {
 }
 
 /**
- * Calculate total course distance
- *
+ * calculate the net course distance
+ * need to "wrap around" for lapped courses
+ * @param {Array} points - Array of points
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @returns {number} Total distance in meters
  */
 function calcCourseDistance(points, isLoop) {
@@ -344,7 +346,12 @@ function calcCourseDistance(points, isLoop) {
 }
 
 /**
- * Interpolate point between two points at fraction f
+ * point linearly interpolated between p1 and p2, with f the
+ * fraction of the distance to p2
+ * note since deleting repeated points results in the second point of a pair being deleted,
+ * for non-numeric fields, I need to assume interpolated points are associated with the
+ * latter point
+ * for segments, I need to have the interpolated interval be a fresh segment
  * @param {Object} p1 - First point
  * @param {Object} p2 - Second point
  * @param {number} f - Fraction (0 = p1, 1 = p2)
@@ -371,7 +378,7 @@ function interpolatePoint(p1, p2, f) {
 }
 
 /**
- * Crop points based on distance ranges and delete ranges
+ * crop points
  * @param {Array} points - Array of points to crop
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @param {Array} deleteRange - Array of distance ranges to delete
@@ -518,7 +525,8 @@ function cropPoints(points, isLoop = 0, deleteRange = [], cropMin, cropMax) {
 }
 
 /**
- * Check whether two segments are in opposite direction (U-turn check)
+ * UTurnCheck
+ * check whether p1->p2 and p3->p4 are in the opposite direction
  * @param {Object} p1 - First point of first segment
  * @param {Object} p2 - Second point of first segment
  * @param {Object} p3 - First point of second segment
@@ -532,7 +540,8 @@ function UTurnCheck(p1, p2, p3, p4, dotMax = -0.98) {
 }
 
 /**
- * Fix zig-zag patterns in route by detecting and removing U-turn sequences
+ * zig-zags: pairs of 180 degree turns within a certain distance are probably misplaced control points
+ * this is just a warning for now... easy to fix if it's along a line, but what if it goes around a corner?
  * @param {Array} points - Array of points
  * @returns {Array} New array with zig-zags fixed
  */
@@ -624,7 +633,11 @@ function fixZigZags(points) {
 }
 
 /**
- * Calculate direction from p1 to p2 in radians
+ * direction from p1 to p2
+ * 0 deg = eastward
+ * 90 deg: northward
+ * 180 deg: westward
+ * 270 deg: southward
  * @param {Object} p1 - First point
  * @param {Object} p2 - Second point
  * @returns {number} Direction in radians (0 = east, π/2 = north)
@@ -645,7 +658,8 @@ function averageAngles(d1, d2) {
 }
 
 /**
- * Calculate direction of point p2 as average of adjacent segments
+ * the direction of a point p2, which is the average
+ * of the directions of the adjacent segments
  * @param {Object} p1 - Previous point
  * @param {Object} p2 - Current point
  * @param {Object} p3 - Next point
@@ -669,7 +683,7 @@ function pointsAreClose(p1, p2, sMax = 0.05, zMax = 1) {
 }
 
 /**
- * Add direction (heading) field to all points
+ * add direction field to points
  * @param {Array} points - Array of points to process
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
  */
@@ -728,7 +742,7 @@ function addDirectionField(points, isLoop = 0) {
 }
 
 /**
- * Find and report loops in the route
+ * look for loops
  * @param {Array} points - Array of points
  * @param {number} isLoop - Whether route is a loop
  */
@@ -779,7 +793,7 @@ function findLoops(points, isLoop) {
 }
 
 /**
- * Reverse points and adjust distance, direction, curvature and laneshift fields
+ * reverse points and adjust distance, direction, curvature and laneshift fields, if present
  * @param {Array} points - Array of points to reverse
  */
 function reversePoints(points) {
@@ -1022,7 +1036,7 @@ function cropCorners(
 }
 
 /**
- * Calculate quality score for a GPX track
+ * calculate a quality metric for the route
  * @param {Array} points - Array of points to analyze
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
  * @returns {Array} [totalScore, directionScore, altitudeScore]
@@ -1091,7 +1105,7 @@ function calcQualityScore(points, isLoop) {
 }
 
 /**
- * Calculate deviation statistics for a range of points relative to connection of endpoints
+ * calculate deviation statistics for a range of points relative to connection of endpoints
  * @param {Array} points - Array of points
  * @param {number} startIndex - Start index
  * @param {number} endIndex - End index
@@ -1133,7 +1147,11 @@ function calcDeviationStats(points, startIndex, endIndex) {
 }
 
 /**
- * Add vector to point to get new lat/lon position
+ * add a vector to a point
+ * a single iteration will use the average cosine for the path rather than
+ * a starting cosine, just for maximal accuracy
+ * note there will be no elevation field for this point:
+ * that will need to be added somewhere else
  * @param {Object} point - Point with lat, lon properties
  * @param {Array} vector - [dx, dy] vector in meters
  * @returns {Object} New point with lat, lon properties
@@ -1159,7 +1177,7 @@ function addVectorToPoint(point, vector) {
 }
 
 /**
- * Straighten points between indices
+ * straighten points between indices
  * @param {Array} points - Array of points
  * @param {boolean} _isLoop - Whether route is a loop
  * @param {number} startIndex - Start index
@@ -1234,7 +1252,7 @@ function xyPointOnLine(p1, p2, p3) {
 }
 
 /**
- * Check if point px is on the line segment from p1 to p2
+ * checks whether px is on the line connecting p1 and p2
  * @param {Object} p1 - First point with {lat, lon} properties
  * @param {Object} p2 - Second point with {lat, lon} properties
  * @param {Object} px - Test point with {lat, lon} properties
@@ -1256,7 +1274,13 @@ function isPointOnRoad(p1, p2, px, dmax = 1) {
 }
 
 /**
- * Corner version of isPointOnRoad - checks if point px lies on corner formed by 4 points
+ * a corner version of whether the point is on the road...
+ * but requires more points.
+ * given 4 points, takes a direction from p1 to p2
+ * and a direction from p3 to p4
+ * if the direction from p2 to px, and from px to p3, falls in
+ * between the directions from p1 to p2 and from p2 to p3,
+ * then it's compatible with being on the line
  * @param {Object} p1 - First reference point
  * @param {Object} p2 - Second reference point
  * @param {Object} p3 - Third reference point
@@ -1296,7 +1320,7 @@ function isPointOnRoadCorner(p1, p2, p3, p4, px) {
 }
 
 /**
- * Test if point i falls on line or corner formed by points j, k, l, m
+ * do tests of if point i falls on the road in the range (j, k, l, m)
  * @param {Array} points - Array of points
  * @param {number} j - Point before first point
  * @param {number} k - First point
@@ -1901,7 +1925,7 @@ function snapPoints(
 }
 
 /**
- * Automatically find segments to be straightened
+ * automatically find segments to be straightened
  * segments have a maximum deviation and also a check on
  * the correlation of the deviations
  * step through the route (perhaps with wrap-around for a loop)
