@@ -227,7 +227,7 @@ class ProcessGPXApp {
 				straightStart: [],
 
 				// shortcut options
-				auto: 1, // TODO: hardcoded for now
+				auto: 0, // TODO: hardcoded for now
 			};
 
 			// Process the current route with options
