@@ -11,7 +11,7 @@ This is a JavaScript port of the original Perl processGPX tool (v0.52) designed 
 ### Code Standards and Formatting
 - Prefer `""` for string literals
 - Add a newline at EOF
-- Replace `console.warn()` with `console.log()` for translations of Perl's `warn()` - Perl's `warn()` doesn't dump a backtrace
+- Use `warn()` function for translations of Perl's `warn()` - this maps to `console.log()` since Perl's `warn()` doesn't dump a backtrace
 - Use biome format --write before git commit
 
 ### Testing and Development Commands
