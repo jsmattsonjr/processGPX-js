@@ -157,3 +157,5 @@ git commit -m "Commit message
 Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: Jim Mattson <jsmattsonjr@gmail.com>"
 ```
+
+- to memorize When searching for 'sub <function_name>' in the Perl reference, be sure to read several lines above that line, so you capture any function header comment that might precede the string match.
