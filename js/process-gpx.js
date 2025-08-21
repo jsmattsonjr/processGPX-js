@@ -300,7 +300,7 @@ function removeDuplicatePoints(points, isLoop = 0) {
 	}
 
 	if (removedCount > 0) {
-		console.warn(`Removed ${removedCount} duplicate points`);
+		console.log(`Removed ${removedCount} duplicate points`);
 	}
 
 	return pNew;
@@ -553,7 +553,7 @@ function fixZigZags(points) {
 			const p2 = points[U2];
 
 			if (p2.distance - p1.distance < dzigzag) {
-				console.warn(
+				console.log(
 					`WARNING: zig-zag found on points (0, 2, 3 ...) : ${U1} and ${U2} : ` +
 					`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
 					`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
@@ -569,7 +569,7 @@ function fixZigZags(points) {
 				// 3. as long as P2 has a U-turn, delete it...
 				// 4. go back step 2 if we deleted any U-turns
 
-				console.warn("repairing zig-zag...");
+				console.log("repairing zig-zag...");
 				const u = U1; // keep points up to u
 				let v = U2 + 1; // keep points starting with v
 
@@ -580,7 +580,7 @@ function fixZigZags(points) {
 					v++;
 				}
 
-				console.warn(`eliminating ${v - u - 1} points`);
+				console.log(`eliminating ${v - u - 1} points`);
 				zigzagCount++;
 
 				const pNew = [...points.slice(0, u + 1), ...points.slice(v)];
@@ -753,7 +753,7 @@ function findLoops(points, isLoop) {
 				u++;
 			}
 
-			console.warn(
+			console.log(
 				`WARNING: loop between distance: ` +
 				`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`,
 			);
@@ -2154,13 +2154,13 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Check for invalid option combinations
 	if (options.snap > 0 && options.snapDistance > options.lSmooth) {
-		console.warn(
+		console.log(
 			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`,
 		);
 	}
 
 	if (options.isLoop && (options.rTurnaround || 0) > 0) {
-		console.warn("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
+		console.log("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
 		isLoop = 0;
 	}
 
@@ -2186,7 +2186,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.isLoop) {
 		const d = latlngDistance(points[0], points[points.length - 1]);
 		if (d > 150) {
-			console.warn(
+			console.log(
 				`WARNING: -loop or -lap specified, with large (${d} meter) distance between first and last point: are you sure you wanted -loop or -lap?`,
 			);
 		}
