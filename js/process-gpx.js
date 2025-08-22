@@ -2356,6 +2356,42 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 }
 
 /**
+ * Interpolates points along a route to achieve consistent spacing
+ * @param {Array} points - Array of points with lat, lon, ele properties
+ * @param {number} isLoop - Whether this is a loop route (1) or point-to-point (0)
+ * @param {number} spacing - Desired spacing between points in meters
+ * @returns {Array} Array with interpolated points added
+ */
+function doPointInterpolation(points, isLoop, spacing) {
+	note("interpolation..");
+	const pNew = [];
+	const iMax = max_index(points) - (isLoop ? 0 : 1);
+
+	for (let i = 0; i <= iMax; i++) {
+		const p1 = points[i];
+		const p2 = points[(i + 1) % points.length];
+		pNew.push(p1);
+
+		const ps = latlngDistance(p1, p2);
+		const npoints = int(ps / spacing + 0.5);
+
+		// interpolate points...
+		for (let n = 1; n <= npoints - 1; n++) {
+			pNew.push(interpolatePoint(p1, p2, n / npoints));
+		}
+	}
+
+	if (!isLoop) {
+		pNew.push(points[points.length - 1]);
+	}
+
+	note(
+		`interpolation increased course from ${points.length} to ${pNew.length} points`,
+	);
+	return pNew;
+}
+
+/**
  * automatically find segments to be straightened
  * segments have a maximum deviation and also a check on
  * the correlation of the deviations
@@ -3191,6 +3227,13 @@ export function processGPX(trackFeature, options = {}) {
 			options.minRadius || 0,
 		);
 		dumpPoints(points, "js-stage-17-auto-spaced.json");
+	}
+
+	// interpolation if requested
+	if (points.length && (options.spacing || 0) > 0) {
+		// STAGE 18: Interpolation
+		points = doPointInterpolation(points, isLoop || 0, options.spacing);
+		dumpPoints(points, "js-stage-18-interpolated.json");
 	}
 
 	// Skip circuit processing
