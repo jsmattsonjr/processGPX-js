@@ -4766,6 +4766,7 @@ for my $file ( @files ) {
   # initially the segment ID = segment index
   # this may change if segments are modified
 
+  # Stage 0: Initial Points from GPX
   # add segment field to points
   my $points = [];
 
@@ -4794,13 +4795,13 @@ for my $file ( @files ) {
   note("quality score of original course = ", sprintf("%.4f", $score), "\n");
   note("direction score of original course = ", sprintf("%.4f", $scoreD), "\n");
   note("altitude score of original course = ", sprintf("%.4f", $scoreZ), "\n");
-  dumpPoints($points, "perl-00-original.txt");
+  dumpPoints($points, "perl-00-initial-points.txt");
 
-  # eliminate duplicate x,y points
+  # Stage 1: Remove Duplicate Points
   $points = removeDuplicatePoints(points=> $points, isLoop=> $isLoop);
   dumpPoints($points, "perl-01-duplicates-removed.txt");
 
-  # if repeat is specified, then create replicates
+  # Stage 2: Repeat Track
   if ( $repeat > 0 ) {
     deleteField2(points=> $points, field=> "distance");
     my @pNew = @$points;
@@ -4821,6 +4822,7 @@ for my $file ( @files ) {
     my $trkIndex2 = 0;
 
     if (my ($f, $t) = ($join =~ /(.*)\:(\d+)$/)) {
+# Stage 0: Initial Points from GPX
       $join = $f;
       $trkIndex2 = ($t > 0) ? $t - 1: 0;
       $nTrack = $t;
@@ -4846,9 +4848,11 @@ for my $file ( @files ) {
     # Parse GPX from open file
     my $waypoints2 = $gpx2->waypoints();
     my $tracks2    = $gpx2->tracks();
+# Stage 1: Remove Duplicate Points
 
     my $track2 = $tracks2->[$trkIndex2];
 
+# Stage 2: Repeat Track
     # segments for the joined file
     my $segments2  = $track2->{segments};
 
@@ -4884,10 +4888,11 @@ for my $file ( @files ) {
     unless (defined $segmentName{$p->{segment}}) {
       $segmentDefined{$p->{segment}} = 0;
       $p->{segment} = 0;
+# Stage 3: Crop Points
     }
   }
 
-  #
+  # Stage 3: Crop Points
   # crop ranges if specified
   # this is done before auto-options since it may change whether the course is a loop, for example
   #
@@ -4943,10 +4948,12 @@ for my $file ( @files ) {
     if (! defined $smoothAngle) {
       $smoothAngle = 10;
       note("setting -smoothAngle $smoothAngle ...\n");
+# Stage 4: Fix Zig-Zags
     }
 
     if (! defined $minRadius) {
       $minRadius = 6;
+# Stage 5: Adjust Altitudes
       note("setting minimum corner radius to $minRadius ...\n");
     }
     if (! defined $prune) {
@@ -4966,12 +4973,14 @@ for my $file ( @files ) {
 
     if (! defined  $rUTurn) {
       $rUTurn = 6;
+# Stage 6: Reverse Course
       note("setting -RUTurn $rUTurn (meters) ...\n");
     }
 
     if (! defined $snap) {
       $snap = 1;
       note("setting -snap 1 ...\n");
+# Stage 7: Crop Corners
 
     }
     if (! defined $snapTransition) {
@@ -4997,6 +5006,7 @@ for my $file ( @files ) {
   $snapTransition //= 0;
   $lSmooth //= 0;
   warn("WARNING: if snapping distance ($snapDistance) is more than smoothing distance ($lSmooth), then abrupt transitions between snapped and unsnapped points may occur\n")
+# Stage 8: Auto-Straighten
     if (($snap > 0) && ($snapDistance > $lSmooth));
 
   if ($isLoop && ($rTurnaround > 0)) {
@@ -5036,25 +5046,28 @@ for my $file ( @files ) {
   die("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.\n")
     unless ( ($shiftSF == $shiftSFDefault) || $isLoop );
 
-  # look for zig-zags
+  # Stage 4: Fix Zig-Zags
   $points = fixZigZags($points);
+# Stage 9: Snap Repeated Points (Pass 1)
   dumpPoints($points, "perl-04-zigzags-fixed.txt");
 
   # look for loops
   findLoops($points, $isLoop);
 
-  # adjust altitudes if requested
+  # Stage 5: Adjust Altitudes
   if ( ((defined $zShift) && ($zShift != 0)) || ((defined $zScale) && ($zScale != 1)) ) {
     # transition set to change gradient by up to 5%
     note("applying z shift = $zShift, and z scale = $zScale\n");
     note("zShift start = $zShiftStart\n") if (defined $zShiftStart);
     note("zShift end = $zShiftEnd\n") if (defined $zShiftEnd);
     my $zShiftDistance = 20 * (1 + abs($zShift));
+# Stage 10: Add Corner Splines
     for my $p ( @$points ) {
       my $s = $p->{distance};
       my $dz = ($p->{ele} + $zOffset - $zScaleRef) * $zScale + $zShift + $zScaleRef - $p->{ele};
       if ( (defined $zShiftStart) && (defined $zShiftEnd) && ($zShiftEnd < $zShiftStart) ) {
         $dz *= (transition(($zShiftStart - $s) / $zShiftDistance) * transition(($s - $zShiftEnd) / $zShiftDistance));
+# Stage 11: Add Corner Arc Fits
       } else {
         $dz *= transition(($zShiftStart - $s) / $zShiftDistance) if (defined $zShiftStart);
         $dz *= transition(($s - $zShiftEnd) / $zShiftDistance)   if (defined $zShiftEnd);
@@ -5063,9 +5076,9 @@ for my $file ( @files ) {
     }
     dumpPoints($points, "perl-05-altitude-adjusted.txt");
   }
+# Stage 12: Auto-Spacing at Corners
 
-  # reverse the points of the original course
-  # points reference segments so segments order is also reversed
+  # Stage 6: Reverse Course
   if ($reverse) {
     note("reversing course direction..\n");
     reversePoints($points);
@@ -5073,23 +5086,30 @@ for my $file ( @files ) {
   }
 
 
-  # corner cropping
+  # Stage 7: Crop Corners
   $cornerCrop //= 0;
+# Stage 13: Point Interpolation
   $minCornerCropDegs //= 75;
   unless (defined $maxCornerCropDegs) {
     if ($minCornerCropDegs < 90) {
       $maxCornerCropDegs = 135;
     } else {
       $maxCornerCropDegs = $minCornerCropDegs + 45;
+    dumpPoints($points, "perl-13-interpolated.txt");
     }
+# Stage 14: Process Straight Sections
   }
   if ($cornerCrop > 0) {
     note("cropping corners by $cornerCrop meters ...\n");
     $points =
+    dumpPoints($points, "perl-14-straights-processed.txt");
+# Stage 15: Process Circular Fits
       cropCorners(
 		  points     => $points,
 		  cornerCrop => $cornerCrop,
 		  minRadians => $minCornerCropDegs * $deg2rad,
+    dumpPoints($points, "perl-15-circles-processed.txt");
+# Stage 16: Snap Repeated Points (Pass 2)
 		  maxRadians => $maxCornerCropDegs * $deg2rad,
 		  start      => $cornerCropStart,
 		  end        => $cornerCropEnd,
@@ -5098,9 +5118,10 @@ for my $file ( @files ) {
     dumpPoints($points, "perl-07-corners-cropped.txt");
   }
 
-  # auto-straighten
+  # Stage 8: Auto-Straighten
   if ($autoStraightenDeviation > 0) {
     note("auto-Straightening...\n");
+    dumpPoints($points, "perl-16-snapped-pass2.txt");
     autoStraighten(
                    points=> $points,
                    isLoop=> $isLoop,
@@ -5185,7 +5206,7 @@ for my $file ( @files ) {
   }
   deleteField2(points=> $points, field=> "distance") if ($circuitsAdded > 0);
 
-  # check for snapping
+  # Stage 9: Snap Repeated Points (Pass 1)
   if ( ($snap > 0) && ($snapDistance >= 0) ) {
     note("snapping repeated points (pass 1)...\n");
     $points =
@@ -5197,34 +5218,40 @@ for my $file ( @files ) {
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
+# Stage 17: Add Corner Splines (Post-smoothing)
     dumpPoints($points, "perl-09-snapped.txt");
   }
 
-  # spline of corners
+    dumpPoints($points, "perl-17-splines-added-post-smoothing.txt");
+# Stage 18: Add Corner Arc Fits (Post-smoothing)
+  # Stage 10: Add Corner Splines
   if ( $splineRadians > 0 ) {
     note("corner splines, pre-smoothing...\n");
+    dumpPoints($points, "perl-18-arcfit-added-post-smoothing.txt");
+# Stage 19: Flatten Sections
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
-    dumpPoints($points, "perl-10-after-splines.txt");
+    dumpPoints($points, "perl-10-splines-added.txt");
   }
 
-  # arc fit of corners
+  # Stage 11: Add Corner Arc Fits
   if ( $arcFitRadians > 0 ) {
     note("corner arcFits, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $arcFitRadians, maxRadians=> $arcFitMaxRadians, isLoop=> $isLoop, splineType=> "arcFit", start=> $arcFitStart, end=> $arcFitEnd);
-    dumpPoints($points, "perl-11-after-arcfit.txt");
+    dumpPoints($points, "perl-11-arcfit-added.txt");
   }
 
   # add distance field
   addDistanceField(points=> $points);
   my $courseDistance = calcCourseDistance(points=> $points, isLoop=> $isLoop);
 
-  # automatic interpolation at corners
+  # Stage 12: Auto-Spacing at Corners
   if ( $autoSpacing && (($lSmooth > 0) || ($minRadius > 0)) ) {
     $points =
       doAutoSpacing(
                     points=> $points,
                     isLoop=> $isLoop,
                     lSmooth=> $lSmooth,
+# Stage 20: Fix Crossings
                     smoothAngle=> $smoothAngle,
                     minRadius=> $minRadius,
                    );
@@ -5232,7 +5259,7 @@ for my $file ( @files ) {
     }
 
 
-  # interpolation if requested
+  # Stage 13: Point Interpolation
   if ( @$points && ($spacing > 0) ) {
     $points =
       doPointInterpolation(
@@ -5240,25 +5267,28 @@ for my $file ( @files ) {
                            isLoop=> $isLoop,
                            spacing=> $spacing,
                           );
+    dumpPoints($points, "perl-13-interpolated.txt");
   }
 
-  # straight processing
+  # Stage 14: Process Straight Sections
   # if circular fits are required, those should be done before smoothing, so smoothing can
   # reduce the anomalies.
   if (@straight || (@straightStart) || (@straightEnd)) {
     note("processing straight fit(s)...\n");
     processStraight(points=> $points, straight=> \@straight, straightStart=> \@straightStart, straightEnd=> \@straightEnd, isLoop=> $isLoop);
+    dumpPoints($points, "perl-14-straights-processed.txt");
   }
 
-  # straight processing
+  # Stage 15: Process Circular Fits
   # if circular fits are required, those should be done before smoothing, so smoothing can
   # reduce the anomalies.
   if (@circle || (@circleStart) || (@circleEnd)) {
     note("processing circular fit(s)\n");
     processCircle(points=> $points, circle=> \@circle, circleStart=> \@circleStart, circleEnd=> \@circleEnd, isLoop=> $isLoop);
+    dumpPoints($points, "perl-15-circles-processed.txt");
   }
 
-  # check for snapping
+  # Stage 16: Snap Repeated Points (Pass 2)
   # this is done after point interpolation as well as before
   # since widely spaced points may not show a match
   if ( ($snap > 0) && ($snapDistance >= 0) ) {
@@ -5272,7 +5302,7 @@ for my $file ( @files ) {
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
-
+    dumpPoints($points, "perl-16-snapped-pass2.txt");
   }
 
   # various smoothing passes:
@@ -5374,6 +5404,7 @@ for my $file ( @files ) {
             my $sigma;
             if ( (defined $smoothStart) && (defined $smoothEnd) && ($smoothEnd < $smoothStart) ) {
               $sigma = $sigma0 * (transition(($smoothStart - $s) / $lambda) * transition(($s - $smoothEnd) / $lambda));
+# Stage 21: Auto-Segments
             } else {
               $sigma = $sigma0;
               $sigma *= transition(($smoothStart - $s) / $lambda) if (defined $smoothStart);
@@ -5425,11 +5456,14 @@ for my $file ( @files ) {
                  $sigmas[$i]
                 );
             }
+# Stage 22: Final Crop
           } else {
             # if only a sigma value was provided in selective smoothing, then add it to any sigma0
             $sigma0 = sqrt($sigma0 ** 2 + $smoothSigmas[0] ** 2);
           }
         }
+    dumpPoints($points, "perl-22-final-crop.txt");
+# Stage 23: Prune Points
       }
     }
 
@@ -5494,6 +5528,7 @@ for my $file ( @files ) {
 
           # step thru points
           my $i = $i0 % @$points;
+# Stage 24: Apply Lane Shift
 
           my $dsMax = 6 * $sigma{$key};
           while ( ($i <= $#$points) && ($i >= 0) ) {
@@ -5516,22 +5551,31 @@ for my $file ( @files ) {
   }
   deleteField2(points=> $points, field=> "sigma") unless ($addSigma);
 
-  # spline again post-smoothing, if requested
+  # Stage 17: Add Corner Splines (Post-smoothing)
   if ( ($splineRadians > 0) && (($lSmooth > 1) || ($zSmooth > 0)) ) {
-    note("corner splines, post-smoothing...\n");
+    note("corner splines, pre-smoothing...\n");
     my $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
+    dumpPoints($points, "perl-17-splines-added-post-smoothing.txt");
   }
 
+  # Stage 18: Add Corner Arc Fits (Post-smoothing)
   if ( ($arcFitRadians > 0) && (($lSmooth > 1) || ($zSmooth > 0)) ) {
     note("corner arcFit, post-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $arcFitRadians, maxRadians=> $arcFitMaxRadians, isLoop=> $isLoop, splineType => "arcFit", start=> $arcFitStart, end=> $arcFitEnd);
+    dumpPoints($points, "perl-18-arcfit-added-post-smoothing.txt");
   }
+    dumpPoints($points, "perl-24-lane-shift-applied.txt");
+# Stage 25: Add Return Points (Out-and-back)
 
-  #
+  # Stage 19: Flatten Sections
   # flatten selected sections
   # points come in sets of 4: start point, altitude, finish point, altitude, lambda
+    dumpPoints($points, "perl-25-return-points-added.txt");
+# Stage 26: Crop for extendBack
   #
+  dumpPoints($points, "perl-26-cropped-for-extend-back.txt")
   if (@flatten) {
+# Stage 27: Add U-Turn Loops
     note("flattening...\n");
     addDistanceField(points=> $points);
     for (my $nf = 0; $nf < @flatten; $nf += 5) {
@@ -5565,12 +5609,7 @@ for my $file ( @files ) {
     }
   }
 
-  #
-  # flatten intersections
-  # if roads cross and one or both of them are sloped, this creates ugly intersections
-  # in RGT, where one of the directions tends to float in the air.  This flattens
-  # roads proximate to intersections
-  #
+  # Stage 20: Fix Crossings
   if ( $fixCrossings ) {
     note("fixing crossings...\n");
 
@@ -5607,6 +5646,7 @@ for my $file ( @files ) {
         }
       }
     }
+# Stage 28: Apply Minimum Radius
     if ( $isLoop ) {
       push @simplified, 0
         unless (pointsAreClose($points->[0], $points->[$simplified[-1]]));
@@ -5670,6 +5710,7 @@ for my $file ( @files ) {
       }
     }
     note("total crossings = ", scalar(@crossings), "\n");
+# Stage 29: Shift Start/Finish
 
     $saveCrossingsCSV  //= 0;
     if ($saveCrossingsCSV) {
@@ -5724,6 +5765,7 @@ for my $file ( @files ) {
     # i : index to the existing points
     # s1: distance to point i
     # s2: distance to point 1 + 1
+# Stage 30: Copy Start Point to End
     # j : index into interpolated point array
     if ( @si) {
       note("adding additional points at crossings...\n");
@@ -5732,6 +5774,7 @@ for my $file ( @files ) {
       for my $i ( 0 .. $#$points - 1) {
         my $s1 = $points->[$i]->{distance};
         my $s2 = $points->[$i + 1]->{distance};
+    dumpPoints($points, "perl-30-start-point-copied.txt");
         $j ++ while ( ($j <= $#si) && ($si[$j] <= $s1) );
         while (($j < @si) && ($s2 > $si[$j])) {
           if ( (abs($si[$j] - $s1) > 0.5) && (abs($si[$j] - $s2) > 0.5) ) {
@@ -5770,7 +5813,7 @@ for my $file ( @files ) {
     }
   }
 
-  #
+  # Stage 21: Auto-Segments
   # create named segments
 
   note("number of named segments = ", scalar(@namedSegments), "\n");
@@ -5818,7 +5861,7 @@ for my $file ( @files ) {
     note("defined segment $name from point number $pStart to point number $pEnd of ", scalar(@$points), "\n");
   }
 
-  #
+  # Stage 22: Final Crop
   # cropping: shorten distance of original GPX
   # note distance is calculated here... can change from lane shifts
   #
@@ -5835,9 +5878,10 @@ for my $file ( @files ) {
   if ( ((defined $cropMin) && ($cropMin > 0)) || ((defined $cropMax) && ($cropMax > 0)) ) {
     $points = cropPoints(points=> $points, isLoop=> $isLoop, min=> $cropMin, max=> $cropMax);
     note("points remaining after cropping = ", scalar(@$points), "\n");
+    dumpPoints($points, "perl-22-final-crop.txt");
   }
 
-  #
+  # Stage 23: Prune Points
   # pruning: remove colinear points
   # out-and-back route generation requires identical paths, so follows this
   #
@@ -5866,11 +5910,7 @@ for my $file ( @files ) {
   }
 
 
-  #
-  # calculate a lane shift field, if we're doing lane shifts
-  # shiftStart < shiftEnd: shifting between shiftStart and shiftEnd
-  # shiftStart > shiftEnd: shifting up to shiftEnd, then after shiftStart
-  #
+  # Stage 24: Apply Lane Shift
   if ( ($laneShift != 0) || (@selectiveLaneShift > 0) ) {
     note("lane shift...\n");
     addDistanceField(points=> $points) unless (defined $points->[0]->{distance});
@@ -5969,12 +6009,7 @@ for my $file ( @files ) {
     }
   }
 
-  #
-  # if an out-and-back is to be generated, then generate the return points
-  # (these will be added to the main points list later)
-  # however, make copies of each invidual hash, don't just copy hash pointers,
-  # or data will get clobbered
-  #
+  # Stage 25: Add Return Points (Out-and-back)
   my $rPoints = [];
   if ( (defined $rTurnaround) && ($rTurnaround > 0) ) {
     note("out-and-back...\n");
@@ -5997,6 +6032,7 @@ for my $file ( @files ) {
       $rPoints = applyLaneShift(points=> $rPoints, isLoop=> $isLoop);
       deleteField2(points=> $rPoints, field=> "shift");
     }
+    dumpPoints($points, "perl-24-lane-shift-applied.txt");
   }
 
   # for extendback, we calculate the crop crop position here: the loop counts as part
@@ -6051,13 +6087,16 @@ for my $file ( @files ) {
     note("points on outbound = ", scalar(@$points), "\n");
     note("points on inbound = ", scalar(@$rPoints), "\n");
     push @$points, @$rPoints;
+    dumpPoints($points, "perl-25-return-points-added.txt");
   }
 
-  # for -extendBack, crop it here:
+  # Stage 26: Crop for extendBack
   $points = cropPoints(points=> $points, isLoop=> $isLoop, max=> $cropBack)
     if ($cropBack > 0);
+  dumpPoints($points, "perl-26-cropped-for-extend-back.txt")
+    if ($cropBack > 0);
 
-  #
+  # Stage 27: Add U-Turn Loops
   # turn-around loops within the course, if requested
   #
   if ( (defined $rUTurn) && (abs($rUTurn) > 1) ) {
@@ -6138,10 +6177,7 @@ for my $file ( @files ) {
   }
 
 
-  #
-  # set maximum curvature
-  # note this needs to happen AFTER turn-around loops
-  #
+  # Stage 28: Apply Minimum Radius
   if ( (defined $minRadius) && ($minRadius > 0) ) {
     note("setting minimum radius to $minRadius...\n");
     addCurvatureField(points=> $points, isLoop=> $isLoop);
@@ -6237,9 +6273,7 @@ for my $file ( @files ) {
     }
   }
 
-  #
-  # shift starting line
-  #
+  # Stage 29: Shift Start/Finish
   if ( $isLoop && ($shiftSF != 0) && (@$points > 1) ) {
     my $direction = ($shiftSF <=> 0);
 
@@ -6274,7 +6308,7 @@ for my $file ( @files ) {
     }
   }
 
-  #
+  # Stage 30: Copy Start Point to End
   # add points to beginning or end
   # this provides space for the S or F in a point-to-point
   # RGT can automatically close courses with undesired results if
@@ -6387,6 +6421,7 @@ for my $file ( @files ) {
     $p{distance} = $points->[-1]->{distance} + latlngDistance($points->[-1], $points->[0]) if (defined $points->[-1]->{distance});
     note("copying point first point to end of the loop...\n");
     push @$points, \%p;
+    dumpPoints($points, "perl-30-start-point-copied.txt");
   }
 
   # split a route.
