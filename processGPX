@@ -5227,7 +5227,8 @@ for my $file ( @files ) {
                     lSmooth=> $lSmooth,
                     smoothAngle=> $smoothAngle,
                     minRadius=> $minRadius,
-                   )
+                   );
+    dumpPoints($points, "perl-12-auto-spaced.txt");
     }
 
 

@@ -2205,6 +2205,157 @@ function snapPoints(
 }
 
 /**
+ * Automatic spacing interpolation at corners to improve smoothing resolution
+ * Iterates through points and adds interpolated points around sharp corners
+ * to provide better smoothing resolution for subsequent processing
+ * @param {Array} points - Array of points with lat, lon, ele properties
+ * @param {boolean} isLoop - Whether the route is a closed loop
+ * @param {number} lSmooth - Smoothing length parameter
+ * @param {number} smoothAngle - Smoothing angle threshold in degrees
+ * @param {number} minRadius - Minimum radius constraint
+ * @returns {Array} Modified points array with additional interpolated points
+ */
+function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
+	const smoothRadians = smoothAngle * DEG2RAD;
+
+	// iterate a few times
+	for (
+		let autoSpacingIteration = 0;
+		autoSpacingIteration <= 0;
+		autoSpacingIteration++
+	) {
+		// do this in each direction
+		for (let direction = 0; direction <= 1; direction++) {
+			const pNew = [];
+
+			// refine distance -- need to exceed the smoothing length
+			// on spacing: minRadius will increase the separation of points,
+			// so we need to be careful how we consider this
+			const lambda = Math.sqrt(1 + lSmooth ** 2);
+			const dRefine = 3 * Math.sqrt(lSmooth ** 2 + minRadius ** 2);
+
+			iLoop: for (let i = 0; i <= max_index(points); i++) {
+				pNew.push(points[i]); // temporarily put the latest point on the new points list
+
+				// there's nothing behind the first point -- copy it to the last point to get refinement
+				if (i === 0) {
+					continue;
+				}
+
+				if (isLoop || i < max_index(points)) {
+					// find points which define an angle
+					let i1 = (i - 1) % points.length;
+					let i2 = (i + 1) % points.length;
+					let d1;
+					let d2;
+
+					while ((d1 = latlngDistance(points[i1], points[i])) < 0.01) {
+						i1--;
+						if ((!isLoop && i1 < 0) || i1 === i) {
+							continue iLoop;
+						}
+						i1 = ((i1 % points.length) + points.length) % points.length;
+					}
+
+					while ((d2 = latlngDistance(points[i2], points[i])) < 0.01) {
+						i2++;
+						if ((!isLoop && i2 > max_index(points)) || i2 === i) {
+							continue iLoop;
+						}
+						i2 = i2 % points.length;
+					}
+
+					// determine the angle between the points
+					const a = latlngAngle(points[i1], points[i], points[i2]);
+
+					// add points if needed
+					if (smoothRadians === undefined) {
+						throw new Error(
+							`ERROR: smoothRadians not defined (smoothAngle = ${smoothAngle})`,
+						);
+					}
+
+					if (Math.abs(a) > Math.abs(smoothRadians)) {
+						// refine spacing -- need to refine to sufficient resolution to resolve the angle
+						// this was multiplied by 0.5, but that generated too many points, so updating
+						const spacing = lambda * (0.01 + Math.abs(smoothRadians / a));
+
+						// tricky bit -- we need to insert points back to the desired range, but that may extend earlier than points
+						// which we've already placed, so we'll need to keep track of points as we rewind.
+
+						// find interval on which to add first point
+						let s = 0;
+						let i3 = max_index(pNew);
+						const ds = [];
+						ds[i3] = 0;
+
+						while (s < dRefine) {
+							if (i3 <= 0) {
+								break;
+							}
+							i3--;
+							ds[i3] = latlngDistance(pNew[i3], pNew[i3 + 1]);
+							s += ds[i3];
+						}
+
+						// find the start point, between point i3 and i3 + 1
+						let f;
+						if (s > dRefine) {
+							f = (s - dRefine) / ds[i3]; // how far over the segment goes
+						} else {
+							f = 0;
+						}
+
+						// strip off the points beyond i3, to save for later
+						const pStack = [];
+						while (max_index(pNew) > i3) {
+							pStack.push(pNew.pop());
+						}
+
+						// add first point for corner smoothing, unless another point is close
+						const ff = (0.5 * spacing) / ds[max_index(pNew)]; // normalized spacing of new points
+						if (f > ff && f < 1 - ff) {
+							pNew.push(
+								interpolatePoint(
+									pNew[max_index(pNew)],
+									pStack[max_index(pStack)],
+									f,
+								),
+							);
+							// adjust spacing to next point to account for interpolated point
+							ds[max_index(pNew)] = ds[max_index(pNew) - 1] * (1 - f);
+							ds[max_index(pNew) - 1] *= f;
+						}
+
+						// go thru points in stack, and adjust spacings
+						while (pStack.length > 0) {
+							const p1 = pNew[max_index(pNew)];
+							const p2 = pStack[max_index(pStack)];
+							const dsTot = latlngDistance(p1, p2);
+							const N = Math.round(dsTot / spacing);
+
+							if (N > 0) {
+								ds[max_index(pNew)] = dsTot / N;
+								for (let n = 1; n <= N - 1; n++) {
+									pNew.push(interpolatePoint(p1, p2, n / N));
+									ds[max_index(pNew)] = dsTot / N;
+								}
+							} else {
+								ds[max_index(pNew)] = dsTot;
+							}
+							pNew.push(pStack.pop());
+							ds[max_index(pNew)] = 0;
+						}
+					}
+				}
+			}
+			points = pNew.slice().reverse();
+		}
+	}
+	return points;
+}
+
+/**
  * automatically find segments to be straightened
  * segments have a maximum deviation and also a check on
  * the correlation of the deviations
@@ -2597,6 +2748,12 @@ export function processGPX(trackFeature, options = {}) {
 		throw new Error("Invalid track feature provided to processGPX");
 	}
 
+	// Map command-line options to internal processing variables (matching Perl implementation)
+	let lSmooth = options.sigma; // --smooth or --sigma
+	const gSmooth = options.sigmag; // --smoothG or --sigmag
+	let zSmooth = options.sigmaz; // --smoothZ, --zSmooth, --sigmaz, --zSigma
+	let isLoop = options.lap; // --loop or --lap
+
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
 		throw new Error("-repeat limited to range 0 to 99");
@@ -2615,7 +2772,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.rLap = options.rLap ?? 0;
 		}
 		options.autoSpacing = options.autoSpacing ?? 1;
-		options.lSmooth = options.lSmooth ?? 5;
+		lSmooth = lSmooth ?? 5;
 		options.laneShift =
 			options.laneShift ?? (options.selectiveLaneShift?.length ? 0 : 6);
 		options.minRadius = options.minRadius ?? 6;
@@ -2757,9 +2914,9 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		// Smoothing
-		if (options.lSmooth === undefined) {
-			options.lSmooth = 5;
-			note(`setting smoothing to ${options.lSmooth} meters`);
+		if (lSmooth === undefined) {
+			lSmooth = 5;
+			note(`setting smoothing to ${lSmooth} meters`);
 		}
 
 		// Other options
@@ -2783,9 +2940,9 @@ export function processGPX(trackFeature, options = {}) {
 			options.prune = 1;
 		}
 
-		if (options.zSmooth === undefined) {
-			options.zSmooth = 15;
-			note(`setting altitude smoothing to ${options.zSmooth} meters`);
+		if (zSmooth === undefined) {
+			zSmooth = 15;
+			note(`setting altitude smoothing to ${zSmooth} meters`);
 		}
 
 		if (options.fixCrossings === undefined) {
@@ -3018,7 +3175,23 @@ export function processGPX(trackFeature, options = {}) {
 
 	// add distance field
 	addDistanceField(points);
-	const _courseDistance = calcCourseDistance(points, options.isLoop || 0);
+	const _courseDistance = calcCourseDistance(points, isLoop || 0);
+
+	// automatic interpolation at corners
+	if (
+		options.autoSpacing &&
+		((lSmooth || 0) > 0 || (options.minRadius || 0) > 0)
+	) {
+		note("auto-spacing at corners...");
+		points = doAutoSpacing(
+			points,
+			isLoop || 0,
+			lSmooth || 0,
+			options.smoothAngle || 0,
+			options.minRadius || 0,
+		);
+		dumpPoints(points, "js-12-auto-spaced.txt");
+	}
 
 	// Skip circuit processing
 
