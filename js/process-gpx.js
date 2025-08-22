@@ -2217,6 +2217,7 @@ function snapPoints(
  */
 function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 	const smoothRadians = smoothAngle * DEG2RAD;
+	console.log(`DEBUG JS: doAutoSpacing input: ${points.length} points`);
 
 	// iterate a few times
 	for (
@@ -2227,6 +2228,9 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 		// do this in each direction
 		for (let direction = 0; direction <= 1; direction++) {
 			const pNew = [];
+			console.log(
+				`DEBUG JS: direction=${direction}, starting with ${points.length} points`,
+			);
 
 			// refine distance -- need to exceed the smoothing length
 			// on spacing: minRadius will increase the separation of points,
@@ -2350,8 +2354,12 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 				}
 			}
 			points = pNew.slice().reverse();
+			console.log(
+				`DEBUG JS: direction=${direction} finished, ${points.length} points`,
+			);
 		}
 	}
+	console.log(`DEBUG JS: doAutoSpacing output: ${points.length} points`);
 	return points;
 }
 
@@ -2874,14 +2882,14 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Calculate quality score of original course
 	note("points in original GPX track = ", points.length);
-	const [score, scoreD, scoreZ] = calcQualityScore(points, options.isLoop || 0);
+	const [score, scoreD, scoreZ] = calcQualityScore(points, isLoop || 0);
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
 	dumpPoints(points, "js-stage-1-original.json");
 
 	// Eliminate duplicate x,y points
-	points = removeDuplicatePoints(points, options.isLoop || 0);
+	points = removeDuplicatePoints(points, isLoop || 0);
 	dumpPoints(points, "js-stage-2-duplicates-removed.json");
 
 	// If repeat is specified, then create replicates
@@ -2903,7 +2911,7 @@ export function processGPX(trackFeature, options = {}) {
 	// This is done before auto-options since it may change whether the course is a loop
 	points = cropPoints(
 		points,
-		options.isLoop || 0,
+		isLoop || 0,
 		options.deleteRange || [],
 		options.cropMin,
 		options.cropMax,
@@ -2911,13 +2919,13 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "js-stage-5-cropped.json");
 
 	// AutoLoop: automatically determine if -loop should be invoked
-	options.isLoop = options.isLoop || 0;
+	isLoop = isLoop || 0;
 	options.copyPoint = options.copyPoint || 0;
 	options.autoLoop = options.autoLoop || options.auto;
 
 	if (options.autoLoop) {
 		if (
-			!options.isLoop &&
+			!isLoop &&
 			options.cropMin === undefined &&
 			options.cropMax === undefined &&
 			latlngDistance(points[0], points[max_index(points)]) < 150 &&
@@ -2929,7 +2937,7 @@ export function processGPX(trackFeature, options = {}) {
 				points[1],
 			) > -0.1
 		) {
-			options.isLoop = 1;
+			isLoop = 1;
 			options.copyPoint = 0;
 			note("setting -loop");
 		}
@@ -2939,7 +2947,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.auto) {
 		note("auto-setting options...");
 
-		const courseDistance = calcCourseDistance(points, options.isLoop);
+		const courseDistance = calcCourseDistance(points, isLoop);
 
 		// Calculate position interpolation
 		if (options.spacing === undefined) {
@@ -3026,7 +3034,7 @@ export function processGPX(trackFeature, options = {}) {
 		);
 	}
 
-	if (options.isLoop && (options.rTurnaround || 0) > 0) {
+	if (isLoop && (options.rTurnaround || 0) > 0) {
 		warn("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
 		isLoop = 0;
 	}
@@ -3050,7 +3058,7 @@ export function processGPX(trackFeature, options = {}) {
 	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
 
 	// Check if loop specified for apparent point-to-point
-	if (options.isLoop) {
+	if (isLoop) {
 		const d = latlngDistance(points[0], points[max_index(points)]);
 		if (d > 150) {
 			warn(
@@ -3060,7 +3068,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// If shiftSF is specified but not loop, that's an error
-	if (options.shiftSF !== options.shiftSFDefault && !options.isLoop) {
+	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
 		throw new Error(
 			"ERROR: -shiftSF is only compatible with the -lap (or -loop) option.",
 		);
@@ -3071,7 +3079,7 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "js-stage-6-zigzags-fixed.json");
 
 	// Look for loops
-	findLoops(points, options.isLoop);
+	findLoops(points, isLoop);
 
 	// Adjust altitudes if requested
 	if (
@@ -3148,7 +3156,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.maxCornerCropDegs * DEG2RAD,
 			options.cornerCropStart,
 			options.cornerCropEnd,
-			options.isLoop,
+			isLoop,
 		);
 		dumpPoints(points, "js-stage-9-corners-cropped.json");
 	}
@@ -3158,7 +3166,7 @@ export function processGPX(trackFeature, options = {}) {
 		note("auto-Straightening...");
 		autoStraighten(
 			points,
-			options.isLoop,
+			isLoop,
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
@@ -3166,7 +3174,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Check for snapping
-	if ((options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
+	if (false && (options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
 		note("snapping repeated points (pass 1)...");
 		points = snapPoints(
 			points,
@@ -3176,6 +3184,9 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
+		dumpPoints(points, "js-stage-14-snapped-pass-1.json");
+	} else {
+		console.log("DEBUG JS: BYPASSING stage 14 snapping");
 		dumpPoints(points, "js-stage-14-snapped-pass-1.json");
 	}
 
@@ -3188,7 +3199,7 @@ export function processGPX(trackFeature, options = {}) {
 			_splineMaxRadians,
 			options.splineStart,
 			options.splineEnd,
-			options.isLoop || 0,
+			isLoop || 0,
 			"spline",
 		);
 		dumpPoints(points, "js-stage-15-corner-splines.json");
@@ -3203,7 +3214,7 @@ export function processGPX(trackFeature, options = {}) {
 			arcFitMaxRadians,
 			options.arcFitStart,
 			options.arcFitEnd,
-			options.isLoop || 0,
+			isLoop || 0,
 			"arcFit",
 		);
 		dumpPoints(points, "js-stage-16-arc-fit.json");

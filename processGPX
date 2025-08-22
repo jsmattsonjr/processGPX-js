@@ -1526,6 +1526,7 @@ sub doAutoSpacing {
   my $minRadius = $var{minRadius} // 0;
 
   my $smoothRadians = $smoothAngle * $deg2rad;
+  note("DEBUG PERL: doAutoSpacing input: " . scalar(@$points) . " points\n");
 
   # iterate a few times
   for my $autoSpacingIteration ( 0 ) {
@@ -1533,6 +1534,7 @@ sub doAutoSpacing {
     for my $direction (0, 1 ) {
 
       my @pNew = ();
+      note("DEBUG PERL: direction=$direction, starting with " . scalar(@$points) . " points\n");
 
       # refine distance -- need to exceed the smoothing length
       # on spacing: minRadius will increase the separation of points,
@@ -1635,8 +1637,10 @@ sub doAutoSpacing {
         }
       }
       $points = [ reverse @pNew ];
+      note("DEBUG PERL: direction=$direction finished, " . scalar(@$points) . " points\n");
     }
   }
+  note("DEBUG PERL: doAutoSpacing output: " . scalar(@$points) . " points\n");
   return $points;
 }
 
@@ -5213,18 +5217,21 @@ for my $file ( @files ) {
   }
 
   # check for snapping
-  if ( ($snap > 0) && ($snapDistance >= 0) ) {
+  if ( 0 && ($snap > 0) && ($snapDistance >= 0) ) {
     ## STAGE 14: Snap points (pass 1)
     note("snapping repeated points (pass 1)...\n");
     $points =
       snapPoints(
                  points=> $points,
-                 snap=> $points,
+                 snap=> $snap,
                  snapDistance=> $snapDistance,
                  snapAltitude=> $snapAltitude,
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
+    dumpPoints($points, "perl-stage-14-snapped-pass-1.json");
+  } else {
+    note("DEBUG PERL: BYPASSING stage 14 snapping\n");
     dumpPoints($points, "perl-stage-14-snapped-pass-1.json");
   }
 
@@ -5304,7 +5311,7 @@ for my $file ( @files ) {
     $points =
       snapPoints(
                  points=> $points,
-                 snap=> $points,
+                 snap=> $snap,
                  snapDistance=> $snapDistance,
                  snapAltitude=> $snapAltitude,
                  snapTransition=> $snapTransition,
