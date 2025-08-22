@@ -70,7 +70,7 @@ function warn(...args) {
  * @param {Array} points - Array of point objects with lat, lon, ele, distance properties
  * @param {string} filename - Output filename
  */
-function _dumpPoints(points, filename) {
+function dumpPoints(points, filename) {
 	let output = `# Points dump: ${points.length} points\n`;
 	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
 
@@ -1912,7 +1912,11 @@ function snapPoints(
 					const sis = [0];
 					const is = [i_trans];
 
-					while (s < snapTransition && i_trans > 0 && i_trans <= max_index(points)) {
+					while (
+						s < snapTransition &&
+						i_trans > 0 &&
+						i_trans <= max_index(points)
+					) {
 						s += latlngDistance(points[i_trans], points[i_trans + d]);
 						i_trans += d;
 						sis.push(s);
@@ -1925,7 +1929,11 @@ function snapPoints(
 					const js = [j_trans];
 
 					s = 0;
-					while (s < snapTransition && j_trans > 0 && j_trans <= max_index(points)) {
+					while (
+						s < snapTransition &&
+						j_trans > 0 &&
+						j_trans <= max_index(points)
+					) {
 						s += latlngDistance(points[j_trans], points[j_trans + jd]);
 						j_trans += jd;
 						sjs.push(s);
@@ -2471,11 +2479,11 @@ export function processGPX(trackFeature, options = {}) {
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
-	_dumpPoints(points, "js-00-original.txt");
+	dumpPoints(points, "js-00-original.txt");
 
 	// Eliminate duplicate x,y points
 	points = removeDuplicatePoints(points, options.isLoop || 0);
-	_dumpPoints(points, "js-01-duplicates-removed.txt");
+	dumpPoints(points, "js-01-duplicates-removed.txt");
 
 	// If repeat is specified, then create replicates
 	if ((options.repeat || 0) > 0) {
@@ -2487,7 +2495,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 		}
 		points = pNew;
-		_dumpPoints(points, "js-02-repeated.txt");
+		dumpPoints(points, "js-02-repeated.txt");
 	}
 
 	// Skip 'join' functionality and convert unnamed segments to 0
@@ -2501,7 +2509,7 @@ export function processGPX(trackFeature, options = {}) {
 		options.cropMin,
 		options.cropMax,
 	);
-	_dumpPoints(points, "js-03-cropped.txt");
+	dumpPoints(points, "js-03-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
 	options.isLoop = options.isLoop || 0;
@@ -2661,7 +2669,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Look for zig-zags
 	points = fixZigZags(points);
-	_dumpPoints(points, "js-04-zigzags-fixed.txt");
+	dumpPoints(points, "js-04-zigzags-fixed.txt");
 
 	// Look for loops
 	findLoops(points, options.isLoop);
@@ -2711,7 +2719,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 			p.ele += dz;
 		}
-		_dumpPoints(points, "js-05-altitude-adjusted.txt");
+		dumpPoints(points, "js-05-altitude-adjusted.txt");
 	}
 
 	// Reverse the points of the original course
@@ -2719,7 +2727,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.reverse) {
 		note("reversing course direction..");
 		reversePoints(points);
-		_dumpPoints(points, "js-06-reversed.txt");
+		dumpPoints(points, "js-06-reversed.txt");
 	}
 
 	// Corner cropping
@@ -2743,7 +2751,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.cornerCropEnd,
 			options.isLoop,
 		);
-		_dumpPoints(points, "js-07-corners-cropped.txt");
+		dumpPoints(points, "js-07-corners-cropped.txt");
 	}
 
 	// Auto-straighten
@@ -2755,7 +2763,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
-		_dumpPoints(points, "js-08-auto-straightened.txt");
+		dumpPoints(points, "js-08-auto-straightened.txt");
 	}
 
 	// Check for snapping
@@ -2769,12 +2777,12 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
-		_dumpPoints(points, "js-09-snapped.txt");
+		dumpPoints(points, "js-09-snapped.txt");
 	}
 
 	// spline of corners
 	if (_splineRadians > 0) {
-		_dumpPoints(points, "js-10-before-splines.txt");
+		dumpPoints(points, "js-10-before-splines.txt");
 		note("corner splines, pre-smoothing...");
 		points = addSplines(
 			points,
@@ -2785,7 +2793,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.isLoop || 0,
 			"spline",
 		);
-		_dumpPoints(points, "js-11-after-splines.txt");
+		dumpPoints(points, "js-11-after-splines.txt");
 	}
 
 	// Skip circuit processing
