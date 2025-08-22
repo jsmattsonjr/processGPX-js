@@ -40,6 +40,15 @@ function transition(x) {
 }
 
 /**
+ * returns the last valid index of an array
+ * @param {Array} x - array
+ * @returns {number} last valid index
+ */
+function max_index(x) {
+	return x.length - 1;
+}
+
+/**
  * Logging function (equivalent to Perl's note function)
  * @param {...any} args - Arguments to log
  */
@@ -396,12 +405,12 @@ function addDistanceField(points) {
  */
 function calcCourseDistance(points, isLoop) {
 	if (!points.length) return 0;
-	if (points[points.length - 1].distance === undefined) {
+	if (points[max_index(points)].distance === undefined) {
 		addDistanceField(points);
 	}
-	let distance = points[points.length - 1].distance;
+	let distance = points[max_index(points)].distance;
 	if (isLoop && points.length > 1) {
-		distance += latlngDistance(points[points.length - 1], points[0]);
+		distance += latlngDistance(points[max_index(points)], points[0]);
 	}
 	return distance;
 }
@@ -772,7 +781,7 @@ function addDirectionField(points, isLoop = 0) {
 
 		// Find next point that's not too close
 		while (pointsAreClose(points[w], points[v])) {
-			if (isLoop ? (w + 1) % points.length !== u : w < points.length - 1) {
+			if (isLoop ? (w + 1) % points.length !== u : w < max_index(points)) {
 				w = (w + 1) % points.length;
 			} else {
 				w = v;
@@ -863,7 +872,7 @@ function reversePoints(points) {
 
 	// Adjust distance field if it exists
 	if (points[0].distance !== undefined) {
-		const dLast = points[points.length - 1].distance;
+		const dLast = points[max_index(points)].distance;
 		for (const p of points) {
 			p.distance = dLast - p.distance;
 		}
@@ -912,7 +921,7 @@ function cropCorners(
 	// Find indices of corners meeting the cropping criteria
 	const cropCorners = [];
 	for (let i = 0; i < points.length; i++) {
-		if (!isLoop && (i === 0 || i === points.length - 1)) continue;
+		if (!isLoop && (i === 0 || i === max_index(points))) continue;
 
 		const p0 = points[(i - 1 + points.length) % points.length];
 		const p1 = points[i];
@@ -954,7 +963,7 @@ function cropCorners(
 
 		let dNext;
 		if (!isLoop && ic === cropCorners.length - 1) {
-			dNext = points[points.length - 1].distance;
+			dNext = points[max_index(points)].distance;
 		} else {
 			dNext = points[cropCorners[(ic + 1) % cropCorners.length]].distance;
 			if (ic === cropCorners.length - 1) dNext += courseDistance;
@@ -994,7 +1003,7 @@ function cropCorners(
 
 	// Wrap-around cropped corners
 	let pointAdded = false;
-	if (isLoop && !pointsAreClose(points[0], points[points.length - 1])) {
+	if (isLoop && !pointsAreClose(points[0], points[max_index(points)])) {
 		pointAdded = true;
 		points.push({ ...points[0] });
 	}
@@ -1009,7 +1018,7 @@ function cropCorners(
 
 	pointsLoop: while (i < points.length) {
 		// If it's point to point and we reached the last point, we're done
-		if (!isLoop && i === points.length - 1) {
+		if (!isLoop && i === max_index(points)) {
 			pNew.push(points[i]);
 			break;
 		}
@@ -1044,7 +1053,7 @@ function cropCorners(
 
 		// Skip points in crop interval
 		while (dp2 < dc2 - epsilon) {
-			if (i > points.length - 1) break pointsLoop;
+			if (i > max_index(points)) break pointsLoop;
 			i++;
 			p1 = p2;
 			p2 = points[(i + 1) % points.length];
@@ -1110,7 +1119,7 @@ function calcQualityScore(points, isLoop) {
 	let s2sum = 0;
 
 	for (let i = 0; i < points.length; i++) {
-		if (!isLoop && i === points.length - 1) break;
+		if (!isLoop && i === max_index(points)) break;
 
 		// Distance and altitude change to next point
 		const ds = latlngDistance(points[i], points[(i + 1) % points.length]);
@@ -1145,7 +1154,7 @@ function calcQualityScore(points, isLoop) {
 
 	let sum2 = 0;
 	for (let i = 0; i < sines.length; i++) {
-		if (!isLoop && i === sines.length - 1) break;
+		if (!isLoop && i === max_index(sines)) break;
 		// These are sine grades, not tangents, to avoid zero denominators
 		const s1 = sines[i];
 		const s2 = sines[(i + 1) % sines.length];
@@ -1474,27 +1483,27 @@ function snapPoints(
 		const jCount = [];
 
 		let j = i + snapStep;
-		if (j >= points.length) continue;
+		if (j > max_index(points)) continue;
 
 		// Get out of snap range: get point j beyond the snap range of point i
 		// This is geometric distance, not course distance, which could potentially be an issue
 		let d = 0;
 		while ((d = latlngDistance(p1, points[j])) <= snapRange) {
 			j += snapStep;
-			if (j >= points.length) continue iLoop;
+			if (j >= max_index(points)) continue iLoop;
 		}
 
 		// Keep going until distance between j and i stops increasing
-		while (j < points.length) {
+		while (j <= max_index(points)) {
 			const d2 = latlngDistance(p1, points[j]);
 			if (d2 < d) break;
 			d = d2;
 			j += snapStep;
-			if (j >= points.length) continue iLoop;
+			if (j >= max_index(points)) continue iLoop;
 		}
 
 		// Keep moving until j comes back into snap range of i
-		jLoop1: while (j < points.length) {
+		jLoop1: while (j <= max_index(points)) {
 			// Make sure we don't try the same value twice (moving forward and backward could cause this)
 			jCount[j] = (jCount[j] || 0) + 1;
 			if (jCount[j] > 1) continue iLoop;
@@ -1506,16 +1515,16 @@ function snapPoints(
 				Math.abs(p1.ele - points[j].ele) > snapAltitude + 0.3 * d
 			) {
 				j += snapStep;
-				if (j >= points.length) continue iLoop;
+				if (j >= max_index(points)) continue iLoop;
 			}
 
 			// Find local minimum of distance... reduced step distance to 1
-			while (j < points.length) {
+			while (j <= max_index(points)) {
 				d = latlngDistance(p1, points[j]);
 
 				// Distance to point forward
 				const df =
-					j < points.length - 1 ? latlngDistance(p1, points[j + 1]) : undefined;
+					j < max_index(points) ? latlngDistance(p1, points[j + 1]) : undefined;
 				// Distance to point backward
 				const db = j > 0 ? latlngDistance(p1, points[j - 1]) : undefined;
 
@@ -1545,7 +1554,7 @@ function snapPoints(
 
 			// Set direction for checking dot product
 			let di = 0;
-			if (j < points.length - 1 && i < points.length - 1) {
+			if (j < max_index(points) && i < max_index(points)) {
 				di = 1;
 			} else if (j > 0 && i > 0) {
 				di = -1;
@@ -1625,7 +1634,7 @@ function snapPoints(
 				while (
 					i1 > 0 &&
 					j1 > i2 &&
-					j1 < points.length - 1 &&
+					j1 < max_index(points) &&
 					pointsAreClose(
 						points[i1 - 1],
 						points[j1 - sign],
@@ -1649,7 +1658,7 @@ function snapPoints(
 				while (
 					i2 < j1 &&
 					j2 > i2 &&
-					j2 < points.length - 1 &&
+					j2 < max_index(points) &&
 					pointsAreClose(
 						points[i2 + 1],
 						points[j2 + sign],
@@ -1668,7 +1677,7 @@ function snapPoints(
 					let jTest = j1;
 					while (
 						jTest > i2 &&
-						jTest < points.length &&
+						jTest <= max_index(points) &&
 						roadTest(
 							points,
 							iTest - 1,
@@ -1685,7 +1694,7 @@ function snapPoints(
 					// Hop jTest past iTest: test that iTest lays in line of j points
 					if (
 						jTest > i2 &&
-						jTest < points.length &&
+						jTest <= max_index(points) &&
 						(flag1 = roadTest(
 							points,
 							jTest - 2 * sign,
@@ -1713,7 +1722,7 @@ function snapPoints(
 					// Push jTest up against iTest2 (it's between j2 and jTest)
 					while (
 						jTest > iTest2 &&
-						jTest < points.length &&
+						jTest <= max_index(points) &&
 						roadTest(
 							points,
 							iTest2 - 2,
@@ -1730,7 +1739,7 @@ function snapPoints(
 					// Hop past iTest2
 					if (
 						jTest > iTest2 &&
-						jTest < points.length &&
+						jTest <= max_index(points) &&
 						(flag2 = roadTest(
 							points,
 							jTest - sign,
@@ -1903,7 +1912,7 @@ function snapPoints(
 					const sis = [0];
 					const is = [i_trans];
 
-					while (s < snapTransition && i_trans > 0 && i_trans < points.length) {
+					while (s < snapTransition && i_trans > 0 && i_trans <= max_index(points)) {
 						s += latlngDistance(points[i_trans], points[i_trans + d]);
 						i_trans += d;
 						sis.push(s);
@@ -1916,7 +1925,7 @@ function snapPoints(
 					const js = [j_trans];
 
 					s = 0;
-					while (s < snapTransition && j_trans > 0 && j_trans < points.length) {
+					while (s < snapTransition && j_trans > 0 && j_trans <= max_index(points)) {
 						s += latlngDistance(points[j_trans], points[j_trans + jd]);
 						j_trans += jd;
 						sjs.push(s);
@@ -2032,7 +2041,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		) {
 			j++;
 			// If we cannot get a segment long enough on point-to-point, we're too close to the finish
-			if (!(isLoop || j <= points.length - 1)) {
+			if (!(isLoop || j <= max_index(points))) {
 				break iLoop;
 			}
 		}
@@ -2045,7 +2054,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		// We've got a line: try to extend it
 		while (true) {
 			const k = j + 1;
-			if (!isLoop && k > points.length - 1) {
+			if (!isLoop && k > max_index(points)) {
 				break;
 			}
 			if (!alignmentTest(points, i, k, maxDeviation)) {
@@ -2196,7 +2205,7 @@ function splineInterpolation(p1, p2, d1, d2, dd = PI / 16) {
 		for (let i = 0; i < points.length - 1; i++) {
 			ss.push(ss[ss.length - 1] + latlngDistance(points[i], points[i + 1]));
 		}
-		ss.push(ss[ss.length - 1] + latlngDistance(points[points.length - 1], p2));
+		ss.push(ss[ss.length - 1] + latlngDistance(points[max_index(points)], p2));
 
 		for (let i = 0; i < points.length; i++) {
 			const f = ss[i] / ss[ss.length - 1];
@@ -2272,7 +2281,7 @@ function addSplines(
 
 		// add points if appropriate
 		// splines cannot be fit to first or last interval unless it's a loop
-		if (isLoop || (i > 0 && i < points.length - 2)) {
+		if (isLoop || (i > 0 && i < max_index(points) - 1)) {
 			const j = (i + 1) % points.length;
 			if (pointsAreClose(points[i], points[j], 1)) {
 				continue;
@@ -2504,11 +2513,11 @@ export function processGPX(trackFeature, options = {}) {
 			!options.isLoop &&
 			options.cropMin === undefined &&
 			options.cropMax === undefined &&
-			latlngDistance(points[0], points[points.length - 1]) < 150 &&
+			latlngDistance(points[0], points[max_index(points)]) < 150 &&
 			points.length > 3 &&
 			latlngDotProduct(
-				points[points.length - 2],
-				points[points.length - 1],
+				points[max_index(points) - 1],
+				points[max_index(points)],
 				points[0],
 				points[1],
 			) > -0.1
@@ -2635,7 +2644,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Check if loop specified for apparent point-to-point
 	if (options.isLoop) {
-		const d = latlngDistance(points[0], points[points.length - 1]);
+		const d = latlngDistance(points[0], points[max_index(points)]);
 		if (d > 150) {
 			warn(
 				`WARNING: -loop or -lap specified, with large (${d} meter) distance between first and last point: are you sure you wanted -loop or -lap?`,
