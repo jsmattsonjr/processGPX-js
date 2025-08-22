@@ -1625,7 +1625,7 @@ function snapPoints(
 				while (
 					i1 > 0 &&
 					j1 > i2 &&
-					j1 < points.length &&
+					j1 < points.length - 1 &&
 					pointsAreClose(
 						points[i1 - 1],
 						points[j1 - sign],
@@ -1649,7 +1649,7 @@ function snapPoints(
 				while (
 					i2 < j1 &&
 					j2 > i2 &&
-					j2 < points.length &&
+					j2 < points.length - 1 &&
 					pointsAreClose(
 						points[i2 + 1],
 						points[j2 + sign],
