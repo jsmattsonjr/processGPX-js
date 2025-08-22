@@ -1677,6 +1677,13 @@ sub snapPoints {
   my $spacing         = $var{spacing} // 0;
 
   addDistanceField(points=> $points);
+  
+  # Only dump distances on first call to snapPoints
+  our $snapPoints_first_call //= 1;
+  if ($snapPoints_first_call) {
+    dumpPoints($points, "perl-distances-after-addDistanceField.txt");
+    $snapPoints_first_call = 0;
+  }
 
   my %vals = @_;
   # snap = 1: subsequent laps snap to position of earlier laps
@@ -2051,6 +2058,9 @@ sub snapPoints {
       }
 
       if (($i2 > $i1) && (abs($j2 - $j1) > 0)) {
+        print STDERR "DEBUG PERL SNAP: i=$i j=$j sign=$sign i1=$i1 i2=$i2 j1=$j1 j2=$j2 snapDistance=$snapDistance\n";
+        print STDERR "DEBUG PERL SNAP: i_point lat=".$points->[$i]->{lat}." lon=".$points->[$i]->{lon}." dist=".$points->[$i]->{distance}."\n";
+        print STDERR "DEBUG PERL SNAP: j_point lat=".$points->[$j]->{lat}." lon=".$points->[$j]->{lon}." dist=".$points->[$j]->{distance}."\n";
         note("i = $i, j = $j: snapping ", ($sign > 0) ? "forward" : "reverse", " segment: $i1 .. $i2 <=> $j1 .. $j2\n");
 
         my @pNew;
@@ -5192,16 +5202,16 @@ for my $file ( @files ) {
 
   # spline of corners
   if ( $splineRadians > 0 ) {
-    dumpPoints($points, "perl-10-before-splines.txt");
     note("corner splines, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
-    dumpPoints($points, "perl-11-after-splines.txt");
+    dumpPoints($points, "perl-10-after-splines.txt");
   }
 
   # arc fit of corners
   if ( $arcFitRadians > 0 ) {
     note("corner arcFits, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $arcFitRadians, maxRadians=> $arcFitMaxRadians, isLoop=> $isLoop, splineType=> "arcFit", start=> $arcFitStart, end=> $arcFitEnd);
+    dumpPoints($points, "perl-11-after-arcfit.txt");
   }
 
   # add distance field

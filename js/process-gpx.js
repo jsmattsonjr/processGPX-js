@@ -25,7 +25,7 @@ function int(x) {
  * @param {number} b - Second value
  * @returns {number} -1 if a < b, 0 if a == b, 1 if a > b
  */
-function _spaceship(a, b) {
+function spaceship(a, b) {
 	return (a > b) - (a < b);
 }
 
@@ -1217,6 +1217,63 @@ function calcDeviationStats(points, startIndex, endIndex) {
 }
 
 /**
+ * Calculate delta vector between two xy points
+ * @param {Array} p1 - [x, y] first point
+ * @param {Array} p2 - [x, y] second point
+ * @returns {Array} [dx, dy] difference vector
+ */
+function deltaxy(p1, p2) {
+	return [p2[0] - p1[0], p2[1] - p1[1]];
+}
+
+/**
+ * Determine turn direction of three points
+ * @param {Array} v1 - [x, y] first point
+ * @param {Array} v2 - [x, y] second point
+ * @param {Array} v3 - [x, y] third point
+ * @returns {number} -1, 0, or 1 indicating turn direction
+ */
+function turnDirection(v1, v2, v3) {
+	const dv1 = deltaxy(v1, v2);
+	const dv2 = deltaxy(v2, v3);
+	return spaceship(dv1[1] * dv2[0], dv1[0] * dv2[1]);
+}
+
+/**
+ * Fit a circle through three points
+ * @param {Array} p1 - [x, y] first point
+ * @param {Array} p2 - [x, y] second point
+ * @param {Array} p3 - [x, y] third point
+ * @returns {Array} [center, radius] where center is [x, y] or [undefined, undefined] if linear
+ */
+function circle3PointFit(p1, p2, p3) {
+	// Reference to first point
+	const x21 = p2[0] - p1[0];
+	const x31 = p3[0] - p1[0];
+	const y21 = p2[1] - p1[1];
+	const y31 = p3[1] - p1[1];
+
+	// Distances from first point
+	const rs21 = x21 ** 2 + y21 ** 2;
+	const rs31 = x31 ** 2 + y31 ** 2;
+	const denom = 2 * (y21 * x31 - y31 * x21);
+
+	// Linear
+	if (denom === 0) {
+		return [undefined, undefined];
+	}
+
+	const f = (rs31 * x21 - rs21 * x31) / denom;
+	const g = (rs21 * y31 - rs31 * y21) / denom;
+
+	const r = Math.sqrt(f ** 2 + g ** 2);
+	const x0 = p1[0] - g;
+	const y0 = p1[1] - f;
+
+	return [[x0, y0], r];
+}
+
+/**
  * add a vector to a point
  * a single iteration will use the average cosine for the path rather than
  * a starting cosine, just for maximal accuracy
@@ -1244,6 +1301,141 @@ function addVectorToPoint(point, vector) {
 	lon -= 360 * Math.floor(0.5 + lon / 360);
 
 	return { lat: lat, lon: lon };
+}
+
+/**
+ * Arc fit interpolation between points
+ * @param {Object} p1 - First point (for first circle fit)
+ * @param {Object} p2 - Second point (interpolation starts here)
+ * @param {Object} p3 - Third point (interpolation ends here)
+ * @param {Object} p4 - Fourth point (for second circle fit)
+ * @param {number} dd - Interpolation angle (default π/16)
+ * @returns {Array} Array of interpolated points
+ */
+function arcFitInterpolation(p1, p2, p3, p4, dd = Math.PI / 16) {
+	const xy1 = latlng2dxdy(p2, p1);
+	const xy2 = [0, 0];
+	const xy3 = latlng2dxdy(p2, p3);
+	const xy4 = latlng2dxdy(p2, p4);
+
+	const [cxy0, cr0] = circle3PointFit(xy1, xy2, xy3);
+	const [cxy1, cr1] = circle3PointFit(xy2, xy3, xy4);
+
+	// Check the circle is on the right side of the corner
+	const t1 = turnDirection(xy1, xy2, xy3);
+	const t2 = turnDirection(xy2, xy3, xy4);
+
+	// Points: find which circle spans the greatest angle, and divide that angle by
+	// the angle spacing
+	let phi11, phi12, dphi1, phi21, phi22, dphi2;
+	let dphiMax = 0;
+
+	if (cxy0 !== undefined) {
+		// Check turn directions match
+		if (
+			!(
+				t1 === turnDirection(xy1, xy2, cxy0) &&
+				t1 === turnDirection(xy2, xy3, cxy0)
+			)
+		) {
+			return [];
+		}
+
+		// Calculate angles
+		phi11 = Math.atan2(xy2[1] - cxy0[1], xy2[0] - cxy0[0]);
+		phi12 = Math.atan2(xy3[1] - cxy0[1], xy3[0] - cxy0[0]);
+		dphi1 = deltaAngle(phi11, phi12);
+		dphiMax = Math.max(dphiMax, Math.abs(dphi1));
+	}
+
+	if (cxy1 !== undefined) {
+		// Check turn directions match
+		if (
+			!(
+				t2 === turnDirection(xy2, xy3, cxy1) &&
+				t2 === turnDirection(xy3, xy4, cxy1)
+			)
+		) {
+			return [];
+		}
+
+		phi21 = Math.atan2(xy2[1] - cxy1[1], xy2[0] - cxy1[0]);
+		phi22 = Math.atan2(xy3[1] - cxy1[1], xy3[0] - cxy1[0]);
+		dphi2 = deltaAngle(phi21, phi22);
+		dphiMax = Math.max(dphiMax, Math.abs(dphi2));
+	}
+
+	// Find number of points to interpolate
+	let NPoints = Math.floor(dphiMax / Math.abs(dd));
+	const NPointsMax = Math.floor(latlngDistance(p2, p3) / 0.1);
+	NPoints = Math.min(NPoints, NPointsMax);
+
+	const points = [];
+	for (let i = 1; i <= NPoints; i++) {
+		const f = i / (NPoints + 1);
+		let phi1, phi2;
+		if (dphi1 !== undefined) {
+			phi1 = phi11 + dphi1 * f;
+		}
+		if (dphi2 !== undefined) {
+			phi2 = phi21 + dphi2 * f;
+		}
+
+		let x1, y1, x2, y2;
+		if (phi1 !== undefined) {
+			x1 = cxy0[0] + cr0 * Math.cos(phi1);
+			y1 = cxy0[1] + cr0 * Math.sin(phi1);
+		} else {
+			x1 = xy2[0] + f * (xy3[0] - xy2[0]);
+			y1 = xy2[1] + f * (xy3[1] - xy2[1]);
+		}
+
+		if (phi2 !== undefined) {
+			x2 = cxy1[0] + cr1 * Math.cos(phi2);
+			y2 = cxy1[1] + cr1 * Math.sin(phi2);
+		} else {
+			x2 = xy2[0] + f * (xy4[0] - xy3[0]);
+			y2 = xy2[1] + f * (xy4[1] - xy3[1]);
+		}
+
+		const dx = (1 - f) * x1 + f * x2 - xy2[0];
+		const dy = (1 - f) * y1 + f * y2 - xy2[1];
+		const p = addVectorToPoint(p2, [dx, dy]);
+		points.push(p);
+	}
+
+	// Interpolate points with respect to distance along spline
+	// Spline does not in general have equally spaced points, so point
+	// interpolation, which would have been provided by interpolatePoint,
+	// wouldn't work
+	if (points.length > 0) {
+		const ss = [latlngDistance(p2, points[0])];
+		for (let i = 0; i < points.length - 1; i++) {
+			ss.push(ss[ss.length - 1] + latlngDistance(points[i], points[i + 1]));
+		}
+		ss.push(ss[ss.length - 1] + latlngDistance(points[points.length - 1], p3));
+
+		for (let i = 0; i < points.length; i++) {
+			const f = ss[i] / ss[ss.length - 1];
+			const p = points[i];
+			for (const k in p2) {
+				if (k !== "lat" && k !== "lon") {
+					if (k === "segment") {
+						if (p2[k] === p3[k]) {
+							p[k] = p2[k];
+						} else {
+							p[k] = 0;
+						}
+					} else if (isNumeric(p2[k]) && isNumeric(p3[k])) {
+						p[k] = (1 - f) * p2[k] + f * p3[k];
+					} else {
+						p[k] = p2[k];
+					}
+				}
+			}
+		}
+	}
+	return points;
 }
 
 /**
@@ -1454,6 +1646,7 @@ function snapPoints(
 
 	// Ensure distance field exists
 	addDistanceField(points);
+	dumpPoints(points, "js-distances-after-addDistanceField.txt");
 
 	// snap = 1: subsequent laps snap to position of earlier laps
 	// snap = 2: earlier laps snap to position of later laps
@@ -1815,6 +2008,15 @@ function snapPoints(
 			}
 
 			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
+				console.error(
+					`DEBUG JS SNAP: i=${i} j=${j} sign=${sign} i1=${i1} i2=${i2} j1=${j1} j2=${j2} snapDistance=${snapDistance}`,
+				);
+				console.error(
+					`DEBUG JS SNAP: i_point lat=${points[i].lat} lon=${points[i].lon} dist=${points[i].distance}`,
+				);
+				console.error(
+					`DEBUG JS SNAP: j_point lat=${points[j].lat} lon=${points[j].lon} dist=${points[j].distance}`,
+				);
 				note(
 					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
 				);
@@ -2343,9 +2545,13 @@ function addSplines(
 			if (Math.abs(turn) > minRadians && Math.abs(turn) <= maxRadians) {
 				let newPoints;
 				if (isArcFit) {
-					// arcFitInterpolation not implemented yet - skip for now
-					warn("arcFitInterpolation not implemented, skipping");
-					newPoints = [];
+					newPoints = arcFitInterpolation(
+						points[k],
+						points[i],
+						points[j],
+						points[l],
+						minRadians,
+					);
 				} else {
 					newPoints = splineInterpolation(
 						points[i],
@@ -2647,8 +2853,8 @@ export function processGPX(trackFeature, options = {}) {
 	const _splineMaxRadians = options.splineMaxDegs * DEG2RAD;
 
 	options.arcFitDegs = options.arcFitDegs ?? 0;
-	const _arcFitRadians = options.arcFitDegs * DEG2RAD;
-	const _arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
+	const arcFitRadians = options.arcFitDegs * DEG2RAD;
+	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
 
 	// Check if loop specified for apparent point-to-point
 	if (options.isLoop) {
@@ -2782,7 +2988,6 @@ export function processGPX(trackFeature, options = {}) {
 
 	// spline of corners
 	if (_splineRadians > 0) {
-		dumpPoints(points, "js-10-before-splines.txt");
 		note("corner splines, pre-smoothing...");
 		points = addSplines(
 			points,
@@ -2793,8 +2998,27 @@ export function processGPX(trackFeature, options = {}) {
 			options.isLoop || 0,
 			"spline",
 		);
-		dumpPoints(points, "js-11-after-splines.txt");
+		dumpPoints(points, "js-10-after-splines.txt");
 	}
+
+	// arc fit of corners
+	if (arcFitRadians > 0) {
+		note("corner arcFits, pre-smoothing...");
+		points = addSplines(
+			points,
+			arcFitRadians,
+			arcFitMaxRadians,
+			options.arcFitStart,
+			options.arcFitEnd,
+			options.isLoop || 0,
+			"arcFit",
+		);
+		dumpPoints(points, "js-11-after-arcfit.txt");
+	}
+
+	// add distance field
+	addDistanceField(points);
+	const _courseDistance = calcCourseDistance(points, options.isLoop || 0);
 
 	// Skip circuit processing
 
