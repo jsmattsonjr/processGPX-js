@@ -29,7 +29,7 @@ function setupYargsParser() {
 			anchorSF: { type: "boolean", default: false },
 			auto: { type: "boolean", default: false },
 			autoLap: { type: "boolean", default: false, alias: ["autoLoop"] },
-			autoSpacing: { type: "boolean", default: false },
+			autoSpacing: { type: "boolean", default: undefined },
 			closed: { type: "boolean", default: false, alias: ["copyPoint"] },
 			csv: { type: "boolean", default: false },
 			enableAdvancedSmoothing: { type: "boolean", default: false },

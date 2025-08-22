@@ -3236,6 +3236,23 @@ export function processGPX(trackFeature, options = {}) {
 		dumpPoints(points, "js-stage-18-interpolated.json");
 	}
 
+	// Check for snapping (pass 2)
+	// This is done after point interpolation as well as before
+	// since widely spaced points may not show a match
+	if ((options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
+		// STAGE 21: Snap points (pass 2)
+		note("snapping repeated points (pass 2)...");
+		points = snapPoints(
+			points,
+			options.snap,
+			options.snapDistance || 2,
+			options.snapAltitude || 1,
+			options.snapTransition || 0,
+			options.spacing || 0,
+		);
+		dumpPoints(points, "js-stage-21-snapped-pass-2.json");
+	}
+
 	// Skip circuit processing
 
 	// Convert processed points back to coordinates format for output
