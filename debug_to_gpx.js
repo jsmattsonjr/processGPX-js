@@ -30,8 +30,8 @@ function convertDebugToGPX(inputPath) {
 			const lon = parseFloat(parts[2]);
 			const ele = parseFloat(parts[3]);
 
-			if (!isNaN(lat) && !isNaN(lon)) {
-				points.push({ lat, lon, ele: isNaN(ele) ? 0 : ele });
+			if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+				points.push({ lat, lon, ele: Number.isNaN(ele) ? 0 : ele });
 			}
 		}
 	}
