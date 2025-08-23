@@ -930,13 +930,17 @@ function addCurvatureField(points, isLoop = 0) {
 				break;
 			}
 		}
-		let k = 0;
-		if (u !== v && w !== v) {
-			k =
-				latlngAngle(points[u], points[v], points[w]) /
-				latlngDistance(points[u], points[w]);
+		if (u === v || u === w) {
+			points[v].curvature = 0;
+			v++;
+			continue;
 		}
-		points[v].curvature = k;
+		dPrev = dPrev ?? latlngDirection(points[u], points[v]);
+		const d = latlngDirection(points[v], points[w]);
+		points[v].curvature = 
+			(2 * deltaAngle(dPrev, d)) /
+			(latlngDistance(points[u], points[v]) + latlngDistance(points[v], points[w]));
+		dPrev = d;
 		v++;
 	}
 }
