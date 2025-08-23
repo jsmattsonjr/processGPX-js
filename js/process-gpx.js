@@ -259,6 +259,23 @@ function latlngCrossProduct(p1, p2, p3, p4) {
 }
 
 /**
+ * Calculate cross product between two segments defined by array coordinates
+ * @param {Array} p1 - [x, y] coordinates of first point of first segment
+ * @param {Array} p2 - [x, y] coordinates of second point of first segment  
+ * @param {Array} p3 - [x, y] coordinates of first point of second segment
+ * @param {Array} p4 - [x, y] coordinates of second point of second segment
+ * @returns {number|null} Normalized cross product or null if degenerate
+ */
+function crossProduct(p1, p2, p3, p4) {
+	const dx12 = p2[0] - p1[0];
+	const dx34 = p4[0] - p3[0];
+	const dy12 = p2[1] - p1[1];
+	const dy34 = p4[1] - p3[1];
+	const denom = Math.sqrt((dx12 ** 2 + dy12 ** 2) * (dx34 ** 2 + dy34 ** 2));
+	return denom === 0 ? null : (dx12 * dy34 - dx34 * dy12) / denom;
+}
+
+/**
  * given 3 points, return the subtended angle
  * @param {Object} p1 - First point
  * @param {Object} p2 - Vertex point
@@ -504,6 +521,52 @@ function interpolatePoint(p1, p2, f) {
 		}
 	}
 	return newPoint;
+}
+
+/**
+ * Check if a point can be pruned based on distance, cross product, and gradient
+ * @param {Array} points - Array of 3 points [p1, p2, p3]
+ * @param {number} distance - Maximum distance threshold (default 2)
+ * @param {number} X - Maximum cross product threshold (default 0.001)
+ * @param {number} dg - Maximum gradient change threshold (default 0.001)
+ * @returns {boolean} True if point can be pruned
+ */
+function isPointPrunable(points, distance = 2, X = 0.001, dg = 0.001) {
+	const [p1, p2, p3] = points;
+	if (!p3) {
+		die("isPointPrunable requires 3 points");
+	}
+	
+	const [x1, y1] = latlng2dxdy(p3, p1);
+	const [x2, y2] = latlng2dxdy(p3, p2);
+	const [x3, y3] = [0, 0];
+	const z1 = p1.ele;
+	const z2 = p2.ele;
+	const z3 = p3.ele;
+	const s1 = p1.segment;
+	const s2 = p2.segment;
+	const s3 = p3.segment;
+	
+	// Only prune points in the same segment
+	if (!(s1 === s2 && s2 === s3)) {
+		return false;
+	}
+	
+	if (isPointOnRoad(p1, p2, p3, 1)) {
+		const d13 = Math.sqrt((y3 - y1) ** 2 + (x3 - x1) ** 2);
+		const d23 = Math.sqrt((y3 - y2) ** 2 + (x3 - x2) ** 2);
+		
+		// Duplicate points are not prunable
+		if (d13 === 0 || d23 === 0) {
+			return false;
+		}
+		
+		// Check gradient and alignment
+		const dgCheck = (z2 - z3) / d23 - (z3 - z1) / d13;
+		const cross = crossProduct([x1, y1], [x3, y3], [x3, y3], [x2, y2]);
+		return Math.abs(dgCheck) <= dg && Math.abs(cross) <= X;
+	}
+	return false;
 }
 
 /**
@@ -4225,6 +4288,31 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		dumpPoints(points, "26-js-crossings-fixed.txt");
+	}
+
+	if (options.prune) {
+		// STAGE 29: Prune points
+		// Prune in each direction
+		for (let n = 0; n < 2; n++) {
+			let pruneCount = 0;
+			const pNew = [points[0]];
+			for (let i = 1; i <= maxIndex(points) - 1; i++) {
+				const p1 = pNew[pNew.length - 1];
+				const p2 = points[i + 1];
+				const p3 = points[i];
+				if (isPointPrunable([p1, p2, p3], options.pruneD || 1, options.pruneX || 0.001, options.prunedg || 0.0005)) {
+					pruneCount++;
+				} else {
+					pNew.push(p3);
+				}
+			}
+			pNew.push(points[maxIndex(points)]);
+			pNew.reverse();
+			points = pNew;
+			deleteDerivedFields(points);
+			note(`prune loop ${n}: pruned ${pruneCount} points.`);
+		}
+		dumpPoints(points, "29-js-pruned.txt");
 	}
 
 	// Convert processed points back to coordinates format for output
