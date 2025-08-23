@@ -3412,12 +3412,12 @@ export function processGPX(trackFeature, options = {}) {
 	options.zSmooth = options.zSmooth ?? 0;
 	options.snap = options.snap ?? 0;
 	options.snapTransition = options.snapTransition ?? 0;
-	options.lSmooth = options.lSmooth ?? 0;
+	lSmooth = lSmooth ?? 0;
 
 	// Check for invalid option combinations
-	if (options.snap > 0 && options.snapDistance > options.lSmooth) {
+	if (options.snap > 0 && options.snapDistance > lSmooth) {
 		warn(
-			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`,
+			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`,
 		);
 	}
 
