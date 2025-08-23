@@ -4,7 +4,8 @@
   "description": "A JavaScript port of processGPX, designed to improve and create GPX files for cycling emulation platforms like BikeTerra. This client-side application brings the powerful GPX processing capabilities of the original Perl tool to the browser.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "debug:to-gpx": "node debug_to_gpx.js"
   },
   "repository": {
     "type": "git",

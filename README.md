@@ -37,6 +37,22 @@ processGPX-js/
 └── dist/                     # Built distribution files
 ```
 
+## Debugging
+
+The `dumpPoints()` function in `js/process-gpx.js` is used to dump the state of the points array at various stages of processing. These dumps are saved as tab-separated text files in the `debug/` directory.
+
+A utility script, `debug_to_gpx.js`, is provided to convert these debug files back into GPX format for visualization and analysis.
+
+### Converting Debug Dumps to GPX
+
+To convert a debug file to a GPX file, run the following command:
+
+```bash
+npm run debug:to-gpx -- debug/your_debug_file.txt
+```
+
+This will create a new file, `your_debug_file.gpx`, in the same directory.
+
 ## Usage (Planned)
 
 The JavaScript port will provide both programmatic API access and a web interface:
