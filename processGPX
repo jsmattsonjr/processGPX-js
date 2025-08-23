@@ -2138,7 +2138,7 @@ sub snapPoints {
         # d = 1: forward direction, -1: backard direction
         for my $d ( -1, 1 ) {
           my $s = 0;
-          $i = ($d > 0) ? $i2 : $i1;
+          my $i = ($d > 0) ? $i2 : $i1;
           my @sis = (0);
           my @is = ($i);
           while (($s < $snapTransition) && ($i > 0) && ($i < $#$points)) {
