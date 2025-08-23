@@ -1997,14 +1997,6 @@ function isPointOnRoadCorner(p1, p2, p3, p4, px) {
  * @returns {boolean} True if point passes road test
  */
 function roadTest(points, j, k, l, m, i, d) {
-	// Debug specific divergent roadTest call
-	const isDebugCall =
-		j === 1261 && k === 1260 && l === 1218 && m === 1217 && i === 363;
-
-	if (isDebugCall) {
-		note(`DEBUG ROADTEST DETAIL: roadTest(${j}, ${k}, ${l}, ${m}, ${i}, ${d})`);
-	}
-
 	// First check to see if the point i falls in the range k .. l
 	if (
 		!(
@@ -2016,17 +2008,14 @@ function roadTest(points, j, k, l, m, i, d) {
 			l <= maxIndex(points)
 		)
 	) {
-		if (isDebugCall) note(`DEBUG ROADTEST: Failed bounds check`);
 		return false;
 	}
 
 	if (isPointOnRoad(points[k], points[l], points[i], d)) {
-		if (isDebugCall) note(`DEBUG ROADTEST: isPointOnRoad returned true`);
 		return true;
 	}
 
 	if (!(j > 0 && m > 0 && j <= maxIndex(points) && m <= maxIndex(points))) {
-		if (isDebugCall) note(`DEBUG ROADTEST: Failed j/m bounds check`);
 		return false;
 	}
 
@@ -2038,8 +2027,6 @@ function roadTest(points, j, k, l, m, i, d) {
 		points[i],
 	);
 
-	if (isDebugCall)
-		note(`DEBUG ROADTEST: isPointOnRoadCorner returned ${cornerResult}`);
 	return cornerResult;
 }
 
@@ -2427,6 +2414,10 @@ function snapPoints(
 			}
 
 			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
+				note(
+					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
+				);
+
 				const pNew = [];
 				if (sign > 0) {
 					// Keep everything up to start of j range
@@ -2435,32 +2426,31 @@ function snapPoints(
 					// Splice in i range (exclude end-points)
 					// Try to match up segments if possible
 					// Segment matching by relative distance, but we need to nudge if we encounter a duplicate
-					let j_seg = j1;
-					for (let i_seg = i1; i_seg <= i2; i_seg++) {
+					let j = j1;
+					for (let i = i1; i <= i2; i++) {
 						if (
-							j_seg < j2 &&
-							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-								0.05
+							j < j2 &&
+							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
 						) {
-							j_seg++;
+							j++;
 						}
 
 						while (
-							j_seg < j2 &&
+							j < j2 &&
 							Math.abs(
-								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-									Math.abs(points[i_seg].distance - points[i1].distance),
+								Math.abs(points[j + 1].distance - points[j1].distance) -
+									Math.abs(points[i].distance - points[i1].distance),
 							) <
 								Math.abs(
-									Math.abs(points[j_seg].distance - points[j1].distance) -
-										Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[j].distance - points[j1].distance) -
+										Math.abs(points[i].distance - points[i1].distance),
 								)
 						) {
-							j_seg++;
+							j++;
 						}
 
-						const p = { ...points[i_seg] };
-						p.segment = points[j_seg].segment;
+						const p = { ...points[i] };
+						p.segment = points[j].segment;
 						pNew.push(p);
 					}
 
@@ -2468,32 +2458,31 @@ function snapPoints(
 				} else {
 					pNew.push(...points.slice(0, j2 + 1));
 
-					let j_seg = j2;
-					for (let i_seg = i2; i_seg >= i1; i_seg--) {
+					let j = j2;
+					for (let i = i2; i >= i1; i--) {
 						if (
-							j_seg < j1 &&
-							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-								0.05
+							j < j1 &&
+							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
 						) {
-							j_seg++;
+							j++;
 						}
 
 						while (
-							j_seg < j1 &&
+							j < j1 &&
 							Math.abs(
-								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-									Math.abs(points[i_seg].distance - points[i1].distance),
+								Math.abs(points[j + 1].distance - points[j1].distance) -
+									Math.abs(points[i].distance - points[i1].distance),
 							) <
 								Math.abs(
-									Math.abs(points[j_seg].distance - points[j1].distance) -
-										Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[j].distance - points[j1].distance) -
+										Math.abs(points[i].distance - points[i1].distance),
 								)
 						) {
-							j_seg++;
+							j++;
 						}
 
-						const p = { ...points[i_seg] };
-						p.segment = points[j_seg].segment;
+						const p = { ...points[i] };
+						p.segment = points[j].segment;
 						pNew.push(p);
 					}
 
@@ -2623,7 +2612,6 @@ function snapPoints(
  */
 function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 	const smoothRadians = smoothAngle * DEG2RAD;
-	console.log(`DEBUG JS: doAutoSpacing input: ${points.length} points`);
 
 	// iterate a few times
 	for (
@@ -2634,9 +2622,6 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 		// do this in each direction
 		for (let direction = 0; direction <= 1; direction++) {
 			const pNew = [];
-			console.log(
-				`DEBUG JS: direction=${direction}, starting with ${points.length} points`,
-			);
 
 			// refine distance -- need to exceed the smoothing length
 			// on spacing: minRadius will increase the separation of points,
@@ -2760,12 +2745,8 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 				}
 			}
 			points = pNew.slice().reverse();
-			console.log(
-				`DEBUG JS: direction=${direction} finished, ${points.length} points`,
-			);
 		}
 	}
-	console.log(`DEBUG JS: doAutoSpacing output: ${points.length} points`);
 	return points;
 }
 
