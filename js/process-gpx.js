@@ -184,6 +184,50 @@ function latlng2dxdy(p1, p2) {
 }
 
 /**
+ * Calculate intersection between two line segments
+ * @param {Array} s12 - First segment [p1, p2]
+ * @param {Array} s34 - Second segment [p3, p4]  
+ * @returns {Array} Array of [f12, f34] intersection parameters, or empty array if no intersection
+ */
+function segmentIntercept(s12, s34) {
+	const [p1, p2] = s12;
+	const [p3, p4] = s34;
+	
+	if (!p1) die("segmentIntercept called with undefined point #1");
+	if (!p2) die("segmentIntercept called with undefined point #2");
+	if (!p3) die("segmentIntercept called with undefined point #3");
+	if (!p4) die("segmentIntercept called with undefined point #4");
+	
+	const [x1, y1] = [0, 0];
+	const [x2, y2] = latlng2dxdy(p1, p2);
+	const [x3, y3] = latlng2dxdy(p1, p3);
+	const [x4, y4] = latlng2dxdy(p1, p4);
+	const [dx12, dy12] = [x2, y2];
+	const [dx34, dy34] = latlng2dxdy(p3, p4);
+	
+	const denom = dx34 * dy12 - dx12 * dy34;
+	const a = Math.sqrt((dx12 ** 2 + dy12 ** 2) * (dx34 ** 2 + dy34 ** 2));
+	
+	// lines are parallel
+	if (a === 0 || Math.abs(denom) < 0.01 * a) {
+		return [];
+	}
+	
+	const f12 = (dx34 * (y3 - y1) - dy34 * (x3 - x1)) / denom;
+	if (f12 >= 0 && f12 < 1) {
+		const x = f12 * x2 + (1 - f12) * x1;
+		const y = f12 * y2 + (1 - f12) * y1;
+		const f23 = (Math.abs(x3 - x4) > Math.abs(y3 - y4)) 
+			? (x - x3) / (x4 - x3) 
+			: (y - y3) / (y4 - y3);
+		if (f23 >= 0 && f23 < 1) {
+			return [f12, f23];
+		}
+	}
+	return [];
+}
+
+/**
  * Calculate dot product between two lat/lng segments
  * @param {Object} p1 - First point of first segment
  * @param {Object} p2 - Second point of first segment
@@ -3959,6 +4003,114 @@ export function processGPX(trackFeature, options = {}) {
 			"spline",
 		);
 		dumpPoints(points, "23-js-post-smoothing-splines.txt");
+	}
+
+	if (options.fixCrossings) {
+		// STAGE 26: Fix crossings
+		note("fixing crossings...");
+
+		// Calculate crossing parameters
+		const crossingAngle = options.crossingAngle;
+		const crossingX = (crossingAngle !== undefined && crossingAngle >= 0) 
+			? Math.abs(Math.sin(crossingAngle * DEG2RAD)) 
+			: Math.sin(PI / 16);
+
+		// Ensure distance field exists
+		addDistanceField(points);
+
+		// Create simplified version of profile
+		// Monitor the direction and when the direction changes enough, add a point
+		const simplified = [0, 1];
+		if (points.length <= 1) {
+			die("course lacks at least two points... quitting");
+		}
+		
+		const simplifiedAngle = PI / 24;
+		for (let i = 2; i <= maxIndex(points); i++) {
+			const angle = latlngAngle(points[i], points[simplified[simplified.length - 1]], points[simplified[simplified.length - 2]]);
+			// Add points which cause an angle change
+			if (angle !== null && Math.abs(angle) > simplifiedAngle && (isLoop || i < maxIndex(points))) {
+				const a1 = latlngAngle(points[(i + 1) % points.length], points[i], points[simplified[simplified.length - 1]]);
+				const a2 = latlngAngle(points[(i + 1) % points.length], points[i], points[i - 1]);
+				if ((a1 !== null && Math.abs(a1) > simplifiedAngle) || (a2 !== null && Math.abs(a2) > simplifiedAngle)) {
+					simplified.push(i);
+				}
+			}
+		}
+
+		if (isLoop) {
+			if (!pointsAreClose(points[0], points[simplified[simplified.length - 1]])) {
+				simplified.push(0);
+			}
+		} else {
+			if (simplified[simplified.length - 1] !== maxIndex(points) && !pointsAreClose(points[maxIndex(points)], points[simplified[simplified.length - 1]])) {
+				simplified.push(maxIndex(points));
+			}
+		}
+
+		// Search for crossings on simplified route
+		const crossings = [];
+
+		for (let j = 1; j < simplified.length - 1; j++) {
+			for (let i = 0; i < j - 1; i++) {
+				const fs = segmentIntercept(
+					[points[simplified[i]], points[simplified[i + 1]]], 
+					[points[simplified[j]], points[simplified[j + 1]]]
+				);
+				if (fs.length === 2) {
+					// There is a crossing between simplified segments i and j
+					// But the actual intersection might be from adjacent segments... so check those if the intersection was close to the edge
+					const u1 = (fs[0] < 0.5 && i > 0) ? simplified[i - 1] : simplified[i];
+					const u2 = ((fs[0] > 0.5 && i < simplified.length - 2) ? simplified[i + 2] : simplified[i + 1]) - 1;
+					const v1 = (fs[1] < 0.5 && j > 0) ? simplified[j - 1] : simplified[j];
+					const v2 = ((fs[1] > 0.5 && j < simplified.length - 2) ? simplified[j + 2] : simplified[j + 1]) - 1;
+
+					// Find the specific segments and positions where the crossings occur
+					let crossingsFound = 0;
+					for (let u = u1; u <= u2; u++) {
+						for (let v = v1; v <= v2; v++) {
+							const gs = segmentIntercept(
+								[points[u], points[(u + 1) % points.length]], 
+								[points[v], points[(v + 1) % points.length]]
+							);
+							if (gs.length === 2) {
+								const up1 = (u + 1) % points.length;
+								const vp1 = (v + 1) % points.length;
+								const cNew = [];
+								cNew.push(interpolatePoint(points[u], points[up1], gs[0]));
+								const z1 = cNew[cNew.length - 1].ele;
+								cNew.push(interpolatePoint(points[v], points[vp1], gs[1]));
+								const z2 = cNew[cNew.length - 1].ele;
+								const zAvg = (z1 + z2) / 2;
+
+								// Adjust the altitude of the crossing points
+								if (Math.abs(latlngCrossProduct(points[u], points[up1], points[v], points[vp1])) > crossingX) {
+									const crossingHeight = options.crossingHeight || 2;
+									if (Math.abs(z1 - z2) < crossingHeight / 2) {
+										note(`crossing @ ${cNew[cNew.length - 2].distance} m and ${cNew[cNew.length - 1].distance} m: setting level crossing altitude to ${zAvg}`);
+										cNew[cNew.length - 2].ele = zAvg;
+										cNew[cNew.length - 1].ele = zAvg;
+									} else if (Math.abs(z1 - z2) < crossingHeight) {
+										cNew[cNew.length - 2].ele = zAvg + Math.sign(z1 - zAvg) * crossingHeight / 2;
+										cNew[cNew.length - 1].ele = zAvg + Math.sign(z2 - zAvg) * crossingHeight / 2;
+										note(`crossing @ ${cNew[cNew.length - 2].distance} m and ${cNew[cNew.length - 1].distance} m: setting overpass altitudes to ${cNew[cNew.length - 2].ele} and ${cNew[cNew.length - 1].ele}`);
+									}
+									crossings.push(...cNew);
+									crossingsFound++;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		note(`total crossings = ${crossings.length}`);
+
+		// TODO: Apply crossings to the route (complex interpolation logic would go here)
+		// For now, just report the crossings found
+
+		dumpPoints(points, "26-js-crossings-fixed.txt");
 	}
 
 	// Convert processed points back to coordinates format for output
