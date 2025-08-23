@@ -118,15 +118,10 @@ function dumpPoints(points, filename) {
 			})
 			.catch(() => {
 				// Fallback to console
-				console.log(`=== Points dump to ${filename} ===`);
-				console.log(output);
-				console.log(`=== End dump ${filename} ===`);
+				note(`=== Points dump to ${filename} ===`);
+				note(output);
+				note(`=== End dump ${filename} ===`);
 			});
-	} else {
-		// Browser environment - log to console instead
-		console.log(`=== Points dump to ${filename} ===`);
-		console.log(output);
-		console.log(`=== End dump ${filename} ===`);
 	}
 }
 
