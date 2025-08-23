@@ -97,8 +97,8 @@ function dumpPoints(points, filename) {
 		const p = points[i];
 		const lat = p.lat.toFixed(8);
 		const lon = p.lon.toFixed(8);
-		const ele = (p.ele || 0).toFixed(2);
-		const dist = (p.distance || 0).toFixed(2);
+		const ele = (p.ele || 0).toString();
+		const dist = (p.distance || 0).toString();
 
 		output += `${i}\t${lat}\t${lon}\t${ele}\t\t${dist}\n`;
 	}
@@ -514,7 +514,9 @@ function interpolatePoint(p1, p2, f) {
 					newPoint[k] = 0;
 				}
 			} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
-				newPoint[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
+				const val1 = typeof p1[k] === 'number' ? p1[k] : parseFloat(p1[k]);
+				const val2 = typeof p2[k] === 'number' ? p2[k] : parseFloat(p2[k]);
+				newPoint[k] = val1 * (1 - f) + val2 * f;
 			} else {
 				newPoint[k] = f < 0.5 ? p1[k] : p2[k];
 			}

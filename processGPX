@@ -4697,8 +4697,8 @@ sub dumpPoints {
     my $p = $points[$i];
     my $lat = sprintf("%.8f", $p->{lat});
     my $lon = sprintf("%.8f", $p->{lon});
-    my $ele = sprintf("%.2f", $p->{ele} // 0);
-    my $dist = sprintf("%.2f", $p->{distance} // 0);
+    my $ele = $p->{ele} // 0;
+    my $dist = $p->{distance} // 0;
     
     print $fh "$i\t$lat\t$lon\t$ele\t\t$dist\n";
   }
