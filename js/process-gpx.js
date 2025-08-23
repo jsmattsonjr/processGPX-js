@@ -173,8 +173,8 @@ function latlngDistance(p1, p2) {
  * @returns {Array} [dx, dy] in meters
  */
 function latlng2dxdy(p1, p2) {
-	if (!p1) throw new Error("latlng2dxdy called with undefined point #1");
-	if (!p2) throw new Error("latlng2dxdy called with undefined point #2");
+	if (!p1) die("latlng2dxdy called with undefined point #1");
+	if (!p2) die("latlng2dxdy called with undefined point #2");
 
 	const c1 = Math.cos(DEG2RAD * p1.lat);
 	const c2 = Math.cos(DEG2RAD * p2.lat);
@@ -2079,9 +2079,6 @@ function snapPoints(
 	// On large courses, since initial search is O(N-squared), step thru multiple points, then refine
 	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2
 	const snapStep = 2 + int(points.length / 200);
-	note(
-		`DEBUG snapStep calculation: points.length=${points.length}, snapStep=2+int(${points.length}/200)=${snapStep}`,
-	);
 
 	// Maximum range at which we check for snapping...
 	// so if colinear points are spaced more than twice this, we may miss snapping onto that interval
@@ -2099,13 +2096,6 @@ function snapPoints(
 
 		let j = i + snapStep;
 		if (j > maxIndex(points)) continue;
-
-		// Debug the assignment of divergent case indices
-		if (i >= 1590 && i <= 1620) {
-			note(
-				`DEBUG: Initial assignment i=${i}, j=${j} (j=i+snapStep where snapStep=${snapStep})`,
-			);
-		}
 
 		// Get out of snap range: get point j beyond the snap range of point i
 		// This is geometric distance, not course distance, which could potentially be an issue
@@ -2205,13 +2195,6 @@ function snapPoints(
 				continue;
 			}
 
-			// Debug final j assignment for divergent case
-			if (i >= 1590 && i <= 1620) {
-				note(
-					`DEBUG: Final j assignment before snapping: i=${i}, j=${j}, sign=${sign}, dot=${dot.toFixed(3)}`,
-				);
-			}
-
 			// Point i is matched to point j, and the two are moving in the same direction
 			// For each point j, if it falls on a line of points i, then replace the nearest point i
 			// First we need to find values of j which are encapsulated by i
@@ -2251,58 +2234,12 @@ function snapPoints(
 			let flag1, flag2;
 
 			do {
-				// Debug boundary expansion for divergent case
-				if (
-					points[i].distance >= 8000 &&
-					points[i].distance <= 9000 &&
-					points[j].distance >= 51000 &&
-					points[j].distance <= 52000
-				) {
-					note(
-						`DEBUG BOUNDARY: Before i1 expansion: i1=${i1}, j1=${j1}, j2=${j2}, sign=${sign}`,
-					);
-				}
-
 				// Shift i1 down as long as along line from j1 to j2
 				while (
 					i1 > 0 &&
 					roadTest(points, j1 - sign, j1, j2, j2 + sign, i1 - 1, snapDistance)
 				) {
-					// Debug roadTest call before expansion
-					if (
-						points[i].distance >= 8000 &&
-						points[i].distance <= 9000 &&
-						points[j].distance >= 51000 &&
-						points[j].distance <= 52000
-					) {
-						const testResult = roadTest(
-							points,
-							j1 - sign,
-							j1,
-							j2,
-							j2 + sign,
-							i1 - 1,
-							snapDistance,
-						);
-						note(
-							`DEBUG ROADTEST: roadTest(${j1 - sign}, ${j1}, ${j2}, ${j2 + sign}, ${i1 - 1}) = ${testResult}`,
-						);
-						note(
-							`  Test point ${i1 - 1} dist=${points[i1 - 1].distance.toFixed(2)} lat=${points[i1 - 1].lat.toFixed(6)} lon=${points[i1 - 1].lon.toFixed(6)}`,
-						);
-					}
 					i1--;
-					// Debug each expansion step
-					if (
-						points[i].distance >= 8000 &&
-						points[i].distance <= 9000 &&
-						points[j].distance >= 51000 &&
-						points[j].distance <= 52000
-					) {
-						note(
-							`DEBUG BOUNDARY: Expanded i1 to ${i1} (dist=${points[i1].distance.toFixed(2)})`,
-						);
-					}
 				}
 
 				// As long as they are coincident, increase i1 and j1 together (short cut)
@@ -2490,53 +2427,6 @@ function snapPoints(
 			}
 
 			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
-				note(
-					`DEBUG JS SNAP: i=${i} j=${j} sign=${sign} i1=${i1} i2=${i2} j1=${j1} j2=${j2} snapDistance=${snapDistance}`,
-				);
-				if (points[i]) {
-					note(
-						`DEBUG JS SNAP: i_point lat=${points[i].lat} lon=${points[i].lon} dist=${points[i].distance}`,
-					);
-				} else {
-					note(
-						`DEBUG JS SNAP: points[${i}] is undefined! points.length=${points.length}`,
-					);
-				}
-				if (points[j]) {
-					note(
-						`DEBUG JS SNAP: j_point lat=${points[j].lat} lon=${points[j].lon} dist=${points[j].distance}`,
-					);
-				} else {
-					note(
-						`DEBUG JS SNAP: points[${j}] is undefined! points.length=${points.length}`,
-					);
-				}
-				note(
-					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
-				);
-
-				// Debug the divergent case specifically - focus on distance values
-				if (
-					points[i].distance >= 8000 &&
-					points[i].distance <= 9000 &&
-					points[j].distance >= 51000 &&
-					points[j].distance <= 52000
-				) {
-					note(`DIVERGENT CASE DEBUG:`);
-					note(`  i=${i}, j=${j}, sign=${sign}`);
-					note(`  i-segment: ${i1}..${i2} (${i2 - i1 + 1} points)`);
-					note(`  j-segment: ${j1}..${j2} (${j2 - j1 + 1} points)`);
-					note(
-						`  i-segment distances: ${points[i1].distance.toFixed(2)} to ${points[i2].distance.toFixed(2)}`,
-					);
-					note(
-						`  j-segment distances: ${points[j1].distance.toFixed(2)} to ${points[j2].distance.toFixed(2)}`,
-					);
-					note(
-						`  Decision: ${sign > 0 ? "Keep i-segment (earlier), discard j-segment (later)" : "Keep i-segment (reverse order)"}`,
-					);
-				}
-
 				const pNew = [];
 				if (sign > 0) {
 					// Keep everything up to start of j range
@@ -2790,7 +2680,7 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 
 					// add points if needed
 					if (smoothRadians === undefined) {
-						throw new Error(
+						die(
 							`ERROR: smoothRadians not defined (smoothAngle = ${smoothAngle})`,
 						);
 					}
@@ -3305,7 +3195,7 @@ export function processGPX(trackFeature, options = {}) {
 		!trackFeature.geometry ||
 		trackFeature.geometry.type !== "LineString"
 	) {
-		throw new Error("Invalid track feature provided to processGPX");
+		die("Invalid track feature provided to processGPX");
 	}
 
 	// Map command-line options to internal processing variables (matching Perl implementation)
@@ -3316,7 +3206,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
-		throw new Error("-repeat limited to range 0 to 99");
+		die("-repeat limited to range 0 to 99");
 	}
 
 	// Check loopLeft and loopRight
@@ -3585,9 +3475,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// If shiftSF is specified but not loop, that's an error
 	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
-		throw new Error(
-			"ERROR: -shiftSF is only compatible with the -lap (or -loop) option.",
-		);
+		die("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
 	}
 
 	// Look for zig-zags
