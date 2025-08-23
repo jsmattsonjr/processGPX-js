@@ -30,6 +30,15 @@ function spaceship(a, b) {
 }
 
 /**
+ * Die function - equivalent to Perl's die()
+ * Throws an error with the given message
+ * @param {string} message - Error message
+ */
+function die(message) {
+	throw new Error(message);
+}
+
+/**
  * Transition function: 1 (x = -1) to 1/2 (x = 0) to 0 (x = 1)
  * @param {number} x - Input value
  * @returns {number} Transition value
@@ -673,7 +682,7 @@ function fixZigZags(points) {
 
 				// If we ran out of points, something is wrong
 				if (pNew.length < 2) {
-					throw new Error("repairing zig-zags eliminated entire route");
+					die("repairing zig-zags eliminated entire route");
 				}
 
 				points = pNew;
@@ -826,12 +835,16 @@ function addGradientField(points, isLoop = 0) {
 		const p1 = points[i];
 		let j = (i + 1) % points.length;
 		const di = p1.distance;
-		while (j !== i && Math.abs(distanceDifference(p1, points[j], courseDistance, isLoop)) < 0.1) {
+		while (
+			j !== i &&
+			Math.abs(distanceDifference(p1, points[j], courseDistance, isLoop)) < 0.1
+		) {
 			j = (j + 1) % points.length;
 		}
-		if ((j <= i) && !isLoop) break;
+		if (j <= i && !isLoop) break;
 		const p2 = points[j];
-		p1.gradient = (p2.ele - p1.ele) / distanceDifference(p1, p2, courseDistance, isLoop);
+		p1.gradient =
+			(p2.ele - p1.ele) / distanceDifference(p1, p2, courseDistance, isLoop);
 		i++;
 	}
 	if (i > 0) {
@@ -860,23 +873,24 @@ function integrateGradientField(points, isLoop = 0) {
 		const p1 = points[i];
 		const j = (i + 1) % points.length;
 		const di = p1.distance;
-		if ((j <= i) && !isLoop) break;
+		if (j <= i && !isLoop) break;
 		const p2 = points[j];
-		p2.ele = p1.ele + p1.gradient * distanceDifference(p1, p2, courseDistance, isLoop);
+		p2.ele =
+			p1.ele + p1.gradient * distanceDifference(p1, p2, courseDistance, isLoop);
 		i++;
 	}
 	if (isLoop) {
 		// adjust the entire course altitude to close the loop
 		const zError = points[max_index(points)].ele - zLast;
 		for (let k = 0; k < points.length; k++) {
-			points[k].ele -= zError * points[k].distance / courseDistance;
+			points[k].ele -= (zError * points[k].distance) / courseDistance;
 		}
 	}
 }
 
 /**
  * Add curvature field to points
- * @param {Array} points - Array of points  
+ * @param {Array} points - Array of points
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
  */
 function addCurvatureField(points, isLoop = 0) {
@@ -893,7 +907,7 @@ function addCurvatureField(points, isLoop = 0) {
 		let u = (v - 1 + points.length) % points.length;
 		let w = (v + 1) % points.length;
 		while (pointsAreClose(points[u], points[v])) {
-			if (isLoop ? (((u - 1 + points.length) % points.length) !== w) : (u > 0)) {
+			if (isLoop ? (u - 1 + points.length) % points.length !== w : u > 0) {
 				u = (u - 1 + points.length) % points.length;
 			} else {
 				u = v;
@@ -901,7 +915,7 @@ function addCurvatureField(points, isLoop = 0) {
 			}
 		}
 		while (pointsAreClose(points[w], points[v])) {
-			if (isLoop ? (((w + 1) % points.length) !== u) : (w < max_index(points))) {
+			if (isLoop ? (w + 1) % points.length !== u : w < max_index(points)) {
 				w = (w + 1) % points.length;
 			} else {
 				w = v;
@@ -910,7 +924,9 @@ function addCurvatureField(points, isLoop = 0) {
 		}
 		let k = 0;
 		if (u !== v && w !== v) {
-			k = latlngAngle(points[u], points[v], points[w]) / latlngDistance(points[u], points[w]);
+			k =
+				latlngAngle(points[u], points[v], points[w]) /
+				latlngDistance(points[u], points[w]);
 		}
 		points[v].curvature = k;
 		v++;
@@ -936,25 +952,40 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 	addGradientField(points, isLoop);
 	const courseDistance = calcCourseDistance(points, isLoop);
 
-	const gVars = [];                    // gradient variances
-	const densities = [];                // point densities
+	const gVars = []; // gradient variances
+	const densities = []; // point densities
 	let i1 = 1; // starting point for gradient variance: note we don't calculate for i=0 unless it's a loop
 	let i2 = 0; // ending point for gradient variance (can exceed number of points)
 
 	if (isLoop) {
-		while ((i1 > -points.length) && (distanceDifference(points[i1], points[0], courseDistance, isLoop) < avgRange)) {
+		while (
+			i1 > -points.length &&
+			distanceDifference(points[i1], points[0], courseDistance, isLoop) <
+				avgRange
+		) {
 			i1--;
 		}
 	}
 
 	for (let i = 0; i < points.length; i++) {
 		// move i1 to just outside averaging range
-		while ((i1 < i) && (distanceDifference(points[i1 + 1], points[i], courseDistance, isLoop) > avgRange)) {
+		while (
+			i1 < i &&
+			distanceDifference(points[i1 + 1], points[i], courseDistance, isLoop) >
+				avgRange
+		) {
 			i1++;
 		}
 		// move i2 to just outside averaging range
-		while ((isLoop ? (i2 < i + points.length) : (i2 < max_index(points))) && 
-			   (distanceDifference(points[i], points[i2 % points.length], courseDistance, isLoop) < avgRange)) {
+		while (
+			(isLoop ? i2 < i + points.length : i2 < max_index(points)) &&
+			distanceDifference(
+				points[i],
+				points[i2 % points.length],
+				courseDistance,
+				isLoop,
+			) < avgRange
+		) {
 			i2++;
 		}
 		let sum0 = 0;
@@ -962,17 +993,26 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 		for (let j = i1; j <= i2; j++) {
 			// gradient for each point is the forward gradient
 			// so compare gradient of the previous point to gradient of this point
-			const w = Math.exp(-((distanceDifference(points[i], points[j % points.length], courseDistance, isLoop)) ** 2) / twoSigmaAvg2);
+			const w = Math.exp(
+				-(
+					distanceDifference(
+						points[i],
+						points[j % points.length],
+						courseDistance,
+						isLoop,
+					) ** 2
+				) / twoSigmaAvg2,
+			);
 			sum0 += w;
 			// note for point to point, the last gradient is invalid, and there's no difference for the first point
 			const g1 = points[j % points.length].gradient;
 			const g2 = points[(j - 1 + points.length) % points.length].gradient;
-			sum1 += w * (g1 - g2) ** 2 / Math.sqrt(1e-4 + g1 ** 2 + g2 ** 2); // this weights steep grade fluctuations more, but not too much more
+			sum1 += (w * (g1 - g2) ** 2) / Math.sqrt(1e-4 + g1 ** 2 + g2 ** 2); // this weights steep grade fluctuations more, but not too much more
 		}
 		if (sum0 > 0) {
 			const gVar = sum1 / sum0; // variance of gradient differences
 			const d = sum0 / (sigmaAvg * SQRT2PI); // density of points
-			const sigma = sigmaFactor * Math.sqrt(gVar) * 50 / d;
+			const sigma = (sigmaFactor * Math.sqrt(gVar) * 50) / d;
 			points[i].sigma = sigma;
 		} else {
 			points[i].sigma = 0;
@@ -992,7 +1032,16 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
  * @param {number} cornerEffect - Corner effect factor (default: 0)
  * @returns {Array} New array of smoothed points
  */
-function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1, sigma = 0, weighting = [], cornerEffect = 0) {
+function smoothing(
+	points,
+	fields,
+	isLoop = 0,
+	sigmaField = "",
+	sigmaFactor = 1,
+	sigma = 0,
+	weighting = [],
+	cornerEffect = 0,
+) {
 	const sigma02 = sigma ** 2;
 
 	note("smoothing proc called...");
@@ -1001,7 +1050,12 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 		note(`smoothing sigma field = ${sigmaField}`);
 	}
 
-	if (!(fields.length > 0 && (sigma > 0 || (sigmaField && sigmaField !== "" && sigmaFactor > 0)))) {
+	if (
+		!(
+			fields.length > 0 &&
+			(sigma > 0 || (sigmaField && sigmaField !== "" && sigmaFactor > 0))
+		)
+	) {
 		return points;
 	}
 
@@ -1016,19 +1070,22 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 		note(`smoothing ${fields.join(",")} with weighting.`);
 	}
 	if (cornerEffect > 0) {
-		note(`smoothing ${fields.join(",")} with the corner effect = ${cornerEffect}.`);
+		note(
+			`smoothing ${fields.join(",")} with the corner effect = ${cornerEffect}.`,
+		);
 	}
 
 	// step thru the points
 	for (let i = 0; i < points.length; i++) {
 		const p = points[i];
-		const sigmap = p[sigmaField] !== undefined ? Math.abs(sigmaFactor * p[sigmaField]) : 0;
-		const effectiveSigma = 
-			sigmap <= 0 ? 
-			sigma :
-			(sigma <= 0 ? 
-			 sigmap :
-			 Math.sqrt(sigma02 + sigmap ** 2));
+		const sigmap =
+			p[sigmaField] !== undefined ? Math.abs(sigmaFactor * p[sigmaField]) : 0;
+		const effectiveSigma =
+			sigmap <= 0
+				? sigma
+				: sigma <= 0
+					? sigmap
+					: Math.sqrt(sigma02 + sigmap ** 2);
 
 		// create smoothed data: initialize with unsmoothed data
 		const newPoint = { ...p };
@@ -1048,30 +1105,38 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 
 			let j = i;
 			let s = 0;
-			while (((j > 0) || isLoop) &&
-				   (j > i - points.length) &&
-				   (s < dsMax)) {
+			while ((j > 0 || isLoop) && j > i - points.length && s < dsMax) {
 				const ds = latlngDistance(points[j], points[j - 1]);
 				s += ds;
 
 				// a 1 radian turn is the same as 2 sigma for cornerEffect = 1
 				if (cornerEffect > 0) {
-					s += ds * cornerEffect * (points[j - 1].curvature + points[j].curvature) * adjustedSigma;
+					s +=
+						ds *
+						cornerEffect *
+						(points[j - 1].curvature + points[j].curvature) *
+						adjustedSigma;
 				}
 				j--;
 			}
 
 			s = 0;
 			let k = i;
-			while (((k < max_index(points)) || isLoop) &&
-				   (k < i + points.length) &&
-				   (s < dsMax)) {
+			while (
+				(k < max_index(points) || isLoop) &&
+				k < i + points.length &&
+				s < dsMax
+			) {
 				const l = k % points.length;
 				const m = (k + 1) % points.length;
 				const ds = latlngDistance(points[l], points[m]);
 				s += ds;
 				if (cornerEffect > 0) {
-					s += ds * cornerEffect * (points[l].curvature + points[m].curvature) * adjustedSigma;
+					s +=
+						ds *
+						cornerEffect *
+						(points[l].curvature + points[m].curvature) *
+						adjustedSigma;
 				}
 				k++;
 			}
@@ -1080,7 +1145,10 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 			s = 0;
 			const ss = [0];
 			for (let ii = j; ii < k; ii++) {
-				s += latlngDistance(points[(ii + 1) % points.length], points[ii % points.length]);
+				s += latlngDistance(
+					points[(ii + 1) % points.length],
+					points[ii % points.length],
+				);
 				ss.push(s);
 			}
 
@@ -1106,7 +1174,7 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 				const point = points[(j + ii) % points.length];
 
 				// weight by distance
-				let du = (ii > 0) ? u - us[ii - 1] : 0;
+				let du = ii > 0 ? u - us[ii - 1] : 0;
 				if (ii < us.length - 1) {
 					du += us[ii + 1] - u;
 				}
@@ -1127,7 +1195,10 @@ function smoothing(points, fields, isLoop = 0, sigmaField = "", sigmaFactor = 1,
 	}
 
 	// delete curvature field if we modified position
-	if (fields.some(f => f.startsWith("lat")) || fields.some(f => f.startsWith("lon"))) {
+	if (
+		fields.some((f) => f.startsWith("lat")) ||
+		fields.some((f) => f.startsWith("lon"))
+	) {
 		deleteDerivedFields(pNew);
 	}
 
@@ -1615,7 +1686,7 @@ function addVectorToPoint(point, vector) {
 	lat -= 360 * Math.floor(0.5 + lat / 360);
 
 	if (Math.abs(lat) > 90) {
-		throw new Error("ERROR -- attempted to cross beyond pole!");
+		die("ERROR -- attempted to cross beyond pole!");
 	}
 
 	const c = Math.cos(DEG2RAD * (lat0 + dlat / 2));
@@ -2295,7 +2366,7 @@ function snapPoints(
 			}
 
 			if (sign === 0) {
-				throw new Error("Zero sign encountered");
+				die("Zero sign encountered");
 			}
 
 			// Now check for zig-zags at start... algorithm shouldn't allow them.
@@ -2331,15 +2402,27 @@ function snapPoints(
 			}
 
 			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
-				console.error(
+				note(
 					`DEBUG JS SNAP: i=${i} j=${j} sign=${sign} i1=${i1} i2=${i2} j1=${j1} j2=${j2} snapDistance=${snapDistance}`,
 				);
-				console.error(
-					`DEBUG JS SNAP: i_point lat=${points[i].lat} lon=${points[i].lon} dist=${points[i].distance}`,
-				);
-				console.error(
-					`DEBUG JS SNAP: j_point lat=${points[j].lat} lon=${points[j].lon} dist=${points[j].distance}`,
-				);
+				if (points[i]) {
+					note(
+						`DEBUG JS SNAP: i_point lat=${points[i].lat} lon=${points[i].lon} dist=${points[i].distance}`,
+					);
+				} else {
+					note(
+						`DEBUG JS SNAP: points[${i}] is undefined! points.length=${points.length}`,
+					);
+				}
+				if (points[j]) {
+					note(
+						`DEBUG JS SNAP: j_point lat=${points[j].lat} lon=${points[j].lon} dist=${points[j].distance}`,
+					);
+				} else {
+					note(
+						`DEBUG JS SNAP: points[${j}] is undefined! points.length=${points.length}`,
+					);
+				}
 				note(
 					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
 				);
@@ -2483,7 +2566,7 @@ function snapPoints(
 								(1 - f) * points[js[v]].ele + f * points[js[v + 1]].ele;
 							// Note: in limit of being close to the snapped section, altitude is average of two branches, then it diverges
 							const g = (1 + Math.cos((PI * sis[u]) / snapTransition)) / 4; // From 0.5 to 0
-							if (g < 0) throw new Error("Negative g!");
+							if (g < 0) die("Negative g!");
 							const z1 = points[is[u]].ele;
 							zis[u] = g * z0 + (1 - g) * z1;
 						} else {
@@ -2492,7 +2575,7 @@ function snapPoints(
 							const z0 =
 								(1 - f) * points[is[u]].ele + f * points[is[u + 1]].ele;
 							const g = (1 + Math.cos((PI * sjs[v]) / snapTransition)) / 4; // From 0.5 to 0
-							if (g < 0) throw new Error("Negative g!");
+							if (g < 0) die("Negative g!");
 							// Note: in limit of being close to the snapped section, altitude is average of two branches, then it diverges
 							const z1 = points[js[v]].ele;
 							zjs[v] = g * z0 + (1 - g) * z1;
@@ -3128,7 +3211,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Check loopLeft and loopRight
 	if (options.loopLeft && options.loopRight) {
-		throw new Error("ERROR: you cannot specify both -loopLeft and -loopRight");
+		die("ERROR: you cannot specify both -loopLeft and -loopRight");
 	}
 
 	// Short-cut for out-and-back
@@ -3189,7 +3272,7 @@ export function processGPX(trackFeature, options = {}) {
 		options.cropMax > 0 &&
 		options.cropMin > options.cropMax
 	) {
-		throw new Error("Crop window minimum exceeds crop window maximum");
+		die("Crop window minimum exceeds crop window maximum");
 	}
 
 	// Apply extend
@@ -3589,7 +3672,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// STAGE 22: Various smoothing passes
 	// 1: position
-	// 2: altitude  
+	// 2: altitude
 	// 3: position auto-smoothing (not yet implemented)
 	// 4: altitude auto-smoothing
 	//
@@ -3601,13 +3684,15 @@ export function processGPX(trackFeature, options = {}) {
 	// to smoothing is chosen. Only if uniform smoothing is being applied is a single
 	// sigma value sent to the smoothing code
 
-	if ((lSmooth || 0) > 0 ||
+	if (
+		(lSmooth || 0) > 0 ||
 		(zSmooth || 0) > 0 ||
 		(options.lAutoSmooth || 0) > 0 ||
 		(options.zAutoSmooth || 0) > 0 ||
 		(options.selectiveSmooth || []).length > 0 ||
 		(options.selectiveSmoothZ || []).length > 0 ||
-		(options.selectiveSmoothG || []).length > 0) {
+		(options.selectiveSmoothG || []).length > 0
+	) {
 		addDistanceField(points);
 	}
 
@@ -3619,7 +3704,7 @@ export function processGPX(trackFeature, options = {}) {
 		smoothed = 1;
 		const fsigma = {};
 		let smooth = 0;
-		let autoSmooth = 0;
+		const autoSmooth = 0;
 		if (smoothLoop === 0) smooth = lSmooth || 0;
 		if (smoothLoop === 1) smooth = zSmooth || 0;
 		if (smoothLoop === 2) smooth = gSmooth || 0;
@@ -3629,12 +3714,15 @@ export function processGPX(trackFeature, options = {}) {
 
 		// selective smoothing
 		const sSmooth =
-			smoothLoop === 0 ? (options.selectiveSmooth || []) :
-			smoothLoop === 1 ? (options.selectiveSmoothZ || []) :
-			smoothLoop === 2 ? (options.selectiveSmoothG || []) :
-			[];
+			smoothLoop === 0
+				? options.selectiveSmooth || []
+				: smoothLoop === 1
+					? options.selectiveSmoothZ || []
+					: smoothLoop === 2
+						? options.selectiveSmoothG || []
+						: [];
 
-		if (!((smooth > 0) || sSmooth.length > 0)) {
+		if (!(smooth > 0 || sSmooth.length > 0)) {
 			continue;
 		}
 
@@ -3654,15 +3742,19 @@ export function processGPX(trackFeature, options = {}) {
 			while (i < sSmooth.length) {
 				const sigma = sSmooth[i]; // value
 				if (sigma < 0) {
-					throw new Error(`negative sigma value found in selective smoothing list: ${sSmooth}`);
+					die(
+						`negative sigma value found in selective smoothing list: ${sSmooth}`,
+					);
 				}
-				positiveSigmaFound = positiveSigmaFound || (sigma > 0);
+				positiveSigmaFound = positiveSigmaFound || sigma > 0;
 				smoothSigmas.push(sigma);
 				i++;
 				if (i >= sSmooth.length) break;
 				const s = sSmooth[i]; // position
-				if ((sPrev !== undefined) && (s < sPrev)) {
-					throw new Error("position values in selective smoothing list must be in non-decreasing order");
+				if (sPrev !== undefined && s < sPrev) {
+					die(
+						"position values in selective smoothing list must be in non-decreasing order",
+					);
 				}
 				smoothPositions.push(s);
 				sPrev = s;
@@ -3670,26 +3762,44 @@ export function processGPX(trackFeature, options = {}) {
 			}
 
 			if (positiveSigmaFound) {
-				note("smoothing...",
-					smoothLoop === 0 ? "position" :
-					smoothLoop === 1 ? "altitude" :
-					smoothLoop === 2 ? "gradient" :
-					smoothLoop === 3 ? "position(auto)" :
-					smoothLoop === 4 ? "altitude(auto)" :
-					smoothLoop === 5 ? "gradient(auto)" :
-					"other");
+				note(
+					"smoothing...",
+					smoothLoop === 0
+						? "position"
+						: smoothLoop === 1
+							? "altitude"
+							: smoothLoop === 2
+								? "gradient"
+								: smoothLoop === 3
+									? "position(auto)"
+									: smoothLoop === 4
+										? "altitude(auto)"
+										: smoothLoop === 5
+											? "gradient(auto)"
+											: "other",
+				);
 
-				sigma0 = smooth;      // constant component of smoothing
+				sigma0 = smooth; // constant component of smoothing
 
 				// convert constant smoothing to a smoothing field if there's a smoothStart and/or smoothEnd
-				if ((options.smoothStart !== undefined) || (options.smoothEnd !== undefined)) {
+				if (
+					options.smoothStart !== undefined ||
+					options.smoothEnd !== undefined
+				) {
 					positiveSigmaFound = false;
 					const lambda = 10 + 4 * sigma0;
 					for (let i = 0; i < points.length; i++) {
 						const s = points[i].distance;
 						let sigma;
-						if ((options.smoothStart !== undefined) && (options.smoothEnd !== undefined) && (options.smoothEnd < options.smoothStart)) {
-							sigma = sigma0 * (transition((options.smoothStart - s) / lambda) * transition((s - options.smoothEnd) / lambda));
+						if (
+							options.smoothStart !== undefined &&
+							options.smoothEnd !== undefined &&
+							options.smoothEnd < options.smoothStart
+						) {
+							sigma =
+								sigma0 *
+								(transition((options.smoothStart - s) / lambda) *
+									transition((s - options.smoothEnd) / lambda));
 						} else {
 							sigma = sigma0;
 							if (options.smoothStart !== undefined) {
@@ -3699,8 +3809,8 @@ export function processGPX(trackFeature, options = {}) {
 								sigma *= transition((s - options.smoothEnd) / lambda);
 							}
 						}
-						points[i].sigma = (sigma < 0.01) ? 0 : sigma; // ignore small values of sigma
-						positiveSigmaFound = positiveSigmaFound || (points[i].sigma > 0);
+						points[i].sigma = sigma < 0.01 ? 0 : sigma; // ignore small values of sigma
+						positiveSigmaFound = positiveSigmaFound || points[i].sigma > 0;
 					}
 					sigma0 = 0;
 					if (!positiveSigmaFound) {
@@ -3719,7 +3829,8 @@ export function processGPX(trackFeature, options = {}) {
 						for (let i = 0; i < smoothSigmas.length; i++) {
 							const sigma = smoothSigmas[i];
 							const start = i > 0 ? smoothPositions[i - 1] : undefined;
-							const end = i < smoothPositions.length ? smoothPositions[i] : undefined;
+							const end =
+								i < smoothPositions.length ? smoothPositions[i] : undefined;
 							let lambda1 = 10;
 							let lambda2 = 10;
 							if (i > 0) {
@@ -3732,11 +3843,14 @@ export function processGPX(trackFeature, options = {}) {
 							for (let j = 0; j < points.length; j++) {
 								const s = points[j].distance;
 								if (s === undefined) {
-									throw new Error(`undefined distance found for point ${j}`);
+									die(`undefined distance found for point ${j}`);
 								}
 								let sigmaEff;
-								if ((start !== undefined) && (end !== undefined)) {
-									sigmaEff = sigma * (transition((start - s) / lambda1) * transition((s - end) / lambda2));
+								if (start !== undefined && end !== undefined) {
+									sigmaEff =
+										sigma *
+										(transition((start - s) / lambda1) *
+											transition((s - end) / lambda2));
 								} else {
 									sigmaEff = sigma;
 									if (start !== undefined) {
@@ -3746,7 +3860,7 @@ export function processGPX(trackFeature, options = {}) {
 										sigmaEff *= transition((s - end) / lambda2);
 									}
 								}
-								sigmas[j] = (sigmas[j] || 0);
+								sigmas[j] = sigmas[j] || 0;
 								if (sigmaEff > 0.01) {
 									sigmas[j] += sigmaEff;
 								}
@@ -3754,9 +3868,9 @@ export function processGPX(trackFeature, options = {}) {
 						}
 						for (let i = 0; i < sigmas.length; i++) {
 							points[i].sigma =
-								((points[i].sigma !== undefined && points[i].sigma > 0) ?
-								 Math.sqrt(points[i].sigma ** 2 + sigmas[i] ** 2) :
-								 sigmas[i]);
+								points[i].sigma !== undefined && points[i].sigma > 0
+									? Math.sqrt(points[i].sigma ** 2 + sigmas[i] ** 2)
+									: sigmas[i];
 						}
 					} else {
 						// if only a sigma value was provided in selective smoothing, then add it to any sigma0
@@ -3792,7 +3906,7 @@ export function processGPX(trackFeature, options = {}) {
 				1, // sigmaFactor
 				sigma0,
 				[], // weighting
-				useCornerEffect ? (options.cornerEffect || 1) : 0
+				useCornerEffect ? options.cornerEffect || 1 : 0,
 			);
 		}
 
@@ -3819,15 +3933,18 @@ export function processGPX(trackFeature, options = {}) {
 			};
 
 			// the point to anchor
-			const i0 = (d === 1) ? 0 : max_index(points);
+			const i0 = d === 1 ? 0 : max_index(points);
 
 			// if autosmoothing is used, then add that in
-			if ((points[i0].sigma !== undefined) && ((options.zAutoSmooth || 0) > 0)) {
-				sigma.ele = Math.sqrt(sigma.ele ** 2 + (points[i0].sigma * (options.zAutoSmooth || 0)) ** 2);
+			if (points[i0].sigma !== undefined && (options.zAutoSmooth || 0) > 0) {
+				sigma.ele = Math.sqrt(
+					sigma.ele ** 2 + (points[i0].sigma * (options.zAutoSmooth || 0)) ** 2,
+				);
 			}
 
 			// this is from BEFORE smoothing since we've not updated the distance field: this is important
-			const courseDistance = endPoints[max_index(endPoints)].distance - endPoints[0].distance;
+			const courseDistance =
+				endPoints[max_index(endPoints)].distance - endPoints[0].distance;
 
 			for (const key of Object.keys(sigma)) {
 				if (sigma[key] > 0) {
@@ -3837,11 +3954,13 @@ export function processGPX(trackFeature, options = {}) {
 					let i = i0 % points.length;
 
 					const dsMax = 6 * sigma[key];
-					while ((i <= max_index(points)) && (i >= 0)) {
+					while (i <= max_index(points) && i >= 0) {
 						// distance: using values calculated from the original course, not
 						// distorted by smoothing, since smoothing can collapse points,
 						// and point of anchoring is to reduce collapse
-						const s = Math.abs(distanceDifference(points[i], points[i0], courseDistance, isLoop));
+						const s = Math.abs(
+							distanceDifference(points[i], points[i0], courseDistance, isLoop),
+						);
 						if (s > dsMax) break;
 
 						const u = s / sigma[key];
