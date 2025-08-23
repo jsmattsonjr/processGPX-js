@@ -322,7 +322,7 @@ function removeDuplicatePoints(points, isLoop = 0) {
 	let removedCount = 0;
 	let i = 0;
 
-	while (i < points.length) {
+	while (i <= maxIndex(points)) {
 		const p = points[i];
 		if (!p || p.lat === undefined) break;
 
@@ -579,7 +579,7 @@ function cropPoints(points, isLoop = 0, deleteRange = [], cropMin, cropMax) {
 	const pNew = [];
 	let s;
 
-	pointLoop: for (let i = 0; i < points.length; i++) {
+	pointLoop: for (let i = 0; i <= maxIndex(points); i++) {
 		const p = points[i];
 		const sPrev = s;
 		s = p.distance;
@@ -640,7 +640,7 @@ function fixZigZags(points) {
 	const UTurns = [];
 
 	// Find all U-turns
-	for (let i = 1; i < points.length - 1; i++) {
+	for (let i = 1; i <= maxIndex(points) - 1; i++) {
 		if (UTurnCheck(points[i - 1], points[i], points[i], points[i + 1], -0.9)) {
 			UTurns.push(i);
 		}
@@ -937,9 +937,10 @@ function addCurvatureField(points, isLoop = 0) {
 		}
 		dPrev = dPrev ?? latlngDirection(points[u], points[v]);
 		const d = latlngDirection(points[v], points[w]);
-		points[v].curvature = 
+		points[v].curvature =
 			(2 * deltaAngle(dPrev, d)) /
-			(latlngDistance(points[u], points[v]) + latlngDistance(points[v], points[w]));
+			(latlngDistance(points[u], points[v]) +
+				latlngDistance(points[v], points[w]));
 		dPrev = d;
 		v++;
 	}
@@ -977,7 +978,7 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 		}
 	}
 
-	for (let i = 0; i < points.length; i++) {
+	for (let i = 0; i <= maxIndex(points); i++) {
 		// move i1 to just outside averaging range
 		while (
 			i1 < i &&
@@ -1323,7 +1324,7 @@ function cropCorners(
 
 	// Find indices of corners meeting the cropping criteria
 	const cropCorners = [];
-	for (let i = 0; i < points.length; i++) {
+	for (let i = 0; i <= maxIndex(points); i++) {
 		if (!isLoop && (i === 0 || i === maxIndex(points))) continue;
 
 		const p0 = points[(i - 1 + points.length) % points.length];
@@ -1521,7 +1522,7 @@ function calcQualityScore(points, isLoop) {
 	let courseDistance = 0;
 	let s2sum = 0;
 
-	for (let i = 0; i < points.length; i++) {
+	for (let i = 0; i <= maxIndex(points); i++) {
 		if (!isLoop && i === maxIndex(points)) break;
 
 		// Distance and altitude change to next point
@@ -1996,35 +1997,50 @@ function isPointOnRoadCorner(p1, p2, p3, p4, px) {
  * @returns {boolean} True if point passes road test
  */
 function roadTest(points, j, k, l, m, i, d) {
+	// Debug specific divergent roadTest call
+	const isDebugCall =
+		j === 1261 && k === 1260 && l === 1218 && m === 1217 && i === 363;
+
+	if (isDebugCall) {
+		note(`DEBUG ROADTEST DETAIL: roadTest(${j}, ${k}, ${l}, ${m}, ${i}, ${d})`);
+	}
+
 	// First check to see if the point i falls in the range k .. l
 	if (
 		!(
 			i > 0 &&
 			k > 0 &&
 			l > 0 &&
-			i < points.length &&
-			k < points.length &&
-			l < points.length
+			i <= maxIndex(points) &&
+			k <= maxIndex(points) &&
+			l <= maxIndex(points)
 		)
 	) {
+		if (isDebugCall) note(`DEBUG ROADTEST: Failed bounds check`);
 		return false;
 	}
 
 	if (isPointOnRoad(points[k], points[l], points[i], d)) {
+		if (isDebugCall) note(`DEBUG ROADTEST: isPointOnRoad returned true`);
 		return true;
 	}
 
-	if (!(j > 0 && m > 0 && j < points.length && m < points.length)) {
+	if (!(j > 0 && m > 0 && j <= maxIndex(points) && m <= maxIndex(points))) {
+		if (isDebugCall) note(`DEBUG ROADTEST: Failed j/m bounds check`);
 		return false;
 	}
 
-	return isPointOnRoadCorner(
+	const cornerResult = isPointOnRoadCorner(
 		points[j],
 		points[k],
 		points[l],
 		points[m],
 		points[i],
 	);
+
+	if (isDebugCall)
+		note(`DEBUG ROADTEST: isPointOnRoadCorner returned ${cornerResult}`);
+	return cornerResult;
 }
 
 /**
@@ -2063,6 +2079,9 @@ function snapPoints(
 	// On large courses, since initial search is O(N-squared), step thru multiple points, then refine
 	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2
 	const snapStep = 2 + int(points.length / 200);
+	note(
+		`DEBUG snapStep calculation: points.length=${points.length}, snapStep=2+int(${points.length}/200)=${snapStep}`,
+	);
 
 	// Maximum range at which we check for snapping...
 	// so if colinear points are spaced more than twice this, we may miss snapping onto that interval
@@ -2074,12 +2093,19 @@ function snapPoints(
 
 	// i is on the "earlier" segment, j on the "later" segment
 	// note this excludes starting point and end point
-	iLoop: for (let i = 0; i < points.length - 2; i += snapStep) {
+	iLoop: for (let i = 0; i < maxIndex(points) - 1; i += snapStep) {
 		const p1 = points[i];
 		const jCount = [];
 
 		let j = i + snapStep;
 		if (j > maxIndex(points)) continue;
+
+		// Debug the assignment of divergent case indices
+		if (i >= 1590 && i <= 1620) {
+			note(
+				`DEBUG: Initial assignment i=${i}, j=${j} (j=i+snapStep where snapStep=${snapStep})`,
+			);
+		}
 
 		// Get out of snap range: get point j beyond the snap range of point i
 		// This is geometric distance, not course distance, which could potentially be an issue
@@ -2179,6 +2205,13 @@ function snapPoints(
 				continue;
 			}
 
+			// Debug final j assignment for divergent case
+			if (i >= 1590 && i <= 1620) {
+				note(
+					`DEBUG: Final j assignment before snapping: i=${i}, j=${j}, sign=${sign}, dot=${dot.toFixed(3)}`,
+				);
+			}
+
 			// Point i is matched to point j, and the two are moving in the same direction
 			// For each point j, if it falls on a line of points i, then replace the nearest point i
 			// First we need to find values of j which are encapsulated by i
@@ -2218,12 +2251,58 @@ function snapPoints(
 			let flag1, flag2;
 
 			do {
+				// Debug boundary expansion for divergent case
+				if (
+					points[i].distance >= 8000 &&
+					points[i].distance <= 9000 &&
+					points[j].distance >= 51000 &&
+					points[j].distance <= 52000
+				) {
+					note(
+						`DEBUG BOUNDARY: Before i1 expansion: i1=${i1}, j1=${j1}, j2=${j2}, sign=${sign}`,
+					);
+				}
+
 				// Shift i1 down as long as along line from j1 to j2
 				while (
 					i1 > 0 &&
 					roadTest(points, j1 - sign, j1, j2, j2 + sign, i1 - 1, snapDistance)
 				) {
+					// Debug roadTest call before expansion
+					if (
+						points[i].distance >= 8000 &&
+						points[i].distance <= 9000 &&
+						points[j].distance >= 51000 &&
+						points[j].distance <= 52000
+					) {
+						const testResult = roadTest(
+							points,
+							j1 - sign,
+							j1,
+							j2,
+							j2 + sign,
+							i1 - 1,
+							snapDistance,
+						);
+						note(
+							`DEBUG ROADTEST: roadTest(${j1 - sign}, ${j1}, ${j2}, ${j2 + sign}, ${i1 - 1}) = ${testResult}`,
+						);
+						note(
+							`  Test point ${i1 - 1} dist=${points[i1 - 1].distance.toFixed(2)} lat=${points[i1 - 1].lat.toFixed(6)} lon=${points[i1 - 1].lon.toFixed(6)}`,
+						);
+					}
 					i1--;
+					// Debug each expansion step
+					if (
+						points[i].distance >= 8000 &&
+						points[i].distance <= 9000 &&
+						points[j].distance >= 51000 &&
+						points[j].distance <= 52000
+					) {
+						note(
+							`DEBUG BOUNDARY: Expanded i1 to ${i1} (dist=${points[i1].distance.toFixed(2)})`,
+						);
+					}
 				}
 
 				// As long as they are coincident, increase i1 and j1 together (short cut)
@@ -2435,6 +2514,28 @@ function snapPoints(
 				note(
 					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
 				);
+
+				// Debug the divergent case specifically - focus on distance values
+				if (
+					points[i].distance >= 8000 &&
+					points[i].distance <= 9000 &&
+					points[j].distance >= 51000 &&
+					points[j].distance <= 52000
+				) {
+					note(`DIVERGENT CASE DEBUG:`);
+					note(`  i=${i}, j=${j}, sign=${sign}`);
+					note(`  i-segment: ${i1}..${i2} (${i2 - i1 + 1} points)`);
+					note(`  j-segment: ${j1}..${j2} (${j2 - j1 + 1} points)`);
+					note(
+						`  i-segment distances: ${points[i1].distance.toFixed(2)} to ${points[i2].distance.toFixed(2)}`,
+					);
+					note(
+						`  j-segment distances: ${points[j1].distance.toFixed(2)} to ${points[j2].distance.toFixed(2)}`,
+					);
+					note(
+						`  Decision: ${sign > 0 ? "Keep i-segment (earlier), discard j-segment (later)" : "Keep i-segment (reverse order)"}`,
+					);
+				}
 
 				const pNew = [];
 				if (sign > 0) {
@@ -3096,7 +3197,7 @@ function addSplines(
 	let count = 0;
 
 	// i : first point on interpolation interval
-	iLoop: for (let i = 0; i < points.length; i++) {
+	iLoop: for (let i = 0; i <= maxIndex(points); i++) {
 		pNew.push(points[i]);
 
 		// add points if appropriate
@@ -3589,7 +3690,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Check for snapping
-	if (false && (options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
+	if ((options.snap || 0) > 0 && (options.snapDistance || 0) >= 0) {
 		note("snapping repeated points (pass 1)...");
 		points = snapPoints(
 			points,
@@ -3599,9 +3700,6 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
-		dumpPoints(points, "14-js-snapped-pass-1.txt");
-	} else {
-		console.log("DEBUG JS: BYPASSING stage 14 snapping");
 		dumpPoints(points, "14-js-snapped-pass-1.txt");
 	}
 

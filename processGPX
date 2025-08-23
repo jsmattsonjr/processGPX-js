@@ -1156,31 +1156,45 @@ sub roadTest {
   my $i = shift;                # test point
   my $d = shift;                # distance error margin
 
+  # Debug specific divergent roadTest call - need to find Perl equivalent
+  # JavaScript call: roadTest(1261, 1260, 1218, 1217, 363) = true
+  my $isDebugCall = 0; # Will enable when we find the equivalent call
+
+  if ($isDebugCall) {
+    note("DEBUG ROADTEST DETAIL: roadTest($j, $k, $l, $m, $i, $d)\n");
+  }
+
   # first check to see if the point i falls in the range k .. l
-  return 0
-    unless (
+  unless (
             ($i > 0) &&
             ($k > 0) &&
             ($l > 0) &&
             ($i <= $#$points) &&
             ($k <= $#$points) &&
             ($l <= $#$points)
-           );
+           ) {
+    if ($isDebugCall) { note("DEBUG ROADTEST: Failed bounds check\n"); }
+    return 0;
+  }
 
-  return 1
-    if (
-        isPointOnRoad($points->[$k], $points->[$l], $points->[$i], $d)
-       );
+  if (isPointOnRoad($points->[$k], $points->[$l], $points->[$i], $d)) {
+    if ($isDebugCall) { note("DEBUG ROADTEST: isPointOnRoad returned true\n"); }
+    return 1;
+  }
 
-  return 0
-    unless (
+  unless (
             ($j > 0) &&
             ($m > 0) &&
             ($j <= $#$points) &&
             ($m <= $#$points)
-           );
+           ) {
+    if ($isDebugCall) { note("DEBUG ROADTEST: Failed j/m bounds check\n"); }
+    return 0;
+  }
 
-  return ( isPointOnRoadCorner($points->[$j], $points->[$k], $points->[$l], $points->[$m], $points->[$i]) );
+  my $cornerResult = isPointOnRoadCorner($points->[$j], $points->[$k], $points->[$l], $points->[$m], $points->[$i]);
+  if ($isDebugCall) { note("DEBUG ROADTEST: isPointOnRoadCorner returned $cornerResult\n"); }
+  return $cornerResult;
 }
 
 #
@@ -1705,6 +1719,8 @@ sub snapPoints {
   # on large courses, since initial search is O(N-squared), step thru multiple points, then refine
   # snap step 1 has a potential bug (infinite loop) so lower bound is 2
   my $snapStep = 2 + int(scalar(@$points) / 200);
+  my $points_count = scalar(@$points);
+  note("DEBUG snapStep calculation: points.length=$points_count, snapStep=2+int($points_count/200)=$snapStep\n");
 
   #
   # maximum range at which we check for snapping...
@@ -1724,6 +1740,11 @@ sub snapPoints {
 
     my $j = $i + $snapStep;
     next iLoop if ( $j > $#$points);
+
+    # Debug the assignment of divergent case indices
+    if ($i >= 1590 && $i <= 1620) {
+      note("DEBUG: Initial assignment i=$i, j=$j (j=i+snapStep where snapStep=$snapStep)\n");
+    }
 
     # get out of snap range: get point j beyond the snap range of point i
     # this is geometric distance, not course distance, which could potentially be an issue
@@ -1822,6 +1843,11 @@ sub snapPoints {
       # point i is matched to point j, and the two are moving in the same direction
       # for each point j, if it falls on a line of points i, then replace the nearest point i
 
+      # Debug final j assignment for divergent case
+      if ($i >= 1590 && $i <= 1620) {
+        note("DEBUG: Final j assignment before snapping: i=$i, j=$j, sign=$sign, dot=" . sprintf("%.3f", $dot) . "\n");
+      }
+
       # first we need to find values of j which are encapsulated by i
       # j will be replaced by i
       my ($ja, $jb);
@@ -1880,20 +1906,41 @@ sub snapPoints {
       my ($flag1, $flag2);
 
       do {
+        # Debug boundary expansion for divergent case
+        if ($points->[$i]->{distance} >= 8000 && $points->[$i]->{distance} <= 9000 && 
+            $points->[$j]->{distance} >= 51000 && $points->[$j]->{distance} <= 52000) {
+          note("DEBUG BOUNDARY: Before i1 expansion: i1=$i1, j1=$j1, j2=$j2, sign=$sign\n");
+        }
+
         # shift i1 down as long as along line from j1 to j2
-        $i1 --
-          while (
-                 ($i1 > 0) &&
-                 roadTest(
-                          $points,
-                          $j1 - $sign,
-                          $j1,  # point 1
-                          $j2,  # point 2
-                          $j2 + $sign,
-                          $i1 - 1, # test point
-                          $snapDistance
-                         )
-                );
+        while (
+               ($i1 > 0) &&
+               roadTest(
+                        $points,
+                        $j1 - $sign,
+                        $j1,  # point 1
+                        $j2,  # point 2
+                        $j2 + $sign,
+                        $i1 - 1, # test point
+                        $snapDistance
+                       )
+              ) {
+          # Debug roadTest call before expansion
+          if ($points->[$i]->{distance} >= 8000 && $points->[$i]->{distance} <= 9000 && 
+              $points->[$j]->{distance} >= 51000 && $points->[$j]->{distance} <= 52000) {
+            my $testResult = roadTest($points, $j1 - $sign, $j1, $j2, $j2 + $sign, $i1 - 1, $snapDistance);
+            note("DEBUG ROADTEST: roadTest(" . ($j1-$sign) . ", $j1, $j2, " . ($j2+$sign) . ", " . ($i1-1) . ") = $testResult\n");
+            note("  Test point " . ($i1-1) . " dist=" . sprintf("%.2f", $points->[$i1-1]->{distance}) . 
+                 " lat=" . sprintf("%.6f", $points->[$i1-1]->{lat}) . 
+                 " lon=" . sprintf("%.6f", $points->[$i1-1]->{lon}) . "\n");
+          }
+          $i1--;
+          # Debug each expansion step
+          if ($points->[$i]->{distance} >= 8000 && $points->[$i]->{distance} <= 9000 && 
+              $points->[$j]->{distance} >= 51000 && $points->[$j]->{distance} <= 52000) {
+            note("DEBUG BOUNDARY: Expanded i1 to $i1 (dist=" . sprintf("%.2f", $points->[$i1]->{distance}) . ")\n");
+          }
+        }
 
         # as long as they are coincident, increase i1 and j1 together (short cut)
         while ( ($i1 > 0) && ($j1 > $i2) && ($j1 < $#$points) && pointsAreClose($points->[$i1 - 1], $points->[$j1 - $sign], $dsClose, $snapAltitude) ) {
@@ -2066,6 +2113,18 @@ sub snapPoints {
         print STDERR "DEBUG PERL SNAP: i_point lat=".$points->[$i]->{lat}." lon=".$points->[$i]->{lon}." dist=".$points->[$i]->{distance}."\n";
         print STDERR "DEBUG PERL SNAP: j_point lat=".$points->[$j]->{lat}." lon=".$points->[$j]->{lon}." dist=".$points->[$j]->{distance}."\n";
         note("i = $i, j = $j: snapping ", ($sign > 0) ? "forward" : "reverse", " segment: $i1 .. $i2 <=> $j1 .. $j2\n");
+
+        # Debug the divergent case specifically - focus on distance values
+        if ($points->[$i]->{distance} >= 8000 && $points->[$i]->{distance} <= 9000 && 
+            $points->[$j]->{distance} >= 51000 && $points->[$j]->{distance} <= 52000) {
+          note("DIVERGENT CASE DEBUG:\n");
+          note("  i=$i, j=$j, sign=$sign\n");
+          note("  i-segment: $i1..$i2 (" . ($i2-$i1+1) . " points)\n");
+          note("  j-segment: $j1..$j2 (" . ($j2-$j1+1) . " points)\n");
+          printf STDERR "  i-segment distances: %.2f to %.2f\n", $points->[$i1]->{distance}, $points->[$i2]->{distance};
+          printf STDERR "  j-segment distances: %.2f to %.2f\n", $points->[$j1]->{distance}, $points->[$j2]->{distance};
+          note("  Decision: " . (($sign > 0) ? "Keep i-segment (earlier), discard j-segment (later)" : "Keep i-segment (reverse order)") . "\n");
+        }
 
         my @pNew;
         if ( $sign > 0 ) {
@@ -5217,7 +5276,7 @@ for my $file ( @files ) {
   }
 
   # check for snapping
-  if ( 0 && ($snap > 0) && ($snapDistance >= 0) ) {
+  if ( ($snap > 0) && ($snapDistance >= 0) ) {
     ## STAGE 14: Snap points (pass 1)
     note("snapping repeated points (pass 1)...\n");
     $points =

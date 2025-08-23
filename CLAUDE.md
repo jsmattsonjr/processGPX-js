@@ -120,7 +120,7 @@ When porting Perl code to JavaScript, be aware of these subtle but critical diff
 1. **Array Length vs Last Index**:
    - Perl: `$#$array` = last valid index (length - 1)
    - JavaScript: `array.length` = number of elements
-   - When translating `$#$points` use `max_index(points)`
+   - When translating `$#$points` use `maxIndex(points)`
 
 2. **Array Auto-vivification**:
    - Perl: `$array[index]++` automatically creates array elements and treats `undef` as 0
