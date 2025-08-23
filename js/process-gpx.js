@@ -3301,11 +3301,11 @@ export function processGPX(trackFeature, options = {}) {
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
-	dumpPoints(points, "js-stage-1-original.json");
+	dumpPoints(points, "01-js-original.txt");
 
 	// Eliminate duplicate x,y points
 	points = removeDuplicatePoints(points, isLoop || 0);
-	dumpPoints(points, "js-stage-2-duplicates-removed.json");
+	dumpPoints(points, "02-js-duplicates-removed.txt");
 
 	// If repeat is specified, then create replicates
 	if ((options.repeat || 0) > 0) {
@@ -3317,7 +3317,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 		}
 		points = pNew;
-		dumpPoints(points, "js-stage-3-repeated.json");
+		dumpPoints(points, "03-js-repeated.txt");
 	}
 
 	// Skip 'join' functionality and convert unnamed segments to 0
@@ -3331,7 +3331,7 @@ export function processGPX(trackFeature, options = {}) {
 		options.cropMin,
 		options.cropMax,
 	);
-	dumpPoints(points, "js-stage-5-cropped.json");
+	dumpPoints(points, "05-js-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
 	isLoop = isLoop || 0;
@@ -3491,7 +3491,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Look for zig-zags
 	points = fixZigZags(points);
-	dumpPoints(points, "js-stage-6-zigzags-fixed.json");
+	dumpPoints(points, "06-js-zigzags-fixed.txt");
 
 	// Look for loops
 	findLoops(points, isLoop);
@@ -3541,7 +3541,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 			p.ele += dz;
 		}
-		dumpPoints(points, "js-stage-7-altitude-adjusted.json");
+		dumpPoints(points, "07-js-altitude-adjusted.txt");
 	}
 
 	// Reverse the points of the original course
@@ -3549,7 +3549,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.reverse) {
 		note("reversing course direction..");
 		reversePoints(points);
-		dumpPoints(points, "js-stage-8-reversed.json");
+		dumpPoints(points, "08-js-reversed.txt");
 	}
 
 	// Corner cropping
@@ -3573,7 +3573,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.cornerCropEnd,
 			isLoop,
 		);
-		dumpPoints(points, "js-stage-9-corners-cropped.json");
+		dumpPoints(points, "09-js-corners-cropped.txt");
 	}
 
 	// Auto-straighten
@@ -3585,7 +3585,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
-		dumpPoints(points, "js-stage-10-auto-straightened.json");
+		dumpPoints(points, "10-js-auto-straightened.txt");
 	}
 
 	// Check for snapping
@@ -3599,10 +3599,10 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
-		dumpPoints(points, "js-stage-14-snapped-pass-1.json");
+		dumpPoints(points, "14-js-snapped-pass-1.txt");
 	} else {
 		console.log("DEBUG JS: BYPASSING stage 14 snapping");
-		dumpPoints(points, "js-stage-14-snapped-pass-1.json");
+		dumpPoints(points, "14-js-snapped-pass-1.txt");
 	}
 
 	// spline of corners
@@ -3617,7 +3617,7 @@ export function processGPX(trackFeature, options = {}) {
 			isLoop || 0,
 			"spline",
 		);
-		dumpPoints(points, "js-stage-15-corner-splines.json");
+		dumpPoints(points, "15-js-corner-splines.txt");
 	}
 
 	// arc fit of corners
@@ -3632,7 +3632,7 @@ export function processGPX(trackFeature, options = {}) {
 			isLoop || 0,
 			"arcFit",
 		);
-		dumpPoints(points, "js-stage-16-arc-fit.json");
+		dumpPoints(points, "16-js-arc-fit.txt");
 	}
 
 	// add distance field
@@ -3652,14 +3652,14 @@ export function processGPX(trackFeature, options = {}) {
 			options.smoothAngle || 0,
 			options.minRadius || 0,
 		);
-		dumpPoints(points, "js-stage-17-auto-spaced.json");
+		dumpPoints(points, "17-js-auto-spaced.txt");
 	}
 
 	// interpolation if requested
 	if (points.length && (options.spacing || 0) > 0) {
 		// STAGE 18: Interpolation
 		points = doPointInterpolation(points, isLoop || 0, options.spacing);
-		dumpPoints(points, "js-stage-18-interpolated.json");
+		dumpPoints(points, "18-js-interpolated.txt");
 	}
 
 	// Check for snapping (pass 2)
@@ -3676,7 +3676,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.snapTransition || 0,
 			options.spacing || 0,
 		);
-		dumpPoints(points, "js-stage-21-snapped-pass-2.json");
+		dumpPoints(points, "21-js-snapped-pass-2.txt");
 	}
 
 	// STAGE 22: Various smoothing passes
@@ -3924,7 +3924,7 @@ export function processGPX(trackFeature, options = {}) {
 
 	if (smoothed) {
 		// STAGE 22: Smoothing
-		dumpPoints(points, "js-stage-22-smoothed.json");
+		dumpPoints(points, "22-js-smoothed.txt");
 	}
 
 	// anchoring: return start point and, if not a loop, finish point to original values

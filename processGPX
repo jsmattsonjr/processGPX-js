@@ -4799,12 +4799,12 @@ for my $file ( @files ) {
   note("direction score of original course = ", sprintf("%.4f", $scoreD), "\n");
   note("altitude score of original course = ", sprintf("%.4f", $scoreZ), "\n");
   ## STAGE 1: Original points
-  dumpPoints($points, "perl-stage-1-original.json");
+  dumpPoints($points, "01-perl-original.txt");
 
   # eliminate duplicate x,y points
   ## STAGE 2: Remove duplicates
   $points = removeDuplicatePoints(points=> $points, isLoop=> $isLoop);
-  dumpPoints($points, "perl-stage-2-duplicates-removed.json");
+  dumpPoints($points, "02-perl-duplicates-removed.txt");
 
   # if repeat is specified, then create replicates
   if ( $repeat > 0 ) {
@@ -4818,7 +4818,7 @@ for my $file ( @files ) {
       }
     }
     $points = \@pNew;
-    dumpPoints($points, "perl-stage-3-repeated.json");
+    dumpPoints($points, "03-perl-repeated.txt");
   }
 
   # if join was specified, join points from a second file
@@ -4889,7 +4889,7 @@ for my $file ( @files ) {
   }
   if ($joined) {
     ## STAGE 4: Join files
-    dumpPoints($points, "perl-stage-4-joined.json");
+    dumpPoints($points, "04-perl-joined.txt");
   }
 
   # unnamed segments get converted to 0 so they can be merged if contiguius
@@ -4906,7 +4906,7 @@ for my $file ( @files ) {
   #
   ## STAGE 5: Crop ranges
   $points = cropPoints(points=> $points, isLoop=> $isLoop, deleteRange=> \@deleteRange);
-  dumpPoints($points, "perl-stage-5-cropped.json");
+  dumpPoints($points, "05-perl-cropped.txt");
 
 
   #
@@ -5053,7 +5053,7 @@ for my $file ( @files ) {
   # look for zig-zags
   ## STAGE 6: Fix zig-zags
   $points = fixZigZags($points);
-  dumpPoints($points, "perl-stage-6-zigzags-fixed.json");
+  dumpPoints($points, "06-perl-zigzags-fixed.txt");
 
   # look for loops
   findLoops($points, $isLoop);
@@ -5077,7 +5077,7 @@ for my $file ( @files ) {
       }
       $p->{ele} += $dz;
     }
-    dumpPoints($points, "perl-stage-7-altitude-adjusted.json");
+    dumpPoints($points, "07-perl-altitude-adjusted.txt");
   }
 
   # reverse the points of the original course
@@ -5086,7 +5086,7 @@ for my $file ( @files ) {
     ## STAGE 8: Reverse course
     note("reversing course direction..\n");
     reversePoints($points);
-    dumpPoints($points, "perl-stage-8-reversed.json");
+    dumpPoints($points, "08-perl-reversed.txt");
   }
 
 
@@ -5113,7 +5113,7 @@ for my $file ( @files ) {
 		  end        => $cornerCropEnd,
 		  isLoop     => $isLoop
 		 );
-    dumpPoints($points, "perl-stage-9-corners-cropped.json");
+    dumpPoints($points, "09-perl-corners-cropped.txt");
   }
 
   # auto-straighten
@@ -5126,7 +5126,7 @@ for my $file ( @files ) {
                    minLength=> $autoStraightenLength,
                    maxDeviation=> $autoStraightenDeviation,
                   );
-    dumpPoints($points, "perl-stage-10-auto-straightened.json");
+    dumpPoints($points, "10-perl-auto-straightened.txt");
   }
 
   # circuits at position
@@ -5143,7 +5143,7 @@ for my $file ( @files ) {
   }
   if ($circuitFromPositionProcessed) {
     ## STAGE 11: Circuit from position
-    dumpPoints($points, "perl-stage-11-circuit-from-position.json");
+    dumpPoints($points, "11-perl-circuit-from-position.txt");
   }
 
   # circuits from position
@@ -5160,7 +5160,7 @@ for my $file ( @files ) {
       $points = circuitFromPosition(points=> $points, position=> $pos, circuits=> $circuits, repeats=> $repeats, isLoop=> $isLoop);
     }
     reversePoints($points);
-    dumpPoints($points, "perl-stage-12-circuit-to-position.json");
+    dumpPoints($points, "12-perl-circuit-to-position.txt");
   }
 
   # start and finish circuits
@@ -5213,7 +5213,7 @@ for my $file ( @files ) {
   if ($circuitsAdded) {
     ## STAGE 13: Add start/finish circuits
     deleteField2(points=> $points, field=> "distance");
-    dumpPoints($points, "perl-stage-13-start-finish-circuits.json");
+    dumpPoints($points, "13-perl-start-finish-circuits.txt");
   }
 
   # check for snapping
@@ -5229,10 +5229,10 @@ for my $file ( @files ) {
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
-    dumpPoints($points, "perl-stage-14-snapped-pass-1.json");
+    dumpPoints($points, "14-perl-snapped-pass-1.txt");
   } else {
     note("DEBUG PERL: BYPASSING stage 14 snapping\n");
-    dumpPoints($points, "perl-stage-14-snapped-pass-1.json");
+    dumpPoints($points, "14-perl-snapped-pass-1.txt");
   }
 
   # spline of corners
@@ -5240,7 +5240,7 @@ for my $file ( @files ) {
     ## STAGE 15: Corner splines
     note("corner splines, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
-    dumpPoints($points, "perl-stage-15-corner-splines.json");
+    dumpPoints($points, "15-perl-corner-splines.txt");
   }
 
   # arc fit of corners
@@ -5248,7 +5248,7 @@ for my $file ( @files ) {
     ## STAGE 16: Arc fit
     note("corner arcFits, pre-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $arcFitRadians, maxRadians=> $arcFitMaxRadians, isLoop=> $isLoop, splineType=> "arcFit", start=> $arcFitStart, end=> $arcFitEnd);
-    dumpPoints($points, "perl-stage-16-arc-fit.json");
+    dumpPoints($points, "16-perl-arc-fit.txt");
   }
 
   # add distance field
@@ -5266,7 +5266,7 @@ for my $file ( @files ) {
                     smoothAngle=> $smoothAngle,
                     minRadius=> $minRadius,
                    );
-    dumpPoints($points, "perl-stage-17-auto-spaced.json");
+    dumpPoints($points, "17-perl-auto-spaced.txt");
     }
 
 
@@ -5279,7 +5279,7 @@ for my $file ( @files ) {
                            isLoop=> $isLoop,
                            spacing=> $spacing,
                           );
-    dumpPoints($points, "perl-stage-18-interpolated.json");
+    dumpPoints($points, "18-perl-interpolated.txt");
   }
 
   # straight processing
@@ -5289,7 +5289,7 @@ for my $file ( @files ) {
     ## STAGE 19: Straighten segments
     note("processing straight fit(s)...\n");
     processStraight(points=> $points, straight=> \@straight, straightStart=> \@straightStart, straightEnd=> \@straightEnd, isLoop=> $isLoop);
-    dumpPoints($points, "perl-stage-19-straightened.json");
+    dumpPoints($points, "19-perl-straightened.txt");
   }
 
   # circular processing
@@ -5299,7 +5299,7 @@ for my $file ( @files ) {
     ## STAGE 20: Fit circles
     note("processing circular fit(s)\n");
     processCircle(points=> $points, circle=> \@circle, circleStart=> \@circleStart, circleEnd=> \@circleEnd, isLoop=> $isLoop);
-    dumpPoints($points, "perl-stage-20-circles-fit.json");
+    dumpPoints($points, "20-perl-circles-fit.txt");
   }
 
   # check for snapping
@@ -5317,7 +5317,7 @@ for my $file ( @files ) {
                  snapTransition=> $snapTransition,
                  spacing=> $spacing,
                 );
-    dumpPoints($points, "perl-stage-21-snapped-pass-2.json");
+    dumpPoints($points, "21-perl-snapped-pass-2.txt");
   }
 
   # various smoothing passes:
@@ -5514,7 +5514,7 @@ for my $file ( @files ) {
   }
   if ($smoothed) {
     ## STAGE 22: Smoothing
-    dumpPoints($points, "perl-stage-22-smoothed.json");
+    dumpPoints($points, "22-perl-smoothed.txt");
   }
 
   # anchoring: return start point and, if not a loop, finish point to original values
@@ -5572,14 +5572,14 @@ for my $file ( @files ) {
     ## STAGE 23: Post-smoothing splines
     note("corner splines, post-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $splineRadians, maxRadians=> $splineMaxRadians, isLoop=> $isLoop, splineType=> "spline", start=> $splineStart, end=> $splineEnd);
-    dumpPoints($points, "perl-stage-23-post-smoothing-splines.json");
+    dumpPoints($points, "23-perl-post-smoothing-splines.txt");
   }
 
   if ( ($arcFitRadians > 0) && (($lSmooth > 1) || ($zSmooth > 0)) ) {
     ## STAGE 24: Post-smoothing arc fit
     note("corner arcFit, post-smoothing...\n");
     $points = addSplines(points=> $points, minRadians=> $arcFitRadians, maxRadians=> $arcFitMaxRadians, isLoop=> $isLoop, splineType => "arcFit", start=> $arcFitStart, end=> $arcFitEnd);
-    dumpPoints($points, "perl-stage-24-post-smoothing-arc-fit.json");
+    dumpPoints($points, "24-perl-post-smoothing-arc-fit.txt");
   }
 
   #
@@ -5619,7 +5619,7 @@ for my $file ( @files ) {
         }
       }
     }
-    dumpPoints($points, "perl-stage-25-flattened.json");
+    dumpPoints($points, "25-perl-flattened.txt");
   }
 
   #
@@ -5826,7 +5826,7 @@ for my $file ( @files ) {
         }
       }
     }
-    dumpPoints($points, "perl-stage-26-crossings-fixed.json");
+    dumpPoints($points, "26-perl-crossings-fixed.txt");
   }
 
   #
@@ -5880,7 +5880,7 @@ for my $file ( @files ) {
   }
   if ($namedSegmentsAdded) {
     ## STAGE 27: Add named segments
-    dumpPoints($points, "perl-stage-27-named-segments.json");
+    dumpPoints($points, "27-perl-named-segments.txt");
   }
 
   #
@@ -5901,7 +5901,7 @@ for my $file ( @files ) {
     ## STAGE 28: Final crop
     $points = cropPoints(points=> $points, isLoop=> $isLoop, min=> $cropMin, max=> $cropMax);
     note("points remaining after cropping = ", scalar(@$points), "\n");
-    dumpPoints($points, "perl-stage-28-final-crop.json");
+    dumpPoints($points, "28-perl-final-crop.txt");
   }
 
   #
@@ -5931,7 +5931,7 @@ for my $file ( @files ) {
       deleteDerivedFields($points);
       note("prune loop $n: pruned $pruneCount points.\n");
     }
-    dumpPoints($points, "perl-stage-29-pruned.json");
+    dumpPoints($points, "29-perl-pruned.txt");
   }
 
 
@@ -6037,7 +6037,7 @@ for my $file ( @files ) {
         }
       }
     }
-    dumpPoints($points, "perl-stage-30-lane-shift-field.json");
+    dumpPoints($points, "30-perl-lane-shift-field.txt");
   }
 
   #
@@ -6069,7 +6069,7 @@ for my $file ( @files ) {
       $rPoints = applyLaneShift(points=> $rPoints, isLoop=> $isLoop);
       deleteField2(points=> $rPoints, field=> "shift");
     }
-    dumpPoints($points, "perl-stage-31-lane-shift-applied.json");
+    dumpPoints($points, "31-perl-lane-shift-applied.txt");
   }
 
   # for extendback, we calculate the crop crop position here: the loop counts as part
@@ -6108,7 +6108,7 @@ for my $file ( @files ) {
   }
   if ($turnaroundLoopGenerated) {
     ## STAGE 32: Generate turn-around loops
-    dumpPoints($points, "perl-stage-32-turnaround-loops.json");
+    dumpPoints($points, "32-perl-turnaround-loops.txt");
   }
 
   # if we made alap turnaround, then this is now a loop course
@@ -6131,14 +6131,14 @@ for my $file ( @files ) {
     note("points on outbound = ", scalar(@$points), "\n");
     note("points on inbound = ", scalar(@$rPoints), "\n");
     push @$points, @$rPoints;
-    dumpPoints($points, "perl-stage-33-out-and-back-combined.json");
+    dumpPoints($points, "33-perl-out-and-back-combined.txt");
   }
 
   # for -extendBack, crop it here:
   if ($cropBack > 0) {
     ## STAGE 34: Crop for extendBack
     $points = cropPoints(points=> $points, isLoop=> $isLoop, max=> $cropBack);
-    dumpPoints($points, "perl-stage-34-extend-back-crop.json");
+    dumpPoints($points, "34-perl-extend-back-crop.txt");
   }
 
   #
@@ -6220,7 +6220,7 @@ for my $file ( @files ) {
     }
 
     push @$points, \%{$points->[0]} if ($pointPopped);
-    dumpPoints($points, "perl-stage-35-u-turn-loops.json");
+    dumpPoints($points, "35-perl-u-turn-loops.txt");
   }
 
 
@@ -6321,7 +6321,7 @@ for my $file ( @files ) {
                  );
 
       deleteField2(points=> $points, field=> "shift");
-      dumpPoints($points, "perl-stage-36-min-radius.json");
+      dumpPoints($points, "36-perl-min-radius.txt");
     }
   }
 
@@ -6361,7 +6361,7 @@ for my $file ( @files ) {
         unshift @$points, pop @$points;
       }
     }
-    dumpPoints($points, "perl-stage-37-shifted-sf.json");
+    dumpPoints($points, "37-perl-shifted-sf.txt");
   }
 
   #
@@ -6467,7 +6467,7 @@ for my $file ( @files ) {
   }
   if ($prependedAppended) {
     ## STAGE 38: Prepend/append
-    dumpPoints($points, "perl-stage-38-prepended-appended.json");
+    dumpPoints($points, "38-perl-prepended-appended.txt");
   }
 
   # copy the first point to the last point if specified
@@ -6485,7 +6485,7 @@ for my $file ( @files ) {
     $p{distance} = $points->[-1]->{distance} + latlngDistance($points->[-1], $points->[0]) if (defined $points->[-1]->{distance});
     note("copying point first point to end of the loop...\n");
     push @$points, \%p;
-    dumpPoints($points, "perl-stage-39-copied-point.json");
+    dumpPoints($points, "39-perl-copied-point.txt");
   }
 
   # split a route.
@@ -6556,7 +6556,7 @@ for my $file ( @files ) {
                         stretch=> $autoSegmentStretch,
                         threshold=> $autoSegmentThreshold,
                        );
-      dumpPoints($points, "perl-stage-40-auto-segments.json");
+      dumpPoints($points, "40-perl-auto-segments.txt");
     }
 
 
