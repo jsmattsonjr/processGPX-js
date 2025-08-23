@@ -660,9 +660,9 @@ function fixZigZags(points) {
 			if (p2.distance - p1.distance < dzigzag) {
 				warn(
 					`WARNING: zig-zag found on points (0, 2, 3 ...) : ${U1} and ${U2} : ` +
-					`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
-					`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
-					`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
+						`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
+						`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
+						`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
 				);
 
 				// Repairing zig-zags...
@@ -844,7 +844,6 @@ function addGradientField(points, isLoop = 0) {
 	while (i <= iMax) {
 		const p1 = points[i];
 		let j = (i + 1) % points.length;
-		const di = p1.distance;
 		while (
 			j !== i &&
 			Math.abs(distanceDifference(p1, points[j], courseDistance, isLoop)) < 0.1
@@ -882,7 +881,6 @@ function integrateGradientField(points, isLoop = 0) {
 	while (i < iMax) {
 		const p1 = points[i];
 		const j = (i + 1) % points.length;
-		const di = p1.distance;
 		if (j <= i && !isLoop) break;
 		const p2 = points[j];
 		p2.ele =
@@ -962,8 +960,6 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 	addGradientField(points, isLoop);
 	const courseDistance = calcCourseDistance(points, isLoop);
 
-	const gVars = []; // gradient variances
-	const densities = []; // point densities
 	let i1 = 1; // starting point for gradient variance: note we don't calculate for i=0 unless it's a loop
 	let i2 = 0; // ending point for gradient variance (can exceed number of points)
 
@@ -971,7 +967,7 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 		while (
 			i1 > -points.length &&
 			distanceDifference(points[i1], points[0], courseDistance, isLoop) <
-			avgRange
+				avgRange
 		) {
 			i1--;
 		}
@@ -982,7 +978,7 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 		while (
 			i1 < i &&
 			distanceDifference(points[i1 + 1], points[i], courseDistance, isLoop) >
-			avgRange
+				avgRange
 		) {
 			i1++;
 		}
@@ -1124,10 +1120,7 @@ function smoothing(
 				// a 1 radian turn is the same as 2 sigma for cornerEffect = 1
 				if (cornerEffect > 0) {
 					s +=
-						ds *
-						cornerEffect *
-						(p2.curvature + p1.curvature) *
-						adjustedSigma;
+						ds * cornerEffect * (p2.curvature + p1.curvature) * adjustedSigma;
 				}
 				j--;
 			}
@@ -1255,7 +1248,7 @@ function findLoops(points, isLoop) {
 
 			warn(
 				`WARNING: loop between distance: ` +
-				`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`,
+					`${(points[u].distance / 1000).toFixed(3)} km and ${(points[v].distance / 1000).toFixed(3)} km`,
 			);
 
 			u = v;
@@ -1544,10 +1537,10 @@ function calcQualityScore(points, isLoop) {
 			!isLoop && i === 0
 				? 0
 				: latlngAngle(
-					points[(i - 1 + points.length) % points.length],
-					points[i],
-					points[(i + 1) % points.length],
-				),
+						points[(i - 1 + points.length) % points.length],
+						points[i],
+						points[(i + 1) % points.length],
+					),
 		);
 
 		if (
@@ -2452,7 +2445,7 @@ function snapPoints(
 						if (
 							j_seg < j2 &&
 							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-							0.05
+								0.05
 						) {
 							j_seg++;
 						}
@@ -2461,12 +2454,12 @@ function snapPoints(
 							j_seg < j2 &&
 							Math.abs(
 								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-								Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[i_seg].distance - points[i1].distance),
 							) <
-							Math.abs(
-								Math.abs(points[j_seg].distance - points[j1].distance) -
-								Math.abs(points[i_seg].distance - points[i1].distance),
-							)
+								Math.abs(
+									Math.abs(points[j_seg].distance - points[j1].distance) -
+										Math.abs(points[i_seg].distance - points[i1].distance),
+								)
 						) {
 							j_seg++;
 						}
@@ -2485,7 +2478,7 @@ function snapPoints(
 						if (
 							j_seg < j1 &&
 							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-							0.05
+								0.05
 						) {
 							j_seg++;
 						}
@@ -2494,12 +2487,12 @@ function snapPoints(
 							j_seg < j1 &&
 							Math.abs(
 								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-								Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[i_seg].distance - points[i1].distance),
 							) <
-							Math.abs(
-								Math.abs(points[j_seg].distance - points[j1].distance) -
-								Math.abs(points[i_seg].distance - points[i1].distance),
-							)
+								Math.abs(
+									Math.abs(points[j_seg].distance - points[j1].distance) -
+										Math.abs(points[i_seg].distance - points[i1].distance),
+								)
 						) {
 							j_seg++;
 						}
@@ -2837,9 +2830,9 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		points[0].distance !== undefined
 			? calcCourseDistance(points, isLoop)
 			: (() => {
-				addDistanceField(points);
-				return calcCourseDistance(points, isLoop);
-			})();
+					addDistanceField(points);
+					return calcCourseDistance(points, isLoop);
+				})();
 
 	function alignmentTest(points, i, j, maxDeviation) {
 		const [avg, max, rms] = calcDeviationStats(points, i, j);
@@ -2858,9 +2851,9 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		while (
 			j < i + 2 ||
 			points[j].distance +
-			int(j / points.length) * courseDistance -
-			points[i].distance <
-			minLength
+				int(j / points.length) * courseDistance -
+				points[i].distance <
+				minLength
 		) {
 			j++;
 			// If we cannot get a segment long enough on point-to-point, we're too close to the finish
@@ -3714,9 +3707,7 @@ export function processGPX(trackFeature, options = {}) {
 	let smoothed = 0;
 	for (const smoothLoop of [0, 1, 2, 4]) {
 		smoothed = 1;
-		const fsigma = {};
 		let smooth = 0;
-		const autoSmooth = 0;
 		if (smoothLoop === 0) smooth = lSmooth || 0;
 		if (smoothLoop === 1) smooth = zSmooth || 0;
 		if (smoothLoop === 2) smooth = gSmooth || 0;
@@ -3988,8 +3979,6 @@ export function processGPX(trackFeature, options = {}) {
 	if (!(options.addSigma || 0)) {
 		deleteField2(points, "sigma");
 	}
-
-	// Skip circuit processing
 
 	// Convert processed points back to coordinates format for output
 	const processedFeature = {
