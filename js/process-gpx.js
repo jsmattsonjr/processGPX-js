@@ -39,6 +39,16 @@ function die(message) {
 }
 
 /**
+ * Wrap array index to handle negative indices like Perl
+ * @param {number} i - Index (can be negative)
+ * @param {number} len - Array length
+ * @returns {number} Wrapped index
+ */
+function wrapIndex(i, len) {
+	return ((i % len) + len) % len;
+}
+
+/**
  * Transition function: 1 (x = -1) to 1/2 (x = 0) to 0 (x = 1)
  * @param {number} x - Input value
  * @returns {number} Transition value
@@ -1106,7 +1116,9 @@ function smoothing(
 			let j = i;
 			let s = 0;
 			while ((j > 0 || isLoop) && j > i - points.length && s < dsMax) {
-				const ds = latlngDistance(points[j], points[j - 1]);
+				const p1 = points[wrapIndex(j, points.length)];
+				const p2 = points[wrapIndex(j - 1, points.length)];
+				const ds = latlngDistance(p1, p2);
 				s += ds;
 
 				// a 1 radian turn is the same as 2 sigma for cornerEffect = 1
@@ -1114,7 +1126,7 @@ function smoothing(
 					s +=
 						ds *
 						cornerEffect *
-						(points[j - 1].curvature + points[j].curvature) *
+						(p2.curvature + p1.curvature) *
 						adjustedSigma;
 				}
 				j--;
@@ -1146,8 +1158,8 @@ function smoothing(
 			const ss = [0];
 			for (let ii = j; ii < k; ii++) {
 				s += latlngDistance(
-					points[(ii + 1) % points.length],
-					points[ii % points.length],
+					points[wrapIndex(ii + 1, points.length)],
+					points[wrapIndex(ii, points.length)],
 				);
 				ss.push(s);
 			}
@@ -1171,7 +1183,7 @@ function smoothing(
 			// more sophisticated approach could use 2D convolution
 			for (let ii = 0; ii < us.length; ii++) {
 				const u = us[ii];
-				const point = points[(j + ii) % points.length];
+				const point = points[wrapIndex(j + ii, points.length)];
 
 				// weight by distance
 				let du = ii > 0 ? u - us[ii - 1] : 0;
@@ -2654,7 +2666,7 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 
 				if (isLoop || i < max_index(points)) {
 					// find points which define an angle
-					let i1 = (i - 1) % points.length;
+					let i1 = wrapIndex(i - 1, points.length);
 					let i2 = (i + 1) % points.length;
 					let d1;
 					let d2;
