@@ -2092,7 +2092,7 @@ function snapPoints(
 	// note this excludes starting point and end point
 	iLoop: for (let i = 0; i < maxIndex(points) - 1; i += snapStep) {
 		const p1 = points[i];
-		const jCount = [];
+		const visited = new Set();
 
 		let j = i + snapStep;
 		if (j > maxIndex(points)) continue;
@@ -2117,8 +2117,8 @@ function snapPoints(
 		// Keep moving until j comes back into snap range of i
 		jLoop1: while (j <= maxIndex(points)) {
 			// Make sure we don't try the same value twice (moving forward and backward could cause this)
-			jCount[j] = (jCount[j] || 0) + 1;
-			if (jCount[j] > 1) continue iLoop;
+			if (visited.has(j)) continue iLoop;
+			visited.add(j);
 
 			// Looking for j sufficiently close to i and connected with less than a 30% slope
 			// Slope requirement avoids snapping across tight switchbacks or a hypothetical "spiral"
