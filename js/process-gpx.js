@@ -2047,7 +2047,6 @@ function snapPoints(
 
 	// Ensure distance field exists
 	addDistanceField(points);
-	dumpPoints(points, "js-distances-after-addDistanceField.txt");
 
 	// snap = 1: subsequent laps snap to position of earlier laps
 	// snap = 2: earlier laps snap to position of later laps
@@ -3944,6 +3943,22 @@ export function processGPX(trackFeature, options = {}) {
 	}
 	if (!(options.addSigma || 0)) {
 		deleteField2(points, "sigma");
+	}
+
+	// spline again post-smoothing, if requested
+	if (_splineRadians > 0 && ((lSmooth || 0) > 1 || (zSmooth || 0) > 0)) {
+		// STAGE 23: Post-smoothing splines
+		note("corner splines, post-smoothing...");
+		points = addSplines(
+			points,
+			_splineRadians,
+			_splineMaxRadians,
+			options.splineStart,
+			options.splineEnd,
+			isLoop || 0,
+			"spline",
+		);
+		dumpPoints(points, "23-js-post-smoothing-splines.txt");
 	}
 
 	// Convert processed points back to coordinates format for output
