@@ -261,7 +261,7 @@ function latlngCrossProduct(p1, p2, p3, p4) {
 /**
  * Calculate cross product between two segments defined by array coordinates
  * @param {Array} p1 - [x, y] coordinates of first point of first segment
- * @param {Array} p2 - [x, y] coordinates of second point of first segment  
+ * @param {Array} p2 - [x, y] coordinates of second point of first segment
  * @param {Array} p3 - [x, y] coordinates of first point of second segment
  * @param {Array} p4 - [x, y] coordinates of second point of second segment
  * @returns {number|null} Normalized cross product or null if degenerate
@@ -514,9 +514,7 @@ function interpolatePoint(p1, p2, f) {
 					newPoint[k] = 0;
 				}
 			} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
-				const val1 = typeof p1[k] === 'number' ? p1[k] : parseFloat(p1[k]);
-				const val2 = typeof p2[k] === 'number' ? p2[k] : parseFloat(p2[k]);
-				newPoint[k] = val1 * (1 - f) + val2 * f;
+				newPoint[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
 			} else {
 				newPoint[k] = f < 0.5 ? p1[k] : p2[k];
 			}
@@ -533,12 +531,12 @@ function interpolatePoint(p1, p2, f) {
  * @param {number} dg - Maximum gradient change threshold (default 0.001)
  * @returns {boolean} True if point can be pruned
  */
-function isPointPrunable(points, distance = 2, X = 0.001, dg = 0.001) {
+function isPointPrunable(points, _distance = 2, X = 0.001, dg = 0.001) {
 	const [p1, p2, p3] = points;
 	if (!p3) {
 		die("isPointPrunable requires 3 points");
 	}
-	
+
 	const [x1, y1] = latlng2dxdy(p3, p1);
 	const [x2, y2] = latlng2dxdy(p3, p2);
 	const [x3, y3] = [0, 0];
@@ -548,21 +546,21 @@ function isPointPrunable(points, distance = 2, X = 0.001, dg = 0.001) {
 	const s1 = p1.segment;
 	const s2 = p2.segment;
 	const s3 = p3.segment;
-	
+
 	// Only prune points in the same segment
 	if (!(s1 === s2 && s2 === s3)) {
 		return false;
 	}
-	
+
 	if (isPointOnRoad(p1, p2, p3, 1)) {
 		const d13 = Math.sqrt((y3 - y1) ** 2 + (x3 - x1) ** 2);
 		const d23 = Math.sqrt((y3 - y2) ** 2 + (x3 - x2) ** 2);
-		
+
 		// Duplicate points are not prunable
 		if (d13 === 0 || d23 === 0) {
 			return false;
 		}
-		
+
 		// Check gradient and alignment
 		const dgCheck = (z2 - z3) / d23 - (z3 - z1) / d13;
 		const cross = crossProduct([x1, y1], [x3, y3], [x3, y3], [x2, y2]);
@@ -780,16 +778,32 @@ function fixZigZags(points) {
 				// 4. go back step 2 if we deleted any U-turns
 
 				warn("repairing zig-zag...");
-				const u = U1; // keep points up to u
+				let u = U1; // keep points up to u
 				let v = U2 + 1; // keep points starting with v
 
+				info(
+					`DEBUG: initial u=${u}, initial v=${v}, points.length=${points.length}`,
+				);
+
 				while (
-					v < points.length - 1 &&
+					v < maxIndex(points) &&
 					UTurnCheck(points[u], points[v], points[v], points[v + 1])
 				) {
+					info(`DEBUG: extending v from ${v} to ${v + 1} due to UTurn check`);
 					v++;
 				}
 
+				while (
+					u > 0 &&
+					UTurnCheck(points[u - 1], points[u], points[u], points[v])
+				) {
+					info(`DEBUG: extending u from ${u} to ${u - 1} due to UTurn check`);
+					u--;
+				}
+
+				info(
+					`DEBUG: final u=${u}, final v=${v}, eliminating points ${u + 1} to ${v - 1} (${v - u - 1} points)`,
+				);
 				warn(`eliminating ${v - u - 1} points`);
 				zigzagCount++;
 
@@ -4302,7 +4316,14 @@ export function processGPX(trackFeature, options = {}) {
 				const p1 = pNew[pNew.length - 1];
 				const p2 = points[i + 1];
 				const p3 = points[i];
-				if (isPointPrunable([p1, p2, p3], options.pruneD || 1, options.pruneX || 0.001, options.prunedg || 0.0005)) {
+				if (
+					isPointPrunable(
+						[p1, p2, p3],
+						options.pruneD || 1,
+						options.pruneX || 0.001,
+						options.prunedg || 0.0005,
+					)
+				) {
 					pruneCount++;
 				} else {
 					pNew.push(p3);
