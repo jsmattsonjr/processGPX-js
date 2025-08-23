@@ -3,7 +3,7 @@ use strict;
 use Getopt::Long;
 use Geo::Gpx;
 use XML::Descent;               # for extension tags
-use POSIX qw(floor ceil);
+use POSIX qw(floor ceil DBL_EPSILON);
 use Date::Parse;
 use Pod::Usage;
 
@@ -72,6 +72,12 @@ my $lat2y       = $rEarth * $deg2rad;
 sub reduceAngle {
   my $theta = shift;
   $theta -= $twopi * floor(0.5 + $theta / $twopi);
+  
+  # Ensure -π maps to π to match atan2()
+  if (abs($theta + $pi) < $pi * DBL_EPSILON) {
+    $theta = $pi;
+  }
+  
   return $theta;
 }
 
