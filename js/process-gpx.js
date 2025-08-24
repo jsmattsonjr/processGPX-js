@@ -532,7 +532,13 @@ function interpolatePoint(p1, p2, f) {
  * @param {Object} segmentNames - Object mapping segment numbers to names
  * @returns {Array} Array of loop points
  */
-function makeLoop(points, direction, radius = 4, defaultSign = 1, segmentNames = {}) {
+function makeLoop(
+	points,
+	direction,
+	radius = 4,
+	defaultSign = 1,
+	segmentNames = {},
+) {
 	if (!points || points.length < 2) {
 		die("makeLoop requires a reference to a list of two points.");
 	}
@@ -638,7 +644,8 @@ function makeLoop(points, direction, radius = 4, defaultSign = 1, segmentNames =
 	// Shear to align
 	// point1 => point2 : dx, dy
 	// point1 => origin:: -s, +c
-	const u = delta === 0 ? 0 : (dx / (2 * delta)) ** 2 + (dy / (2 * delta)) ** 2 - 1;
+	const u =
+		delta === 0 ? 0 : (dx / (2 * delta)) ** 2 + (dy / (2 * delta)) ** 2 - 1;
 	const shear = delta === 0 ? 0 : u > 0 ? Math.sqrt(u) : 0;
 	const shearSign = -sign * Math.sign(cdir * dx + sdir * dy);
 
@@ -688,7 +695,8 @@ function makeLoop(points, direction, radius = 4, defaultSign = 1, segmentNames =
 	for (let i = 0; i < pLoop.length - 1; i++) {
 		ss.push(ss[ss.length - 1] + latlngDistance(pLoop[i], pLoop[i + 1]));
 	}
-	const sLoop = ss[ss.length - 1] + latlngDistance(pLoop[pLoop.length - 1], point2);
+	const sLoop =
+		ss[ss.length - 1] + latlngDistance(pLoop[pLoop.length - 1], point2);
 
 	// Interpolate elevation
 	for (let i = 0; i < pLoop.length; i++) {
@@ -3472,12 +3480,6 @@ export function processGPX(trackFeature, options = {}) {
 		die("Invalid track feature provided to processGPX");
 	}
 
-	// Map command-line options to internal processing variables (matching Perl implementation)
-	let lSmooth = options.sigma; // --smooth or --sigma
-	const gSmooth = options.sigmag; // --smoothG or --sigmag
-	let zSmooth = options.sigmaz; // --smoothZ, --zSmooth, --sigmaz, --zSigma
-	let isLoop = options.lap; // --loop or --lap
-
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
 		die("-repeat limited to range 0 to 99");
@@ -3496,7 +3498,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.rLap = options.rLap ?? 0;
 		}
 		options.autoSpacing = options.autoSpacing ?? 1;
-		lSmooth = lSmooth ?? 5;
+		options.sigma = options.sigma ?? 5;
 		options.laneShift =
 			options.laneShift ?? (options.selectiveLaneShift?.length ? 0 : 6);
 		options.minRadius = options.minRadius ?? 6;
@@ -3508,7 +3510,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Loop sign
-	const _loopSign = options.loopLeft
+	const loopSign = options.loopLeft
 		? -1
 		: options.loopRight
 			? 1
@@ -3521,12 +3523,6 @@ export function processGPX(trackFeature, options = {}) {
 		options.autoStraightenDeviation ?? options.autoStraighten?.[0] ?? 0;
 	options.autoStraightenLength =
 		options.autoStraightenLength ?? options.autoStraighten?.[1] ?? 100;
-
-	// Named segments
-	// const namedSegments = (options.namedSegments || "").split(/[;]/);
-	// const autoSegmentNames = (options.autoSegmentNames || "")
-	// 	.split(/[,;]/)
-	// 	.map((s) => s.replace(/^\s*(.*?)\s*$/, "$1"));
 
 	// Convert max slope to percent
 	if (options.maxSlope !== undefined && options.maxSlope < 1) {
@@ -3563,14 +3559,14 @@ export function processGPX(trackFeature, options = {}) {
 
 	// Calculate quality score of original course
 	note("points in original GPX track = ", points.length);
-	const [score, scoreD, scoreZ] = calcQualityScore(points, isLoop || 0);
+	const [score, scoreD, scoreZ] = calcQualityScore(points, options.loop || 0);
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
 	dumpPoints(points, "01-js-original.txt");
 
 	// Eliminate duplicate x,y points
-	points = removeDuplicatePoints(points, isLoop || 0);
+	points = removeDuplicatePoints(points, options.loop || 0);
 	dumpPoints(points, "02-js-duplicates-removed.txt");
 
 	// If repeat is specified, then create replicates
@@ -3592,7 +3588,7 @@ export function processGPX(trackFeature, options = {}) {
 	// This is done before auto-options since it may change whether the course is a loop
 	points = cropPoints(
 		points,
-		isLoop || 0,
+		options.loop || 0,
 		options.deleteRange || [],
 		options.cropMin,
 		options.cropMax,
@@ -3600,13 +3596,13 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "05-js-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
-	isLoop = isLoop || 0;
+	options.loop = options.loop || 0;
 	options.copyPoint = options.copyPoint || 0;
 	options.autoLoop = options.autoLoop || options.auto;
 
 	if (options.autoLoop) {
 		if (
-			!isLoop &&
+			!options.loop &&
 			options.cropMin === undefined &&
 			options.cropMax === undefined &&
 			latlngDistance(points[0], points[maxIndex(points)]) < 150 &&
@@ -3618,7 +3614,7 @@ export function processGPX(trackFeature, options = {}) {
 				points[1],
 			) > -0.1
 		) {
-			isLoop = 1;
+			options.loop = 1;
 			options.copyPoint = 0;
 			note("setting -loop");
 		}
@@ -3628,7 +3624,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.auto) {
 		note("auto-setting options...");
 
-		const courseDistance = calcCourseDistance(points, isLoop);
+		const courseDistance = calcCourseDistance(points, options.loop);
 
 		// Calculate position interpolation
 		if (options.spacing === undefined) {
@@ -3639,9 +3635,9 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		// Smoothing
-		if (lSmooth === undefined) {
-			lSmooth = 5;
-			note(`setting smoothing to ${lSmooth} meters`);
+		if (options.sigma === undefined) {
+			options.sigma = 5;
+			note(`setting smoothing to ${options.sigma} meters`);
 		}
 
 		// Other options
@@ -3665,9 +3661,9 @@ export function processGPX(trackFeature, options = {}) {
 			options.prune = 1;
 		}
 
-		if (zSmooth === undefined) {
-			zSmooth = 15;
-			note(`setting altitude smoothing to ${zSmooth} meters`);
+		if (options.sigmaz === undefined) {
+			options.sigmaz = 15;
+			note(`setting altitude smoothing to ${options.sigmaz} meters`);
 		}
 
 		if (options.fixCrossings === undefined) {
@@ -3703,21 +3699,21 @@ export function processGPX(trackFeature, options = {}) {
 	options.prune = options.prune ?? 0;
 	options.rLap = options.rLap ?? 0;
 	options.spacing = options.spacing ?? 0;
-	options.zSmooth = options.zSmooth ?? 0;
+	options.sigmaz = options.sigmaz ?? 0;
 	options.snap = options.snap ?? 0;
 	options.snapTransition = options.snapTransition ?? 0;
-	lSmooth = lSmooth ?? 0;
+	options.sigma = options.sigma ?? 0;
 
 	// Check for invalid option combinations
-	if (options.snap > 0 && options.snapDistance > lSmooth) {
+	if (options.snap > 0 && options.snapDistance > options.sigma) {
 		warn(
-			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`,
+			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.sigma}), then abrupt transitions between snapped and unsnapped points may occur`,
 		);
 	}
 
-	if (isLoop && (options.rTurnaround || 0) > 0) {
+	if (options.loop && (options.rTurnaround || 0) > 0) {
 		warn("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
-		isLoop = 0;
+		options.loop = 0;
 	}
 
 	// AutoSpacing triggered if max angle specified
@@ -3739,7 +3735,7 @@ export function processGPX(trackFeature, options = {}) {
 	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
 
 	// Check if loop specified for apparent point-to-point
-	if (isLoop) {
+	if (options.loop) {
 		const d = latlngDistance(points[0], points[maxIndex(points)]);
 		if (d > 150) {
 			warn(
@@ -3749,7 +3745,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// If shiftSF is specified but not loop, that's an error
-	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
+	if (options.laneShiftSF !== 0 && !options.loop) {
 		die("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
 	}
 
@@ -3758,7 +3754,7 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "06-js-zigzags-fixed.txt");
 
 	// Look for loops
-	findLoops(points, isLoop);
+	findLoops(points, options.loop);
 
 	// Adjust altitudes if requested
 	if (
@@ -3835,7 +3831,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.maxCornerCropDegs * DEG2RAD,
 			options.cornerCropStart,
 			options.cornerCropEnd,
-			isLoop,
+			options.loop,
 		);
 		dumpPoints(points, "09-js-corners-cropped.txt");
 	}
@@ -3845,7 +3841,7 @@ export function processGPX(trackFeature, options = {}) {
 		note("auto-Straightening...");
 		autoStraighten(
 			points,
-			isLoop,
+			options.loop,
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
@@ -3875,7 +3871,7 @@ export function processGPX(trackFeature, options = {}) {
 			_splineMaxRadians,
 			options.splineStart,
 			options.splineEnd,
-			isLoop || 0,
+			options.loop || 0,
 			"spline",
 		);
 		dumpPoints(points, "15-js-corner-splines.txt");
@@ -3890,7 +3886,7 @@ export function processGPX(trackFeature, options = {}) {
 			arcFitMaxRadians,
 			options.arcFitStart,
 			options.arcFitEnd,
-			isLoop || 0,
+			options.loop || 0,
 			"arcFit",
 		);
 		dumpPoints(points, "16-js-arc-fit.txt");
@@ -3898,18 +3894,18 @@ export function processGPX(trackFeature, options = {}) {
 
 	// add distance field
 	addDistanceField(points);
-	const _courseDistance = calcCourseDistance(points, isLoop || 0);
+	const _courseDistance = calcCourseDistance(points, options.loop || 0);
 
 	// automatic interpolation at corners
 	if (
 		options.autoSpacing &&
-		((lSmooth || 0) > 0 || (options.minRadius || 0) > 0)
+		((options.sigma || 0) > 0 || (options.minRadius || 0) > 0)
 	) {
 		note("auto-spacing at corners...");
 		points = doAutoSpacing(
 			points,
-			isLoop || 0,
-			lSmooth || 0,
+			options.loop || 0,
+			options.sigma || 0,
 			options.smoothAngle || 0,
 			options.minRadius || 0,
 		);
@@ -3919,7 +3915,7 @@ export function processGPX(trackFeature, options = {}) {
 	// interpolation if requested
 	if (points.length && (options.spacing || 0) > 0) {
 		// STAGE 18: Interpolation
-		points = doPointInterpolation(points, isLoop || 0, options.spacing);
+		points = doPointInterpolation(points, options.loop || 0, options.spacing);
 		dumpPoints(points, "18-js-interpolated.txt");
 	}
 
@@ -3955,8 +3951,8 @@ export function processGPX(trackFeature, options = {}) {
 	// sigma value sent to the smoothing code
 
 	if (
-		(lSmooth || 0) > 0 ||
-		(zSmooth || 0) > 0 ||
+		(options.sigma || 0) > 0 ||
+		(options.sigmaz || 0) > 0 ||
 		(options.lAutoSmooth || 0) > 0 ||
 		(options.zAutoSmooth || 0) > 0 ||
 		(options.selectiveSmooth || []).length > 0 ||
@@ -3973,9 +3969,9 @@ export function processGPX(trackFeature, options = {}) {
 	for (const smoothLoop of [0, 1, 2, 4]) {
 		smoothed = 1;
 		let smooth = 0;
-		if (smoothLoop === 0) smooth = lSmooth || 0;
-		if (smoothLoop === 1) smooth = zSmooth || 0;
-		if (smoothLoop === 2) smooth = gSmooth || 0;
+		if (smoothLoop === 0) smooth = options.sigma || 0;
+		if (smoothLoop === 1) smooth = options.sigmaz || 0;
+		if (smoothLoop === 2) smooth = options.sigmag || 0;
 		if (smoothLoop === 3) smooth = options.lAutoSmooth || 0;
 		if (smoothLoop === 4) smooth = options.zAutoSmooth || 0;
 		if (smoothLoop === 5) smooth = options.gAutoSmooth || 0;
@@ -3998,7 +3994,7 @@ export function processGPX(trackFeature, options = {}) {
 		if (smoothLoop === 3) {
 			// smooth field is generated from data
 			note("calculating auto sigma");
-			calcSmoothingSigma(points, smooth, isLoop);
+			calcSmoothingSigma(points, smooth, options.loop);
 			sigma0 = 0;
 		} else {
 			// parse and check the selective smoothing parameters
@@ -4162,14 +4158,14 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		if (smoothLoop % 3 === 2) {
-			addGradientField(points, isLoop);
+			addGradientField(points, options.loop);
 		}
 
 		for (const key of keys) {
 			points = smoothing(
 				points,
 				key === "latlon" ? ["lat", "lon"] : [key],
-				isLoop,
+				options.loop,
 				points[0].sigma !== undefined ? "sigma" : "",
 				1, // sigmaFactor
 				sigma0,
@@ -4179,7 +4175,7 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		if (smoothLoop % 3 === 2) {
-			integrateGradientField(points, isLoop);
+			integrateGradientField(points, options.loop);
 		}
 	}
 
@@ -4190,14 +4186,14 @@ export function processGPX(trackFeature, options = {}) {
 
 	// anchoring: return start point and, if not a loop, finish point to original values
 	// if anchoring requested
-	if (options.anchorSF && !isLoop) {
+	if (options.anchorSF && !options.loop) {
 		addDistanceField(points);
 
 		for (const d of [1, -1]) {
 			const sigma = {
-				ele: Math.sqrt((lSmooth || 0) ** 2 + (zSmooth || 0) ** 2),
-				lat: lSmooth || 0,
-				lon: lSmooth || 0,
+				ele: Math.sqrt((options.sigma || 0) ** 2 + (options.sigmaz || 0) ** 2),
+				lat: options.sigma || 0,
+				lon: options.sigma || 0,
 			};
 
 			// the point to anchor
@@ -4227,7 +4223,12 @@ export function processGPX(trackFeature, options = {}) {
 						// distorted by smoothing, since smoothing can collapse points,
 						// and point of anchoring is to reduce collapse
 						const s = Math.abs(
-							distanceDifference(points[i], points[i0], courseDistance, isLoop),
+							distanceDifference(
+								points[i],
+								points[i0],
+								courseDistance,
+								options.loop,
+							),
 						);
 						if (s > dsMax) break;
 
@@ -4246,7 +4247,10 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// spline again post-smoothing, if requested
-	if (_splineRadians > 0 && ((lSmooth || 0) > 1 || (zSmooth || 0) > 0)) {
+	if (
+		_splineRadians > 0 &&
+		((options.sigma || 0) > 1 || (options.sigmaz || 0) > 0)
+	) {
 		// STAGE 23: Post-smoothing splines
 		note("corner splines, post-smoothing...");
 		points = addSplines(
@@ -4255,7 +4259,7 @@ export function processGPX(trackFeature, options = {}) {
 			_splineMaxRadians,
 			options.splineStart,
 			options.splineEnd,
-			isLoop || 0,
+			options.loop || 0,
 			"spline",
 		);
 		dumpPoints(points, "23-js-post-smoothing-splines.txt");
@@ -4293,7 +4297,7 @@ export function processGPX(trackFeature, options = {}) {
 			if (
 				angle !== null &&
 				Math.abs(angle) > simplifiedAngle &&
-				(isLoop || i < maxIndex(points))
+				(options.loop || i < maxIndex(points))
 			) {
 				const a1 = latlngAngle(
 					points[(i + 1) % points.length],
@@ -4314,7 +4318,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 		}
 
-		if (isLoop) {
+		if (options.loop) {
 			if (
 				!pointsAreClose(points[0], points[simplified[simplified.length - 1]])
 			) {
@@ -4527,7 +4531,7 @@ export function processGPX(trackFeature, options = {}) {
 			const pNew = [];
 			let i = 0;
 
-			if (!isLoop) {
+			if (!options.loop) {
 				pNew.push(points[i++]);
 			}
 
@@ -4556,7 +4560,7 @@ export function processGPX(trackFeature, options = {}) {
 
 				if (
 					turnType === 3 &&
-					(isLoop || i < maxIndex(points)) &&
+					(options.loop || i < maxIndex(points)) &&
 					UTurnCheck(points[h], points[i], points[i], points[j])
 				) {
 					const d1 = latlngDirection(points[h], points[i]);
@@ -4573,14 +4577,14 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[i]],
 						dir,
 						options.rUTurn,
-						options.loopSign || 1,
+						loopSign || 1,
 						{}, // segmentNames - simplified for now
 					);
 					pNew.push(...loop);
 					pNew.push({ ...points[i] }); // Put a copy of the turn-around point here
 				} else if (
 					turnType === 4 &&
-					(isLoop || (i > 0 && i < maxIndex(points) - 1)) &&
+					(options.loop || (i > 0 && i < maxIndex(points) - 1)) &&
 					UTurnCheck(points[h], points[i], points[j], points[k]) &&
 					latlngDistance(points[i], points[j]) < 20
 				) {
@@ -4599,7 +4603,7 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[j]],
 						dir,
 						options.rUTurn,
-						options.loopSign || 1,
+						loopSign || 1,
 						{}, // segmentNames - simplified for now
 					);
 					pNew.push(...loop);
