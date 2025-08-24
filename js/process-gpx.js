@@ -244,6 +244,175 @@ function latlngDotProduct(p1, p2, p3, p4) {
 }
 
 /**
+ * Calculate distance difference between two points on course
+ * @param {Object} p1 - First point with distance field
+ * @param {Object} p2 - Second point with distance field
+ * @param {number} courseDistance - Total course distance
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {number} Distance difference
+ */
+function distanceDifference(p1, p2, courseDistance, isLoop) {
+	if (!Object.hasOwn(p1, "distance") || !Object.hasOwn(p2, "distance")) {
+		die("distanceDifference called w/o distance field");
+	}
+	let d = p2.distance - p1.distance;
+	if (isLoop && courseDistance > 0) {
+		d -= courseDistance * Math.floor(d / courseDistance);
+	}
+	return d;
+}
+
+/**
+ * Calculate separation between two points in course distance
+ * @param {Object} p1 - First point
+ * @param {Object} p2 - Second point
+ * @param {number} courseDistance - Total course distance
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {number} Absolute separation distance
+ */
+function pointSeparation(p1, p2, courseDistance, isLoop) {
+	let d = distanceDifference(p1, p2, courseDistance, isLoop);
+	if (isLoop) {
+		d -= courseDistance * Math.floor(0.5 + d / courseDistance);
+	}
+	return Math.abs(d);
+}
+
+/**
+ * Shift a point by a given distance in a given direction
+ * @param {Object} point - Point to shift
+ * @param {number} direction - Direction in radians
+ * @param {number} distance - Distance to shift
+ * @returns {Object} New shifted point
+ */
+function shiftPoint(point, direction, distance) {
+	const c = Math.cos(direction);
+	const s = Math.sin(direction);
+
+	// lane shift, 90 degrees
+	const dx = s * distance;
+	const dy = -c * distance;
+	const dlng = dx / (LAT2Y * Math.cos(DEG2RAD * point.lat));
+	const dlat = dy / LAT2Y;
+
+	return {
+		...point,
+		lon: point.lon + dlng,
+		lat: point.lat + dlat,
+	};
+}
+
+/**
+ * Shift a vertex by a given distance considering two directions
+ * @param {Object} point - Point to shift
+ * @param {Array} directions - Array of two directions in radians
+ * @param {number} distance - Distance to shift
+ * @returns {Object} New shifted point
+ */
+function shiftVertex(point, directions, distance) {
+	const c1 = Math.cos(directions[0]);
+	const s1 = Math.sin(directions[0]);
+	const c2 = Math.cos(directions[1]);
+	const s2 = Math.sin(directions[1]);
+
+	// lane shift, 90 degrees
+	const denom = c1 * s2 - c2 * s1;
+	let dx, dy;
+
+	if (Math.abs(denom) < 0.001) {
+		dx = ((s1 + s2) * distance) / 2;
+		dy = (-(c1 + c2) * distance) / 2;
+	} else {
+		dx = ((c1 - c2) / denom) * distance;
+		dy = ((s1 - s2) / denom) * distance;
+	}
+
+	const dlng = dx / (LAT2Y * Math.cos(DEG2RAD * point.lat));
+	const dlat = dy / LAT2Y;
+
+	return {
+		...point,
+		lon: point.lon + dlng,
+		lat: point.lat + dlat,
+	};
+}
+
+/**
+ * Apply lane shift to all points based on their shift field
+ * @param {Array} points - Array of points with shift field
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {Array} New array of shifted points
+ */
+function applyLaneShift(points, isLoop) {
+	if (!points.length) return points;
+
+	const pNew = [];
+
+	// create list of (x, y) coordinates
+	const dxs = [];
+	const dys = [];
+	const dss = [];
+	const ss = [0];
+	const dirs = [];
+
+	for (let i = 0; i < points.length; i++) {
+		if (i > 0) ss.push(ss[ss.length - 1] + dss[dss.length - 1]);
+		if (isLoop || i < maxIndex(points)) {
+			const [dx, dy] = latlng2dxdy(points[i], points[(i + 1) % points.length]);
+			dxs.push(dx);
+			dys.push(dy);
+			dss.push(Math.sqrt(dx ** 2 + dy ** 2));
+			dirs.push(Math.atan2(dy, dx));
+		}
+	}
+
+	// final point for point-to-point
+	if (!isLoop) {
+		dxs.push(dxs[dxs.length - 1]);
+		dys.push(dys[dys.length - 1]);
+		dss.push(dss[dss.length - 1]);
+		dirs.push(dirs[dirs.length - 1]);
+	}
+
+	// lane shift: to right, which means adding pi/2 to the direction
+	for (let i = 0; i < points.length; i++) {
+		let dir1, dir2;
+		if (i > 0 || isLoop) {
+			dir1 = dirs[i - 1];
+			dir2 = dir1 + reduceAngle(dirs[i] - dir1);
+		} else {
+			dir1 = dirs[i];
+			dir2 = dirs[i];
+		}
+
+		// for sharp turns repeat a point: there's no way to decide if it's an "inside" or "outside" sharp turn
+		if (
+			(isLoop || (i > 0 && i < maxIndex(points))) &&
+			Math.abs(dir2 - dir1) > 0.99 * PI
+		) {
+			const pTurns = [];
+			for (const dir of [dir1, dir2]) {
+				pTurns.push(shiftPoint(points[i], dir, points[i].shift || 0));
+			}
+			// check if there's a knot.. if not use the doubled points
+			const fs = segmentIntercept(
+				[points[i - 1], pTurns[0]],
+				[pTurns[1], points[(i + 1) % points.length]],
+			);
+			if (fs.length === 0) {
+				pNew.push(...pTurns);
+				continue;
+			}
+		}
+
+		pNew.push(shiftVertex(points[i], [dir1, dir2], points[i].shift || 0));
+	}
+
+	deleteDerivedFields(pNew);
+	return pNew;
+}
+
+/**
  * Calculate cross product between two lat/lng segments
  * @param {Object} p1 - First point of first segment
  * @param {Object} p2 - Second point of first segment
@@ -4622,6 +4791,147 @@ export function processGPX(trackFeature, options = {}) {
 			points.push({ ...points[0] });
 		}
 		dumpPoints(points, "35-js-u-turn-loops.txt");
+	}
+
+	// STAGE 36: Set minimum radius
+	if (options.minRadius !== undefined && options.minRadius > 0) {
+		const minRadius = options.minRadius;
+		const minRadiusStart = options.minRadiusStart;
+		const minRadiusEnd = options.minRadiusEnd;
+
+		note(`setting minimum radius to ${minRadius}...`);
+		addCurvatureField(points, options.loop);
+		addDistanceField(points);
+		const courseDistance = calcCourseDistance(points, options.loop);
+
+		// calculate a lane shift field
+		const maxCurvature = 1 / minRadius;
+		let count = 0;
+		const posShifts = points.map(() => 0);
+		const negShifts = points.map(() => 0);
+		const lambda = 16 * Math.sqrt(minRadius);
+
+		for (let u = 0; u < points.length; u++) {
+			const p = points[u];
+			const inRange =
+				(minRadiusStart === undefined || p.distance >= minRadiusStart ? 1 : 0) +
+				(minRadiusEnd === undefined || p.distance <= minRadiusEnd ? 1 : 0) +
+				(minRadiusEnd !== undefined &&
+				minRadiusStart !== undefined &&
+				minRadiusEnd < minRadiusStart
+					? 1
+					: 0);
+
+			if (inRange === 2 && Math.abs(p.curvature) > maxCurvature) {
+				const s = minRadius - Math.abs(1 / p.curvature);
+				const a = p.curvature > 0 ? posShifts : negShifts;
+				if (a[u] < s) {
+					a[u] = s;
+				}
+				count++;
+			}
+		}
+
+		if (count > 0) {
+			note(
+				"found " +
+					count +
+					" points tighter than minimum radius " +
+					minRadius +
+					" meters...",
+			);
+
+			for (const a of [posShifts, negShifts]) {
+				let u1 = 0;
+				let u2 = 0;
+
+				if (options.loop) {
+					while (
+						u1 > -maxIndex(points) &&
+						distanceDifference(
+							points[wrapIndex(u1 - 1, points.length)],
+							points[0],
+							courseDistance,
+							options.loop,
+						) < lambda
+					) {
+						u1--;
+					}
+				}
+
+				const newShifts = [...a];
+				for (let u0 = 0; u0 < points.length; u0++) {
+					if (a[u0] === 0) continue;
+
+					// u1 ... u0 ... u2
+					while (
+						u1 < u0 &&
+						distanceDifference(points[wrapIndex(u1, points.length)], points[u0], courseDistance, options.loop) >
+							lambda
+					) {
+						u1++;
+					}
+					if (u2 < u0) u2 = u0;
+					while (
+						(options.loop
+							? (u2 + 1) % points.length !== u1
+							: u2 < maxIndex(points)) &&
+						distanceDifference(
+							points[u0],
+							points[(u2 + 1) % points.length],
+							courseDistance,
+							options.loop,
+						) < lambda
+					) {
+						u2 = (u2 + 1) % points.length;
+					}
+
+					for (let u = u1; u <= u2; u++) {
+						// the u0 point has already been set...
+						if (u === u0) continue;
+
+						const f =
+							((1 +
+								Math.cos(
+									(PI *
+										pointSeparation(
+											points[wrapIndex(u,points.length)],
+											points[u0],
+											courseDistance,
+											options.loop,
+										)) /
+										lambda,
+								)) /
+								2) **
+							2;
+						const shift = a[u0] * f;
+
+						// if there's an existing shift, then combine with that:
+						if (shift > newShifts[u]) {
+							newShifts[u] = shift;
+						}
+					}
+				}
+
+				// Copy back the new shifts
+				for (let u = 0; u < points.length; u++) {
+					a[u] = newShifts[u];
+				}
+			}
+
+			// fill in shifts... sum of positive and negative shifts.
+			for (let u = 0; u < points.length; u++) {
+				points[u].shift = (points[u].shift || 0) + posShifts[u] - negShifts[u];
+			}
+
+			points = applyLaneShift(points, options.loop);
+
+			// apply smoothing after shift: shifting can cause some noise
+			points = smoothing(points, ["lat", "lon", "ele"], options.loop, "shift", 0.2);
+
+			deleteField2(points, "shift");
+			dumpPoints(points, "36-js-min-radius.txt");
+		}
 	}
 
 	// Convert processed points back to coordinates format for output
