@@ -73,6 +73,31 @@ function maxIndex(x) {
  */
 function note(...args) {
 	console.log(...args);
+
+	// Dispatch progress events for the web UI
+	if (typeof window !== "undefined") {
+		const message = args.join(" ");
+		// Check if it's a stage completion message
+		if (message.includes("Stage") && message.includes("complete:")) {
+			window.dispatchEvent(
+				new CustomEvent("gpx-progress", {
+					detail: { message, type: "stage" },
+				}),
+			);
+		}
+		// Check if it's a major processing step
+		else if (
+			message.includes("...") ||
+			message.includes("setting") ||
+			message.includes("checking")
+		) {
+			window.dispatchEvent(
+				new CustomEvent("gpx-progress", {
+					detail: { message, type: "step" },
+				}),
+			);
+		}
+	}
 }
 
 /**
@@ -90,6 +115,15 @@ function warn(...args) {
  * @param {string} filename - Output filename
  */
 function dumpPoints(points, filename) {
+	// Extract stage number and basename for clearer messaging
+	const match = filename.match(/^(\d+)-js-(.+)\.txt$/);
+	if (match) {
+		const [, stageNum, stageName] = match;
+		note(`Stage ${stageNum} (${stageName}) complete: ${points.length} points`);
+	} else {
+		note(`Stage ${filename} complete: ${points.length} points`);
+	}
+
 	let output = `# Points dump: ${points.length} points\n`;
 	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
 
@@ -4883,8 +4917,12 @@ export function processGPX(trackFeature, options = {}) {
 					// u1 ... u0 ... u2
 					while (
 						u1 < u0 &&
-						distanceDifference(points[wrapIndex(u1, points.length)], points[u0], courseDistance, options.loop) >
-							lambda
+						distanceDifference(
+							points[wrapIndex(u1, points.length)],
+							points[u0],
+							courseDistance,
+							options.loop,
+						) > lambda
 					) {
 						u1++;
 					}
@@ -4912,7 +4950,7 @@ export function processGPX(trackFeature, options = {}) {
 								Math.cos(
 									(PI *
 										pointSeparation(
-											points[wrapIndex(u,points.length)],
+											points[wrapIndex(u, points.length)],
 											points[u0],
 											courseDistance,
 											options.loop,
@@ -4944,25 +4982,35 @@ export function processGPX(trackFeature, options = {}) {
 			points = applyLaneShift(points, options.loop);
 
 			// Debug: Check for NaN after lane shift
-			let nanAfterShift = 0;
+			let _nanAfterShift = 0;
 			for (let i = 0; i < Math.min(5, points.length); i++) {
 				const p = points[i];
-				if (isNaN(p.lat) || isNaN(p.lon)) {
-					note(`DEBUG: Point ${i} has NaN after lane shift: lat=${p.lat}, lon=${p.lon}`);
-					nanAfterShift++;
+				if (Number.isNaN(p.lat) || Number.isNaN(p.lon)) {
+					note(
+						`DEBUG: Point ${i} has NaN after lane shift: lat=${p.lat}, lon=${p.lon}`,
+					);
+					_nanAfterShift++;
 				}
 			}
 
 			// apply smoothing after shift: shifting can cause some noise
-			points = smoothing(points, ["lat", "lon", "ele"], options.loop, "shift", 0.2);
+			points = smoothing(
+				points,
+				["lat", "lon", "ele"],
+				options.loop,
+				"shift",
+				0.2,
+			);
 
-			// Debug: Check for NaN after post-shift smoothing  
-			let nanAfterSmoothing = 0;
+			// Debug: Check for NaN after post-shift smoothing
+			let _nanAfterSmoothing = 0;
 			for (let i = 0; i < Math.min(5, points.length); i++) {
 				const p = points[i];
-				if (isNaN(p.lat) || isNaN(p.lon)) {
-					note(`DEBUG: Point ${i} has NaN after smoothing: lat=${p.lat}, lon=${p.lon}`);
-					nanAfterSmoothing++;
+				if (Number.isNaN(p.lat) || Number.isNaN(p.lon)) {
+					note(
+						`DEBUG: Point ${i} has NaN after smoothing: lat=${p.lat}, lon=${p.lon}`,
+					);
+					_nanAfterSmoothing++;
 				}
 			}
 
@@ -4979,19 +5027,22 @@ export function processGPX(trackFeature, options = {}) {
 		note("adding time...");
 		const tStart = new Date(options.startTime).getTime() / 1000; // Convert to Unix timestamp
 		if (tStart > 0) {
-			note("start time found: " + tStart);
+			note(`start time found: ${tStart}`);
 			const ts = [0];
 			const gs = [0];
-			
+
 			for (let i = 0; i < maxIndex(points); i++) {
 				const dd = points[i + 1].distance - points[i].distance;
-				const gradient = (dd === 0) ? gs[gs.length - 1] : (points[i + 1].ele - points[i].ele) / dd;
+				const gradient =
+					dd === 0
+						? gs[gs.length - 1]
+						: (points[i + 1].ele - points[i].ele) / dd;
 				gs.push(gradient);
 				const speed = bikeSpeedModel(gradient);
 				const deltaTime = (points[i + 1].distance - points[i].distance) / speed;
 				ts.push(ts[ts.length - 1] + deltaTime);
 			}
-			
+
 			for (let i = 0; i < points.length; i++) {
 				points[i].time = tStart + ts[i];
 				points[i].duration = ts[i];
@@ -4999,18 +5050,25 @@ export function processGPX(trackFeature, options = {}) {
 		}
 	}
 
-
 	const courseDistance = calcCourseDistance(points, options.loop);
-	note("final number of points = " + points.length);
-	note("course distance = " + (courseDistance / 1000).toFixed(4) + " kilometers");
-	
-	const [finalScore, finalScoreD, finalScoreZ] = calcQualityScore(points, options.loop);
-	note("quality score of final course = " + finalScore.toFixed(4));
-	note("direction score of final course = " + finalScoreD.toFixed(4));
-	note("altitude score of final course = " + finalScoreZ.toFixed(4));
-	
-	const lastToFirstDistance = latlngDistance(points[maxIndex(points)], points[0]);
-	note("distance from last point to first point = " + lastToFirstDistance.toFixed(3) + " meters");
+	note(`final number of points = ${points.length}`);
+	note(`course distance = ${(courseDistance / 1000).toFixed(4)} kilometers`);
+
+	const [finalScore, finalScoreD, finalScoreZ] = calcQualityScore(
+		points,
+		options.loop,
+	);
+	note(`quality score of final course = ${finalScore.toFixed(4)}`);
+	note(`direction score of final course = ${finalScoreD.toFixed(4)}`);
+	note(`altitude score of final course = ${finalScoreZ.toFixed(4)}`);
+
+	const lastToFirstDistance = latlngDistance(
+		points[maxIndex(points)],
+		points[0],
+	);
+	note(
+		`distance from last point to first point = ${lastToFirstDistance.toFixed(3)} meters`,
+	);
 
 	// Add curvature field if requested
 	if (options.addCurvature) {

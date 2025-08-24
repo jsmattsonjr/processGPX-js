@@ -14,6 +14,11 @@ body {
 	/* Prevent body scroll in split view */
 }
 
+/* Utility classes */
+.hidden {
+	display: none !important;
+}
+
 /* Upload screen - full page overlay */
 .upload-screen {
 	position: fixed;

@@ -90,7 +90,7 @@ export const defaultOptions = {
 	snapDistance: 2,
 
 	// Spline settings
-	splineDegs: 5,
+	splineDegs: 0,
 	splineMaxDegs: 60,
 
 	// Circuit settings
