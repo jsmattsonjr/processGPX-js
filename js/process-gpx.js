@@ -413,6 +413,23 @@ function applyLaneShift(points, isLoop) {
 }
 
 /**
+ * Bike speed model for realistic time calculations
+ * @param {number} g - Gradient (rise/run)
+ * @param {number} vMax - Maximum speed (m/s), default 17
+ * @param {number} VAMMax - Maximum VAM (m/s), default 0.52
+ * @param {number} v0 - Base speed (m/s), default 9.5
+ * @returns {number} Speed in m/s
+ */
+function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.52, v0 = 9.5) {
+	// convert g to sine
+	g /= Math.sqrt(1 + g ** 2);
+	const a = vMax / VAMMax;
+	const b = vMax / v0 - Math.log(2);
+	const fV = (1 + (3 * g) ** 4) * (b + Math.log(1 + Math.exp(a * g)));
+	return vMax / fV;
+}
+
+/**
  * Calculate cross product between two lat/lng segments
  * @param {Object} p1 - First point of first segment
  * @param {Object} p2 - Second point of first segment
@@ -4932,6 +4949,80 @@ export function processGPX(trackFeature, options = {}) {
 			deleteField2(points, "shift");
 			dumpPoints(points, "36-js-min-radius.txt");
 		}
+	}
+
+	// Add distance field for final calculations
+	addDistanceField(points);
+
+	// Add times from bike speed model, if requested
+	if (options.startTime !== undefined && options.startTime !== "") {
+		note("adding time...");
+		const tStart = new Date(options.startTime).getTime() / 1000; // Convert to Unix timestamp
+		if (tStart > 0) {
+			note("start time found: " + tStart);
+			const ts = [0];
+			const gs = [0];
+			
+			for (let i = 0; i < maxIndex(points); i++) {
+				const dd = points[i + 1].distance - points[i].distance;
+				const gradient = (dd === 0) ? gs[gs.length - 1] : (points[i + 1].ele - points[i].ele) / dd;
+				gs.push(gradient);
+				const speed = bikeSpeedModel(gradient);
+				const deltaTime = (points[i + 1].distance - points[i].distance) / speed;
+				ts.push(ts[ts.length - 1] + deltaTime);
+			}
+			
+			for (let i = 0; i < points.length; i++) {
+				points[i].time = tStart + ts[i];
+				points[i].duration = ts[i];
+			}
+		}
+	}
+
+	const courseDistance = calcCourseDistance(points, options.loop);
+	note("final number of points = " + points.length);
+	note("course distance = " + (courseDistance / 1000).toFixed(4) + " kilometers");
+	
+	const [finalScore, finalScoreD, finalScoreZ] = calcQualityScore(points, options.loop);
+	note("quality score of final course = " + finalScore.toFixed(4));
+	note("direction score of final course = " + finalScoreD.toFixed(4));
+	note("altitude score of final course = " + finalScoreZ.toFixed(4));
+	
+	const lastToFirstDistance = latlngDistance(points[maxIndex(points)], points[0]);
+	note("distance from last point to first point = " + lastToFirstDistance.toFixed(3) + " meters");
+
+	// Add curvature field if requested
+	if (options.addCurvature) {
+		note("checking curvature");
+		addCurvatureField(points, options.loop);
+	} else {
+		deleteField2(points, "curvature");
+	}
+
+	// Add gradient field if requested
+	if (options.addGradient) {
+		note("adding gradient field");
+		addGradientField(points, options.loop);
+	} else {
+		deleteField2(points, "gradient");
+	}
+
+	// Remove distance field unless explicitly requested
+	if (!options.addDistance) {
+		deleteField2(points, "distance");
+	}
+
+	// Add direction field if requested
+	if (options.addDirection) {
+		addDirectionField(points, options.loop);
+		// Convert heading from radians to degrees
+		for (const p of points) {
+			if (p.heading !== undefined) {
+				p.heading /= DEG2RAD;
+			}
+		}
+	} else {
+		deleteField2(points, "heading");
 	}
 
 	// Convert processed points back to coordinates format for output
