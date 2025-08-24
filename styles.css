@@ -14,6 +14,11 @@ body {
 	/* Prevent body scroll in split view */
 }
 
+/* Utility classes */
+.hidden {
+	display: none !important;
+}
+
 /* Upload screen - full page overlay */
 .upload-screen {
 	position: fixed;
@@ -162,6 +167,43 @@ body {
 	text-align: center;
 	word-wrap: break-word;
 	line-height: 1.3;
+}
+
+.options-panel {
+	background: rgba(236, 240, 241, 0.8);
+	border-radius: 6px;
+	padding: 15px;
+	margin-bottom: 20px;
+}
+
+.options-title {
+	font-size: 1rem;
+	font-weight: 600;
+	color: #2c3e50;
+	margin-bottom: 12px;
+	text-align: center;
+}
+
+.option-item {
+	display: flex;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.option-item:last-child {
+	margin-bottom: 0;
+}
+
+.option-item input[type="checkbox"] {
+	margin-right: 8px;
+	transform: scale(1.1);
+}
+
+.option-item label {
+	font-size: 0.9rem;
+	color: #2c3e50;
+	cursor: pointer;
+	user-select: none;
 }
 
 .process-button {

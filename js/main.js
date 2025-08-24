@@ -89,6 +89,17 @@ class ProcessGPXApp {
 			this.mapVisualization,
 		);
 		this.elevationChart.createChart(trackFeature);
+		
+		// Initialize UI options from defaults
+		this.initializeOptionsUI();
+	}
+
+	/**
+	 * Initialize options UI from default options
+	 */
+	initializeOptionsUI() {
+		const autoCheckbox = document.getElementById("autoOption");
+		autoCheckbox.checked = defaultOptions.auto === 1;
 	}
 
 	/**
@@ -101,14 +112,21 @@ class ProcessGPXApp {
 		}
 
 		try {
-			this.showLoading("Processing GPX route...");
+			this.showLoading("Processing GPX");
 
 			// Initialize processing options based on Perl processGPX defaults
 			const options = { ...defaultOptions };
+			
+			// Update options based on UI settings
+			const autoCheckbox = document.getElementById("autoOption");
+			options.auto = autoCheckbox.checked ? 1 : 0;
 
-			// Process the current route with options
+			// Process the current route with options (yield to browser for UI update)
+			await new Promise(resolve => setTimeout(resolve, 10));
 			const processedRoute = processGPX(this.currentRoute, options);
 			this.processedRoute = processedRoute;
+
+			this.updateLoadingMessage("Updating visualizations...");
 
 			// Update visualizations to show both original and processed routes
 			this.mapVisualization.displayProcessedRoute(processedRoute);

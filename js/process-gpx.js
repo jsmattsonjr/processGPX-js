@@ -73,6 +73,31 @@ function maxIndex(x) {
  */
 function note(...args) {
 	console.log(...args);
+
+	// Dispatch progress events for the web UI
+	if (typeof window !== "undefined") {
+		const message = args.join(" ");
+		// Check if it's a stage completion message
+		if (message.includes("Stage") && message.includes("complete:")) {
+			window.dispatchEvent(
+				new CustomEvent("gpx-progress", {
+					detail: { message, type: "stage" },
+				}),
+			);
+		}
+		// Check if it's a major processing step
+		else if (
+			message.includes("...") ||
+			message.includes("setting") ||
+			message.includes("checking")
+		) {
+			window.dispatchEvent(
+				new CustomEvent("gpx-progress", {
+					detail: { message, type: "step" },
+				}),
+			);
+		}
+	}
 }
 
 /**
@@ -90,6 +115,15 @@ function warn(...args) {
  * @param {string} filename - Output filename
  */
 function dumpPoints(points, filename) {
+	// Extract stage number and basename for clearer messaging
+	const match = filename.match(/^(\d+)-js-(.+)\.txt$/);
+	if (match) {
+		const [, stageNum, stageName] = match;
+		note(`Stage ${stageNum} (${stageName}) complete: ${points.length} points`);
+	} else {
+		note(`Stage ${filename} complete: ${points.length} points`);
+	}
+
 	let output = `# Points dump: ${points.length} points\n`;
 	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
 
@@ -97,8 +131,8 @@ function dumpPoints(points, filename) {
 		const p = points[i];
 		const lat = p.lat.toFixed(8);
 		const lon = p.lon.toFixed(8);
-		const ele = (p.ele || 0).toFixed(2);
-		const dist = (p.distance || 0).toFixed(2);
+		const ele = (p.ele || 0).toString();
+		const dist = (p.distance || 0).toString();
 
 		output += `${i}\t${lat}\t${lon}\t${ele}\t\t${dist}\n`;
 	}
@@ -118,15 +152,10 @@ function dumpPoints(points, filename) {
 			})
 			.catch(() => {
 				// Fallback to console
-				console.log(`=== Points dump to ${filename} ===`);
-				console.log(output);
-				console.log(`=== End dump ${filename} ===`);
+				note(`=== Points dump to ${filename} ===`);
+				note(output);
+				note(`=== End dump ${filename} ===`);
 			});
-	} else {
-		// Browser environment - log to console instead
-		console.log(`=== Points dump to ${filename} ===`);
-		console.log(output);
-		console.log(`=== End dump ${filename} ===`);
 	}
 }
 
@@ -173,8 +202,8 @@ function latlngDistance(p1, p2) {
  * @returns {Array} [dx, dy] in meters
  */
 function latlng2dxdy(p1, p2) {
-	if (!p1) throw new Error("latlng2dxdy called with undefined point #1");
-	if (!p2) throw new Error("latlng2dxdy called with undefined point #2");
+	if (!p1) die("latlng2dxdy called with undefined point #1");
+	if (!p2) die("latlng2dxdy called with undefined point #2");
 
 	const c1 = Math.cos(DEG2RAD * p1.lat);
 	const c2 = Math.cos(DEG2RAD * p2.lat);
@@ -186,6 +215,51 @@ function latlng2dxdy(p1, p2) {
 	const dx = ((c1 + c2) * LAT2Y * dlon) / 2;
 	const dy = LAT2Y * dlat;
 	return [dx, dy];
+}
+
+/**
+ * Calculate intersection between two line segments
+ * @param {Array} s12 - First segment [p1, p2]
+ * @param {Array} s34 - Second segment [p3, p4]
+ * @returns {Array} Array of [f12, f34] intersection parameters, or empty array if no intersection
+ */
+function segmentIntercept(s12, s34) {
+	const [p1, p2] = s12;
+	const [p3, p4] = s34;
+
+	if (!p1) die("segmentIntercept called with undefined point #1");
+	if (!p2) die("segmentIntercept called with undefined point #2");
+	if (!p3) die("segmentIntercept called with undefined point #3");
+	if (!p4) die("segmentIntercept called with undefined point #4");
+
+	const [x1, y1] = [0, 0];
+	const [x2, y2] = latlng2dxdy(p1, p2);
+	const [x3, y3] = latlng2dxdy(p1, p3);
+	const [x4, y4] = latlng2dxdy(p1, p4);
+	const [dx12, dy12] = [x2, y2];
+	const [dx34, dy34] = latlng2dxdy(p3, p4);
+
+	const denom = dx34 * dy12 - dx12 * dy34;
+	const a = Math.sqrt((dx12 ** 2 + dy12 ** 2) * (dx34 ** 2 + dy34 ** 2));
+
+	// lines are parallel
+	if (a === 0 || Math.abs(denom) < 0.01 * a) {
+		return [];
+	}
+
+	const f12 = (dx34 * (y3 - y1) - dy34 * (x3 - x1)) / denom;
+	if (f12 >= 0 && f12 < 1) {
+		const x = f12 * x2 + (1 - f12) * x1;
+		const y = f12 * y2 + (1 - f12) * y1;
+		const f23 =
+			Math.abs(x3 - x4) > Math.abs(y3 - y4)
+				? (x - x3) / (x4 - x3)
+				: (y - y3) / (y4 - y3);
+		if (f23 >= 0 && f23 < 1) {
+			return [f12, f23];
+		}
+	}
+	return [];
 }
 
 /**
@@ -204,6 +278,192 @@ function latlngDotProduct(p1, p2, p3, p4) {
 }
 
 /**
+ * Calculate distance difference between two points on course
+ * @param {Object} p1 - First point with distance field
+ * @param {Object} p2 - Second point with distance field
+ * @param {number} courseDistance - Total course distance
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {number} Distance difference
+ */
+function distanceDifference(p1, p2, courseDistance, isLoop) {
+	if (!Object.hasOwn(p1, "distance") || !Object.hasOwn(p2, "distance")) {
+		die("distanceDifference called w/o distance field");
+	}
+	let d = p2.distance - p1.distance;
+	if (isLoop && courseDistance > 0) {
+		d -= courseDistance * Math.floor(d / courseDistance);
+	}
+	return d;
+}
+
+/**
+ * Calculate separation between two points in course distance
+ * @param {Object} p1 - First point
+ * @param {Object} p2 - Second point
+ * @param {number} courseDistance - Total course distance
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {number} Absolute separation distance
+ */
+function pointSeparation(p1, p2, courseDistance, isLoop) {
+	let d = distanceDifference(p1, p2, courseDistance, isLoop);
+	if (isLoop) {
+		d -= courseDistance * Math.floor(0.5 + d / courseDistance);
+	}
+	return Math.abs(d);
+}
+
+/**
+ * Shift a point by a given distance in a given direction
+ * @param {Object} point - Point to shift
+ * @param {number} direction - Direction in radians
+ * @param {number} distance - Distance to shift
+ * @returns {Object} New shifted point
+ */
+function shiftPoint(point, direction, distance) {
+	const c = Math.cos(direction);
+	const s = Math.sin(direction);
+
+	// lane shift, 90 degrees
+	const dx = s * distance;
+	const dy = -c * distance;
+	const dlng = dx / (LAT2Y * Math.cos(DEG2RAD * point.lat));
+	const dlat = dy / LAT2Y;
+
+	return {
+		...point,
+		lon: point.lon + dlng,
+		lat: point.lat + dlat,
+	};
+}
+
+/**
+ * Shift a vertex by a given distance considering two directions
+ * @param {Object} point - Point to shift
+ * @param {Array} directions - Array of two directions in radians
+ * @param {number} distance - Distance to shift
+ * @returns {Object} New shifted point
+ */
+function shiftVertex(point, directions, distance) {
+	const c1 = Math.cos(directions[0]);
+	const s1 = Math.sin(directions[0]);
+	const c2 = Math.cos(directions[1]);
+	const s2 = Math.sin(directions[1]);
+
+	// lane shift, 90 degrees
+	const denom = c1 * s2 - c2 * s1;
+	let dx, dy;
+
+	if (Math.abs(denom) < 0.001) {
+		dx = ((s1 + s2) * distance) / 2;
+		dy = (-(c1 + c2) * distance) / 2;
+	} else {
+		dx = ((c1 - c2) / denom) * distance;
+		dy = ((s1 - s2) / denom) * distance;
+	}
+
+	const dlng = dx / (LAT2Y * Math.cos(DEG2RAD * point.lat));
+	const dlat = dy / LAT2Y;
+
+	return {
+		...point,
+		lon: point.lon + dlng,
+		lat: point.lat + dlat,
+	};
+}
+
+/**
+ * Apply lane shift to all points based on their shift field
+ * @param {Array} points - Array of points with shift field
+ * @param {number} isLoop - Whether this is a loop course
+ * @returns {Array} New array of shifted points
+ */
+function applyLaneShift(points, isLoop) {
+	if (!points.length) return points;
+
+	const pNew = [];
+
+	// create list of (x, y) coordinates
+	const dxs = [];
+	const dys = [];
+	const dss = [];
+	const ss = [0];
+	const dirs = [];
+
+	for (let i = 0; i < points.length; i++) {
+		if (i > 0) ss.push(ss[ss.length - 1] + dss[dss.length - 1]);
+		if (isLoop || i < maxIndex(points)) {
+			const [dx, dy] = latlng2dxdy(points[i], points[(i + 1) % points.length]);
+			dxs.push(dx);
+			dys.push(dy);
+			dss.push(Math.sqrt(dx ** 2 + dy ** 2));
+			dirs.push(Math.atan2(dy, dx));
+		}
+	}
+
+	// final point for point-to-point
+	if (!isLoop) {
+		dxs.push(dxs[dxs.length - 1]);
+		dys.push(dys[dys.length - 1]);
+		dss.push(dss[dss.length - 1]);
+		dirs.push(dirs[dirs.length - 1]);
+	}
+
+	// lane shift: to right, which means adding pi/2 to the direction
+	for (let i = 0; i < points.length; i++) {
+		let dir1, dir2;
+		if (i > 0 || isLoop) {
+			dir1 = dirs[wrapIndex(i - 1, dirs.length)];
+			dir2 = dir1 + reduceAngle(dirs[i] - dir1);
+		} else {
+			dir1 = dirs[i];
+			dir2 = dirs[i];
+		}
+
+		// for sharp turns repeat a point: there's no way to decide if it's an "inside" or "outside" sharp turn
+		if (
+			(isLoop || (i > 0 && i < maxIndex(points))) &&
+			Math.abs(dir2 - dir1) > 0.99 * PI
+		) {
+			const pTurns = [];
+			for (const dir of [dir1, dir2]) {
+				pTurns.push(shiftPoint(points[i], dir, points[i].shift || 0));
+			}
+			// check if there's a knot.. if not use the doubled points
+			const fs = segmentIntercept(
+				[points[wrapIndex(i - 1, points.length)], pTurns[0]],
+				[pTurns[1], points[(i + 1) % points.length]],
+			);
+			if (fs.length === 0) {
+				pNew.push(...pTurns);
+				continue;
+			}
+		}
+
+		pNew.push(shiftVertex(points[i], [dir1, dir2], points[i].shift || 0));
+	}
+
+	deleteDerivedFields(pNew);
+	return pNew;
+}
+
+/**
+ * Bike speed model for realistic time calculations
+ * @param {number} g - Gradient (rise/run)
+ * @param {number} vMax - Maximum speed (m/s), default 17
+ * @param {number} VAMMax - Maximum VAM (m/s), default 0.52
+ * @param {number} v0 - Base speed (m/s), default 9.5
+ * @returns {number} Speed in m/s
+ */
+function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.52, v0 = 9.5) {
+	// convert g to sine
+	g /= Math.sqrt(1 + g ** 2);
+	const a = vMax / VAMMax;
+	const b = vMax / v0 - Math.log(2);
+	const fV = (1 + (3 * g) ** 4) * (b + Math.log(1 + Math.exp(a * g)));
+	return vMax / fV;
+}
+
+/**
  * Calculate cross product between two lat/lng segments
  * @param {Object} p1 - First point of first segment
  * @param {Object} p2 - Second point of first segment
@@ -214,6 +474,23 @@ function latlngDotProduct(p1, p2, p3, p4) {
 function latlngCrossProduct(p1, p2, p3, p4) {
 	const [dx12, dy12] = latlng2dxdy(p1, p2);
 	const [dx34, dy34] = latlng2dxdy(p3, p4);
+	const denom = Math.sqrt((dx12 ** 2 + dy12 ** 2) * (dx34 ** 2 + dy34 ** 2));
+	return denom === 0 ? null : (dx12 * dy34 - dx34 * dy12) / denom;
+}
+
+/**
+ * Calculate cross product between two segments defined by array coordinates
+ * @param {Array} p1 - [x, y] coordinates of first point of first segment
+ * @param {Array} p2 - [x, y] coordinates of second point of first segment
+ * @param {Array} p3 - [x, y] coordinates of first point of second segment
+ * @param {Array} p4 - [x, y] coordinates of second point of second segment
+ * @returns {number|null} Normalized cross product or null if degenerate
+ */
+function crossProduct(p1, p2, p3, p4) {
+	const dx12 = p2[0] - p1[0];
+	const dx34 = p4[0] - p3[0];
+	const dy12 = p2[1] - p1[1];
+	const dy34 = p4[1] - p3[1];
 	const denom = Math.sqrt((dx12 ** 2 + dy12 ** 2) * (dx34 ** 2 + dy34 ** 2));
 	return denom === 0 ? null : (dx12 * dy34 - dx34 * dy12) / denom;
 }
@@ -467,6 +744,235 @@ function interpolatePoint(p1, p2, f) {
 }
 
 /**
+ * Create a loop for U-turns between two points
+ * @param {Array} points - Array of two points [point1, point2]
+ * @param {number} direction - Direction in radians
+ * @param {number} radius - Radius of the loop in meters (default 4)
+ * @param {number} defaultSign - Default sign for loop direction (default 1)
+ * @param {Object} segmentNames - Object mapping segment numbers to names
+ * @returns {Array} Array of loop points
+ */
+function makeLoop(
+	points,
+	direction,
+	radius = 4,
+	defaultSign = 1,
+	segmentNames = {},
+) {
+	if (!points || points.length < 2) {
+		die("makeLoop requires a reference to a list of two points.");
+	}
+	if (direction === undefined) {
+		die("makeLoop requires a direction parameter");
+	}
+
+	let sign = defaultSign;
+
+	// If radius is negative, swap the direction
+	if (radius < 0) {
+		radius = -radius;
+		sign = -sign;
+	}
+
+	const cdir = Math.cos(direction);
+	const sdir = Math.sin(direction);
+
+	const [point1, point2] = points;
+
+	// Loop points
+	const pLoop = [];
+
+	// Calculate distance of the two paths, where a left turn is positive,
+	// a right turn is negative. This is twice the "laneShift", for example
+	const [dx, dy] = latlng2dxdy(point1, point2);
+	const ds = Math.sqrt(dx ** 2 + dy ** 2);
+	let d = 0;
+	if (ds > 0.01) {
+		// The original route is along direction dir (c, s)
+		// so I need the end point along the orthogonal direction (-s, c)
+		// it's along the direction perpendicular, but proportional to dot product
+		d = -sdir * dx + cdir * dy;
+	}
+
+	// Make loop from point to reverse direction with specified shift
+	const lat0 = (point1.lat + point2.lat) / 2;
+	const lng0 = (point1.lon + point2.lon) / 2;
+	const delta = Math.abs(d / 2);
+	if (delta > 0.1) {
+		sign = Math.sign(d); // Override sign if the points are separate (L or R turn)
+	}
+
+	// Generate points... rotated coordinates
+	const xs = [];
+	const ys = [];
+	const cosTheta = (radius + delta) / (2 * radius);
+
+	// If cos theta > 1, then we'll generate a circle, but stretch it later
+	let theta;
+	let stretch;
+	if (cosTheta > 1) {
+		theta = 0;
+		stretch = delta / radius;
+	} else {
+		theta = Math.atan2(Math.sqrt(1 - cosTheta ** 2), cosTheta);
+		stretch = 1;
+	}
+
+	const dThetaMax = TWOPI / (16 * (1 + Math.sqrt(Math.abs(radius / 4))));
+
+	// Arc going into the circle
+	// First point (delta, 0)
+	// Last point (-delta, 0)
+	let nPoints = 1 + Math.floor(theta / dThetaMax);
+	for (let i = 1; i <= nPoints; i++) {
+		const t = (theta * i) / nPoints;
+		const x = radius + delta - radius * Math.cos(t);
+		const y = radius * Math.sin(t);
+		xs.push(x);
+		ys.push(y);
+	}
+
+	// Semi-circle
+	const theta2 = theta + PI / 2;
+	nPoints = 1 + Math.floor(stretch ** (2 / 3) * (theta2 / dThetaMax));
+	for (let i = 1; i <= nPoints; i++) {
+		const t = ((nPoints - i) * theta2) / nPoints;
+		const x = radius * Math.sin(t);
+		const y = 2 * radius * Math.sin(theta) + radius * Math.cos(t);
+		xs.push(x);
+		ys.push(y);
+	}
+
+	// Stretch points if separation exceeds target turn radius
+	for (let i = 1; i < xs.length; i++) {
+		xs[i] *= stretch;
+	}
+
+	// Swap x points if we're "driving on the left"
+	if (sign < 0) {
+		for (let i = 0; i < xs.length; i++) {
+			xs[i] = -xs[i];
+		}
+	}
+
+	// Finish route
+	for (let i = xs.length - 2; i >= 0; i--) {
+		xs.push(-xs[i]);
+		ys.push(ys[i]);
+	}
+
+	// Shear to align
+	// point1 => point2 : dx, dy
+	// point1 => origin:: -s, +c
+	const u =
+		delta === 0 ? 0 : (dx / (2 * delta)) ** 2 + (dy / (2 * delta)) ** 2 - 1;
+	const shear = delta === 0 ? 0 : u > 0 ? Math.sqrt(u) : 0;
+	const shearSign = -sign * Math.sign(cdir * dx + sdir * dy);
+
+	// Transform to direction, adding shear transformation first
+	// Original road is aligned in direction dir
+	// This is aligned in direction 90 degrees
+	// Need to rotate by dir - 90 deg
+	// Also calculate distance
+	for (let i = 0; i < xs.length; i++) {
+		ys[i] += shear * shearSign * xs[i];
+		const x = sdir * xs[i] + cdir * ys[i];
+		const y = -cdir * xs[i] + sdir * ys[i];
+		xs[i] = x;
+		ys[i] = y;
+	}
+
+	// Convert to lat, lng
+	const c = Math.cos(DEG2RAD * lat0);
+	for (let i = 0; i < xs.length; i++) {
+		const h = { ...point1 };
+		h.lon = lng0 + xs[i] / (LAT2Y * c);
+		h.lat = lat0 + ys[i] / LAT2Y;
+		pLoop.push(h);
+	}
+
+	// May need to set segment
+	if (point1.segment !== point2.segment) {
+		if (segmentNames[point1.segment]) {
+			const s = segmentNames[point2.segment] ? 0 : point2.segment;
+			const p = { ...point1 };
+			pLoop.unshift(p);
+
+			for (const pt of pLoop) {
+				pt.segment = s;
+			}
+		}
+
+		if (pLoop[pLoop.length - 1].segment !== point2.segment) {
+			const p = { ...point2 };
+			p.segment = pLoop[pLoop.length - 1].segment;
+			pLoop.push(p);
+		}
+	}
+
+	// Create a distance field
+	const ss = [latlngDistance(point1, pLoop[0])];
+	for (let i = 0; i < pLoop.length - 1; i++) {
+		ss.push(ss[ss.length - 1] + latlngDistance(pLoop[i], pLoop[i + 1]));
+	}
+	const sLoop =
+		ss[ss.length - 1] + latlngDistance(pLoop[pLoop.length - 1], point2);
+
+	// Interpolate elevation
+	for (let i = 0; i < pLoop.length; i++) {
+		pLoop[i].ele = (point1.ele * (sLoop - ss[i]) + point2.ele * ss[i]) / sLoop;
+	}
+
+	return pLoop;
+}
+
+/**
+ * Check if a point can be pruned based on distance, cross product, and gradient
+ * @param {Array} points - Array of 3 points [p1, p2, p3]
+ * @param {number} distance - Maximum distance threshold (default 2)
+ * @param {number} X - Maximum cross product threshold (default 0.001)
+ * @param {number} dg - Maximum gradient change threshold (default 0.001)
+ * @returns {boolean} True if point can be pruned
+ */
+function isPointPrunable(points, _distance = 2, X = 0.001, dg = 0.001) {
+	const [p1, p2, p3] = points;
+	if (!p3) {
+		die("isPointPrunable requires 3 points");
+	}
+
+	const [x1, y1] = latlng2dxdy(p3, p1);
+	const [x2, y2] = latlng2dxdy(p3, p2);
+	const [x3, y3] = [0, 0];
+	const z1 = p1.ele;
+	const z2 = p2.ele;
+	const z3 = p3.ele;
+	const s1 = p1.segment;
+	const s2 = p2.segment;
+	const s3 = p3.segment;
+
+	// Only prune points in the same segment
+	if (!(s1 === s2 && s2 === s3)) {
+		return false;
+	}
+
+	if (isPointOnRoad(p1, p2, p3, 1)) {
+		const d13 = Math.sqrt((y3 - y1) ** 2 + (x3 - x1) ** 2);
+		const d23 = Math.sqrt((y3 - y2) ** 2 + (x3 - x2) ** 2);
+
+		// Duplicate points are not prunable
+		if (d13 === 0 || d23 === 0) {
+			return false;
+		}
+
+		// Check gradient and alignment
+		const dgCheck = (z2 - z3) / d23 - (z3 - z1) / d13;
+		const cross = crossProduct([x1, y1], [x3, y3], [x3, y3], [x2, y2]);
+		return Math.abs(dgCheck) <= dg && Math.abs(cross) <= X;
+	}
+	return false;
+}
+
+/**
  * crop points
  * @param {Array} points - Array of points to crop
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
@@ -675,16 +1181,32 @@ function fixZigZags(points) {
 				// 4. go back step 2 if we deleted any U-turns
 
 				warn("repairing zig-zag...");
-				const u = U1; // keep points up to u
+				let u = U1; // keep points up to u
 				let v = U2 + 1; // keep points starting with v
 
+				note(
+					`DEBUG: initial u=${u}, initial v=${v}, points.length=${points.length}`,
+				);
+
 				while (
-					v < points.length - 1 &&
+					v < maxIndex(points) &&
 					UTurnCheck(points[u], points[v], points[v], points[v + 1])
 				) {
+					note(`DEBUG: extending v from ${v} to ${v + 1} due to UTurn check`);
 					v++;
 				}
 
+				while (
+					u > 0 &&
+					UTurnCheck(points[u - 1], points[u], points[u], points[v])
+				) {
+					note(`DEBUG: extending u from ${u} to ${u - 1} due to UTurn check`);
+					u--;
+				}
+
+				note(
+					`DEBUG: final u=${u}, final v=${v}, eliminating points ${u + 1} to ${v - 1} (${v - u - 1} points)`,
+				);
 				warn(`eliminating ${v - u - 1} points`);
 				zigzagCount++;
 
@@ -1997,14 +2519,6 @@ function isPointOnRoadCorner(p1, p2, p3, p4, px) {
  * @returns {boolean} True if point passes road test
  */
 function roadTest(points, j, k, l, m, i, d) {
-	// Debug specific divergent roadTest call
-	const isDebugCall =
-		j === 1261 && k === 1260 && l === 1218 && m === 1217 && i === 363;
-
-	if (isDebugCall) {
-		note(`DEBUG ROADTEST DETAIL: roadTest(${j}, ${k}, ${l}, ${m}, ${i}, ${d})`);
-	}
-
 	// First check to see if the point i falls in the range k .. l
 	if (
 		!(
@@ -2016,17 +2530,14 @@ function roadTest(points, j, k, l, m, i, d) {
 			l <= maxIndex(points)
 		)
 	) {
-		if (isDebugCall) note(`DEBUG ROADTEST: Failed bounds check`);
 		return false;
 	}
 
 	if (isPointOnRoad(points[k], points[l], points[i], d)) {
-		if (isDebugCall) note(`DEBUG ROADTEST: isPointOnRoad returned true`);
 		return true;
 	}
 
 	if (!(j > 0 && m > 0 && j <= maxIndex(points) && m <= maxIndex(points))) {
-		if (isDebugCall) note(`DEBUG ROADTEST: Failed j/m bounds check`);
 		return false;
 	}
 
@@ -2038,8 +2549,6 @@ function roadTest(points, j, k, l, m, i, d) {
 		points[i],
 	);
 
-	if (isDebugCall)
-		note(`DEBUG ROADTEST: isPointOnRoadCorner returned ${cornerResult}`);
 	return cornerResult;
 }
 
@@ -2065,7 +2574,6 @@ function snapPoints(
 
 	// Ensure distance field exists
 	addDistanceField(points);
-	dumpPoints(points, "js-distances-after-addDistanceField.txt");
 
 	// snap = 1: subsequent laps snap to position of earlier laps
 	// snap = 2: earlier laps snap to position of later laps
@@ -2079,9 +2587,6 @@ function snapPoints(
 	// On large courses, since initial search is O(N-squared), step thru multiple points, then refine
 	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2
 	const snapStep = 2 + int(points.length / 200);
-	note(
-		`DEBUG snapStep calculation: points.length=${points.length}, snapStep=2+int(${points.length}/200)=${snapStep}`,
-	);
 
 	// Maximum range at which we check for snapping...
 	// so if colinear points are spaced more than twice this, we may miss snapping onto that interval
@@ -2099,13 +2604,6 @@ function snapPoints(
 
 		let j = i + snapStep;
 		if (j > maxIndex(points)) continue;
-
-		// Debug the assignment of divergent case indices
-		if (i >= 1590 && i <= 1620) {
-			note(
-				`DEBUG: Initial assignment i=${i}, j=${j} (j=i+snapStep where snapStep=${snapStep})`,
-			);
-		}
 
 		// Get out of snap range: get point j beyond the snap range of point i
 		// This is geometric distance, not course distance, which could potentially be an issue
@@ -2205,13 +2703,6 @@ function snapPoints(
 				continue;
 			}
 
-			// Debug final j assignment for divergent case
-			if (i >= 1590 && i <= 1620) {
-				note(
-					`DEBUG: Final j assignment before snapping: i=${i}, j=${j}, sign=${sign}, dot=${dot.toFixed(3)}`,
-				);
-			}
-
 			// Point i is matched to point j, and the two are moving in the same direction
 			// For each point j, if it falls on a line of points i, then replace the nearest point i
 			// First we need to find values of j which are encapsulated by i
@@ -2251,58 +2742,12 @@ function snapPoints(
 			let flag1, flag2;
 
 			do {
-				// Debug boundary expansion for divergent case
-				if (
-					points[i].distance >= 8000 &&
-					points[i].distance <= 9000 &&
-					points[j].distance >= 51000 &&
-					points[j].distance <= 52000
-				) {
-					note(
-						`DEBUG BOUNDARY: Before i1 expansion: i1=${i1}, j1=${j1}, j2=${j2}, sign=${sign}`,
-					);
-				}
-
 				// Shift i1 down as long as along line from j1 to j2
 				while (
 					i1 > 0 &&
 					roadTest(points, j1 - sign, j1, j2, j2 + sign, i1 - 1, snapDistance)
 				) {
-					// Debug roadTest call before expansion
-					if (
-						points[i].distance >= 8000 &&
-						points[i].distance <= 9000 &&
-						points[j].distance >= 51000 &&
-						points[j].distance <= 52000
-					) {
-						const testResult = roadTest(
-							points,
-							j1 - sign,
-							j1,
-							j2,
-							j2 + sign,
-							i1 - 1,
-							snapDistance,
-						);
-						note(
-							`DEBUG ROADTEST: roadTest(${j1 - sign}, ${j1}, ${j2}, ${j2 + sign}, ${i1 - 1}) = ${testResult}`,
-						);
-						note(
-							`  Test point ${i1 - 1} dist=${points[i1 - 1].distance.toFixed(2)} lat=${points[i1 - 1].lat.toFixed(6)} lon=${points[i1 - 1].lon.toFixed(6)}`,
-						);
-					}
 					i1--;
-					// Debug each expansion step
-					if (
-						points[i].distance >= 8000 &&
-						points[i].distance <= 9000 &&
-						points[j].distance >= 51000 &&
-						points[j].distance <= 52000
-					) {
-						note(
-							`DEBUG BOUNDARY: Expanded i1 to ${i1} (dist=${points[i1].distance.toFixed(2)})`,
-						);
-					}
 				}
 
 				// As long as they are coincident, increase i1 and j1 together (short cut)
@@ -2491,51 +2936,8 @@ function snapPoints(
 
 			if (i2 > i1 && Math.abs(j2 - j1) > 0) {
 				note(
-					`DEBUG JS SNAP: i=${i} j=${j} sign=${sign} i1=${i1} i2=${i2} j1=${j1} j2=${j2} snapDistance=${snapDistance}`,
-				);
-				if (points[i]) {
-					note(
-						`DEBUG JS SNAP: i_point lat=${points[i].lat} lon=${points[i].lon} dist=${points[i].distance}`,
-					);
-				} else {
-					note(
-						`DEBUG JS SNAP: points[${i}] is undefined! points.length=${points.length}`,
-					);
-				}
-				if (points[j]) {
-					note(
-						`DEBUG JS SNAP: j_point lat=${points[j].lat} lon=${points[j].lon} dist=${points[j].distance}`,
-					);
-				} else {
-					note(
-						`DEBUG JS SNAP: points[${j}] is undefined! points.length=${points.length}`,
-					);
-				}
-				note(
 					`i = ${i}, j = ${j}: snapping ${sign > 0 ? "forward" : "reverse"} segment: ${i1} .. ${i2} <=> ${j1} .. ${j2}`,
 				);
-
-				// Debug the divergent case specifically - focus on distance values
-				if (
-					points[i].distance >= 8000 &&
-					points[i].distance <= 9000 &&
-					points[j].distance >= 51000 &&
-					points[j].distance <= 52000
-				) {
-					note(`DIVERGENT CASE DEBUG:`);
-					note(`  i=${i}, j=${j}, sign=${sign}`);
-					note(`  i-segment: ${i1}..${i2} (${i2 - i1 + 1} points)`);
-					note(`  j-segment: ${j1}..${j2} (${j2 - j1 + 1} points)`);
-					note(
-						`  i-segment distances: ${points[i1].distance.toFixed(2)} to ${points[i2].distance.toFixed(2)}`,
-					);
-					note(
-						`  j-segment distances: ${points[j1].distance.toFixed(2)} to ${points[j2].distance.toFixed(2)}`,
-					);
-					note(
-						`  Decision: ${sign > 0 ? "Keep i-segment (earlier), discard j-segment (later)" : "Keep i-segment (reverse order)"}`,
-					);
-				}
 
 				const pNew = [];
 				if (sign > 0) {
@@ -2545,32 +2947,31 @@ function snapPoints(
 					// Splice in i range (exclude end-points)
 					// Try to match up segments if possible
 					// Segment matching by relative distance, but we need to nudge if we encounter a duplicate
-					let j_seg = j1;
-					for (let i_seg = i1; i_seg <= i2; i_seg++) {
+					let j = j1;
+					for (let i = i1; i <= i2; i++) {
 						if (
-							j_seg < j2 &&
-							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-								0.05
+							j < j2 &&
+							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
 						) {
-							j_seg++;
+							j++;
 						}
 
 						while (
-							j_seg < j2 &&
+							j < j2 &&
 							Math.abs(
-								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-									Math.abs(points[i_seg].distance - points[i1].distance),
+								Math.abs(points[j + 1].distance - points[j1].distance) -
+									Math.abs(points[i].distance - points[i1].distance),
 							) <
 								Math.abs(
-									Math.abs(points[j_seg].distance - points[j1].distance) -
-										Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[j].distance - points[j1].distance) -
+										Math.abs(points[i].distance - points[i1].distance),
 								)
 						) {
-							j_seg++;
+							j++;
 						}
 
-						const p = { ...points[i_seg] };
-						p.segment = points[j_seg].segment;
+						const p = { ...points[i] };
+						p.segment = points[j].segment;
 						pNew.push(p);
 					}
 
@@ -2578,32 +2979,31 @@ function snapPoints(
 				} else {
 					pNew.push(...points.slice(0, j2 + 1));
 
-					let j_seg = j2;
-					for (let i_seg = i2; i_seg >= i1; i_seg--) {
+					let j = j2;
+					for (let i = i2; i >= i1; i--) {
 						if (
-							j_seg < j1 &&
-							Math.abs(points[i_seg].distance - points[i_seg - 1].distance) <
-								0.05
+							j < j1 &&
+							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
 						) {
-							j_seg++;
+							j++;
 						}
 
 						while (
-							j_seg < j1 &&
+							j < j1 &&
 							Math.abs(
-								Math.abs(points[j_seg + 1].distance - points[j1].distance) -
-									Math.abs(points[i_seg].distance - points[i1].distance),
+								Math.abs(points[j + 1].distance - points[j1].distance) -
+									Math.abs(points[i].distance - points[i1].distance),
 							) <
 								Math.abs(
-									Math.abs(points[j_seg].distance - points[j1].distance) -
-										Math.abs(points[i_seg].distance - points[i1].distance),
+									Math.abs(points[j].distance - points[j1].distance) -
+										Math.abs(points[i].distance - points[i1].distance),
 								)
 						) {
-							j_seg++;
+							j++;
 						}
 
-						const p = { ...points[i_seg] };
-						p.segment = points[j_seg].segment;
+						const p = { ...points[i] };
+						p.segment = points[j].segment;
 						pNew.push(p);
 					}
 
@@ -2633,7 +3033,7 @@ function snapPoints(
 					while (
 						s < snapTransition &&
 						i_trans > 0 &&
-						i_trans <= maxIndex(points)
+						i_trans < maxIndex(points)
 					) {
 						s += latlngDistance(points[i_trans], points[i_trans + d]);
 						i_trans += d;
@@ -2650,7 +3050,7 @@ function snapPoints(
 					while (
 						s < snapTransition &&
 						j_trans > 0 &&
-						j_trans <= maxIndex(points)
+						j_trans < maxIndex(points)
 					) {
 						s += latlngDistance(points[j_trans], points[j_trans + jd]);
 						j_trans += jd;
@@ -2733,7 +3133,6 @@ function snapPoints(
  */
 function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 	const smoothRadians = smoothAngle * DEG2RAD;
-	console.log(`DEBUG JS: doAutoSpacing input: ${points.length} points`);
 
 	// iterate a few times
 	for (
@@ -2744,9 +3143,6 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 		// do this in each direction
 		for (let direction = 0; direction <= 1; direction++) {
 			const pNew = [];
-			console.log(
-				`DEBUG JS: direction=${direction}, starting with ${points.length} points`,
-			);
 
 			// refine distance -- need to exceed the smoothing length
 			// on spacing: minRadius will increase the separation of points,
@@ -2790,7 +3186,7 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 
 					// add points if needed
 					if (smoothRadians === undefined) {
-						throw new Error(
+						die(
 							`ERROR: smoothRadians not defined (smoothAngle = ${smoothAngle})`,
 						);
 					}
@@ -2870,12 +3266,8 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 				}
 			}
 			points = pNew.slice().reverse();
-			console.log(
-				`DEBUG JS: direction=${direction} finished, ${points.length} points`,
-			);
 		}
 	}
-	console.log(`DEBUG JS: doAutoSpacing output: ${points.length} points`);
 	return points;
 }
 
@@ -3305,18 +3697,12 @@ export function processGPX(trackFeature, options = {}) {
 		!trackFeature.geometry ||
 		trackFeature.geometry.type !== "LineString"
 	) {
-		throw new Error("Invalid track feature provided to processGPX");
+		die("Invalid track feature provided to processGPX");
 	}
-
-	// Map command-line options to internal processing variables (matching Perl implementation)
-	let lSmooth = options.sigma; // --smooth or --sigma
-	const gSmooth = options.sigmag; // --smoothG or --sigmag
-	let zSmooth = options.sigmaz; // --smoothZ, --zSmooth, --sigmaz, --zSigma
-	let isLoop = options.lap; // --loop or --lap
 
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
-		throw new Error("-repeat limited to range 0 to 99");
+		die("-repeat limited to range 0 to 99");
 	}
 
 	// Check loopLeft and loopRight
@@ -3332,7 +3718,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.rLap = options.rLap ?? 0;
 		}
 		options.autoSpacing = options.autoSpacing ?? 1;
-		lSmooth = lSmooth ?? 5;
+		options.sigma = options.sigma ?? 5;
 		options.laneShift =
 			options.laneShift ?? (options.selectiveLaneShift?.length ? 0 : 6);
 		options.minRadius = options.minRadius ?? 6;
@@ -3344,7 +3730,7 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Loop sign
-	const _loopSign = options.loopLeft
+	const loopSign = options.loopLeft
 		? -1
 		: options.loopRight
 			? 1
@@ -3357,12 +3743,6 @@ export function processGPX(trackFeature, options = {}) {
 		options.autoStraightenDeviation ?? options.autoStraighten?.[0] ?? 0;
 	options.autoStraightenLength =
 		options.autoStraightenLength ?? options.autoStraighten?.[1] ?? 100;
-
-	// Named segments
-	// const namedSegments = (options.namedSegments || "").split(/[;]/);
-	// const autoSegmentNames = (options.autoSegmentNames || "")
-	// 	.split(/[,;]/)
-	// 	.map((s) => s.replace(/^\s*(.*?)\s*$/, "$1"));
 
 	// Convert max slope to percent
 	if (options.maxSlope !== undefined && options.maxSlope < 1) {
@@ -3394,18 +3774,19 @@ export function processGPX(trackFeature, options = {}) {
 		lat: coord[1],
 		lon: coord[0],
 		ele: coord[2] || 0,
+		segment: 1,
 	}));
 
 	// Calculate quality score of original course
 	note("points in original GPX track = ", points.length);
-	const [score, scoreD, scoreZ] = calcQualityScore(points, isLoop || 0);
+	const [score, scoreD, scoreZ] = calcQualityScore(points, options.loop || 0);
 	note("quality score of original course = ", score.toFixed(4));
 	note("direction score of original course = ", scoreD.toFixed(4));
 	note("altitude score of original course = ", scoreZ.toFixed(4));
 	dumpPoints(points, "01-js-original.txt");
 
 	// Eliminate duplicate x,y points
-	points = removeDuplicatePoints(points, isLoop || 0);
+	points = removeDuplicatePoints(points, options.loop || 0);
 	dumpPoints(points, "02-js-duplicates-removed.txt");
 
 	// If repeat is specified, then create replicates
@@ -3427,7 +3808,7 @@ export function processGPX(trackFeature, options = {}) {
 	// This is done before auto-options since it may change whether the course is a loop
 	points = cropPoints(
 		points,
-		isLoop || 0,
+		options.loop || 0,
 		options.deleteRange || [],
 		options.cropMin,
 		options.cropMax,
@@ -3435,13 +3816,13 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "05-js-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
-	isLoop = isLoop || 0;
+	options.loop = options.loop || 0;
 	options.copyPoint = options.copyPoint || 0;
 	options.autoLoop = options.autoLoop || options.auto;
 
 	if (options.autoLoop) {
 		if (
-			!isLoop &&
+			!options.loop &&
 			options.cropMin === undefined &&
 			options.cropMax === undefined &&
 			latlngDistance(points[0], points[maxIndex(points)]) < 150 &&
@@ -3453,7 +3834,7 @@ export function processGPX(trackFeature, options = {}) {
 				points[1],
 			) > -0.1
 		) {
-			isLoop = 1;
+			options.loop = 1;
 			options.copyPoint = 0;
 			note("setting -loop");
 		}
@@ -3463,7 +3844,7 @@ export function processGPX(trackFeature, options = {}) {
 	if (options.auto) {
 		note("auto-setting options...");
 
-		const courseDistance = calcCourseDistance(points, isLoop);
+		const courseDistance = calcCourseDistance(points, options.loop);
 
 		// Calculate position interpolation
 		if (options.spacing === undefined) {
@@ -3474,9 +3855,9 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		// Smoothing
-		if (lSmooth === undefined) {
-			lSmooth = 5;
-			note(`setting smoothing to ${lSmooth} meters`);
+		if (options.sigma === undefined) {
+			options.sigma = 5;
+			note(`setting smoothing to ${options.sigma} meters`);
 		}
 
 		// Other options
@@ -3500,9 +3881,9 @@ export function processGPX(trackFeature, options = {}) {
 			options.prune = 1;
 		}
 
-		if (zSmooth === undefined) {
-			zSmooth = 15;
-			note(`setting altitude smoothing to ${zSmooth} meters`);
+		if (options.sigmaz === undefined) {
+			options.sigmaz = 15;
+			note(`setting altitude smoothing to ${options.sigmaz} meters`);
 		}
 
 		if (options.fixCrossings === undefined) {
@@ -3538,21 +3919,21 @@ export function processGPX(trackFeature, options = {}) {
 	options.prune = options.prune ?? 0;
 	options.rLap = options.rLap ?? 0;
 	options.spacing = options.spacing ?? 0;
-	options.zSmooth = options.zSmooth ?? 0;
+	options.sigmaz = options.sigmaz ?? 0;
 	options.snap = options.snap ?? 0;
 	options.snapTransition = options.snapTransition ?? 0;
-	options.lSmooth = options.lSmooth ?? 0;
+	options.sigma = options.sigma ?? 0;
 
 	// Check for invalid option combinations
-	if (options.snap > 0 && options.snapDistance > options.lSmooth) {
+	if (options.snap > 0 && options.snapDistance > options.sigma) {
 		warn(
-			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.lSmooth}), then abrupt transitions between snapped and unsnapped points may occur`,
+			`WARNING: if snapping distance (${options.snapDistance}) is more than smoothing distance (${options.sigma}), then abrupt transitions between snapped and unsnapped points may occur`,
 		);
 	}
 
-	if (isLoop && (options.rTurnaround || 0) > 0) {
+	if (options.loop && (options.rTurnaround || 0) > 0) {
 		warn("WARNING: ignoring -lap or -loop option when rTurnaround > 0");
-		isLoop = 0;
+		options.loop = 0;
 	}
 
 	// AutoSpacing triggered if max angle specified
@@ -3574,7 +3955,7 @@ export function processGPX(trackFeature, options = {}) {
 	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
 
 	// Check if loop specified for apparent point-to-point
-	if (isLoop) {
+	if (options.loop) {
 		const d = latlngDistance(points[0], points[maxIndex(points)]);
 		if (d > 150) {
 			warn(
@@ -3584,10 +3965,8 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// If shiftSF is specified but not loop, that's an error
-	if (options.shiftSF !== options.shiftSFDefault && !isLoop) {
-		throw new Error(
-			"ERROR: -shiftSF is only compatible with the -lap (or -loop) option.",
-		);
+	if (options.laneShiftSF !== 0 && !options.loop) {
+		die("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
 	}
 
 	// Look for zig-zags
@@ -3595,7 +3974,7 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "06-js-zigzags-fixed.txt");
 
 	// Look for loops
-	findLoops(points, isLoop);
+	findLoops(points, options.loop);
 
 	// Adjust altitudes if requested
 	if (
@@ -3672,7 +4051,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.maxCornerCropDegs * DEG2RAD,
 			options.cornerCropStart,
 			options.cornerCropEnd,
-			isLoop,
+			options.loop,
 		);
 		dumpPoints(points, "09-js-corners-cropped.txt");
 	}
@@ -3682,7 +4061,7 @@ export function processGPX(trackFeature, options = {}) {
 		note("auto-Straightening...");
 		autoStraighten(
 			points,
-			isLoop,
+			options.loop,
 			options.autoStraightenLength || 100,
 			options.autoStraightenDeviation,
 		);
@@ -3712,7 +4091,7 @@ export function processGPX(trackFeature, options = {}) {
 			_splineMaxRadians,
 			options.splineStart,
 			options.splineEnd,
-			isLoop || 0,
+			options.loop || 0,
 			"spline",
 		);
 		dumpPoints(points, "15-js-corner-splines.txt");
@@ -3727,7 +4106,7 @@ export function processGPX(trackFeature, options = {}) {
 			arcFitMaxRadians,
 			options.arcFitStart,
 			options.arcFitEnd,
-			isLoop || 0,
+			options.loop || 0,
 			"arcFit",
 		);
 		dumpPoints(points, "16-js-arc-fit.txt");
@@ -3735,18 +4114,18 @@ export function processGPX(trackFeature, options = {}) {
 
 	// add distance field
 	addDistanceField(points);
-	const _courseDistance = calcCourseDistance(points, isLoop || 0);
+	const _courseDistance = calcCourseDistance(points, options.loop || 0);
 
 	// automatic interpolation at corners
 	if (
 		options.autoSpacing &&
-		((lSmooth || 0) > 0 || (options.minRadius || 0) > 0)
+		((options.sigma || 0) > 0 || (options.minRadius || 0) > 0)
 	) {
 		note("auto-spacing at corners...");
 		points = doAutoSpacing(
 			points,
-			isLoop || 0,
-			lSmooth || 0,
+			options.loop || 0,
+			options.sigma || 0,
 			options.smoothAngle || 0,
 			options.minRadius || 0,
 		);
@@ -3756,7 +4135,7 @@ export function processGPX(trackFeature, options = {}) {
 	// interpolation if requested
 	if (points.length && (options.spacing || 0) > 0) {
 		// STAGE 18: Interpolation
-		points = doPointInterpolation(points, isLoop || 0, options.spacing);
+		points = doPointInterpolation(points, options.loop || 0, options.spacing);
 		dumpPoints(points, "18-js-interpolated.txt");
 	}
 
@@ -3792,8 +4171,8 @@ export function processGPX(trackFeature, options = {}) {
 	// sigma value sent to the smoothing code
 
 	if (
-		(lSmooth || 0) > 0 ||
-		(zSmooth || 0) > 0 ||
+		(options.sigma || 0) > 0 ||
+		(options.sigmaz || 0) > 0 ||
 		(options.lAutoSmooth || 0) > 0 ||
 		(options.zAutoSmooth || 0) > 0 ||
 		(options.selectiveSmooth || []).length > 0 ||
@@ -3810,9 +4189,9 @@ export function processGPX(trackFeature, options = {}) {
 	for (const smoothLoop of [0, 1, 2, 4]) {
 		smoothed = 1;
 		let smooth = 0;
-		if (smoothLoop === 0) smooth = lSmooth || 0;
-		if (smoothLoop === 1) smooth = zSmooth || 0;
-		if (smoothLoop === 2) smooth = gSmooth || 0;
+		if (smoothLoop === 0) smooth = options.sigma || 0;
+		if (smoothLoop === 1) smooth = options.sigmaz || 0;
+		if (smoothLoop === 2) smooth = options.sigmag || 0;
 		if (smoothLoop === 3) smooth = options.lAutoSmooth || 0;
 		if (smoothLoop === 4) smooth = options.zAutoSmooth || 0;
 		if (smoothLoop === 5) smooth = options.gAutoSmooth || 0;
@@ -3835,7 +4214,7 @@ export function processGPX(trackFeature, options = {}) {
 		if (smoothLoop === 3) {
 			// smooth field is generated from data
 			note("calculating auto sigma");
-			calcSmoothingSigma(points, smooth, isLoop);
+			calcSmoothingSigma(points, smooth, options.loop);
 			sigma0 = 0;
 		} else {
 			// parse and check the selective smoothing parameters
@@ -3999,14 +4378,14 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		if (smoothLoop % 3 === 2) {
-			addGradientField(points, isLoop);
+			addGradientField(points, options.loop);
 		}
 
 		for (const key of keys) {
 			points = smoothing(
 				points,
 				key === "latlon" ? ["lat", "lon"] : [key],
-				isLoop,
+				options.loop,
 				points[0].sigma !== undefined ? "sigma" : "",
 				1, // sigmaFactor
 				sigma0,
@@ -4016,7 +4395,7 @@ export function processGPX(trackFeature, options = {}) {
 		}
 
 		if (smoothLoop % 3 === 2) {
-			integrateGradientField(points, isLoop);
+			integrateGradientField(points, options.loop);
 		}
 	}
 
@@ -4027,14 +4406,14 @@ export function processGPX(trackFeature, options = {}) {
 
 	// anchoring: return start point and, if not a loop, finish point to original values
 	// if anchoring requested
-	if (options.anchorSF && !isLoop) {
+	if (options.anchorSF && !options.loop) {
 		addDistanceField(points);
 
 		for (const d of [1, -1]) {
 			const sigma = {
-				ele: Math.sqrt((lSmooth || 0) ** 2 + (zSmooth || 0) ** 2),
-				lat: lSmooth || 0,
-				lon: lSmooth || 0,
+				ele: Math.sqrt((options.sigma || 0) ** 2 + (options.sigmaz || 0) ** 2),
+				lat: options.sigma || 0,
+				lon: options.sigma || 0,
 			};
 
 			// the point to anchor
@@ -4064,7 +4443,12 @@ export function processGPX(trackFeature, options = {}) {
 						// distorted by smoothing, since smoothing can collapse points,
 						// and point of anchoring is to reduce collapse
 						const s = Math.abs(
-							distanceDifference(points[i], points[i0], courseDistance, isLoop),
+							distanceDifference(
+								points[i],
+								points[i0],
+								courseDistance,
+								options.loop,
+							),
 						);
 						if (s > dsMax) break;
 
@@ -4080,6 +4464,644 @@ export function processGPX(trackFeature, options = {}) {
 	}
 	if (!(options.addSigma || 0)) {
 		deleteField2(points, "sigma");
+	}
+
+	// spline again post-smoothing, if requested
+	if (
+		_splineRadians > 0 &&
+		((options.sigma || 0) > 1 || (options.sigmaz || 0) > 0)
+	) {
+		// STAGE 23: Post-smoothing splines
+		note("corner splines, post-smoothing...");
+		points = addSplines(
+			points,
+			_splineRadians,
+			_splineMaxRadians,
+			options.splineStart,
+			options.splineEnd,
+			options.loop || 0,
+			"spline",
+		);
+		dumpPoints(points, "23-js-post-smoothing-splines.txt");
+	}
+
+	if (options.fixCrossings) {
+		// STAGE 26: Fix crossings
+		note("fixing crossings...");
+
+		// Calculate crossing parameters
+		const crossingAngle = options.crossingAngle;
+		const crossingX =
+			crossingAngle !== undefined && crossingAngle >= 0
+				? Math.abs(Math.sin(crossingAngle * DEG2RAD))
+				: Math.sin(PI / 16);
+
+		// Ensure distance field exists
+		addDistanceField(points);
+
+		// Create simplified version of profile
+		// Monitor the direction and when the direction changes enough, add a point
+		const simplified = [0, 1];
+		if (points.length <= 1) {
+			die("course lacks at least two points... quitting");
+		}
+
+		const simplifiedAngle = PI / 24;
+		for (let i = 2; i <= maxIndex(points); i++) {
+			const angle = latlngAngle(
+				points[i],
+				points[simplified[simplified.length - 1]],
+				points[simplified[simplified.length - 2]],
+			);
+			// Add points which cause an angle change
+			if (
+				angle !== null &&
+				Math.abs(angle) > simplifiedAngle &&
+				(options.loop || i < maxIndex(points))
+			) {
+				const a1 = latlngAngle(
+					points[(i + 1) % points.length],
+					points[i],
+					points[simplified[simplified.length - 1]],
+				);
+				const a2 = latlngAngle(
+					points[(i + 1) % points.length],
+					points[i],
+					points[i - 1],
+				);
+				if (
+					(a1 !== null && Math.abs(a1) > simplifiedAngle) ||
+					(a2 !== null && Math.abs(a2) > simplifiedAngle)
+				) {
+					simplified.push(i);
+				}
+			}
+		}
+
+		if (options.loop) {
+			if (
+				!pointsAreClose(points[0], points[simplified[simplified.length - 1]])
+			) {
+				simplified.push(0);
+			}
+		} else {
+			if (
+				simplified[simplified.length - 1] !== maxIndex(points) &&
+				!pointsAreClose(
+					points[maxIndex(points)],
+					points[simplified[simplified.length - 1]],
+				)
+			) {
+				simplified.push(maxIndex(points));
+			}
+		}
+
+		// Search for crossings on simplified route
+		const crossings = [];
+
+		for (let j = 1; j < simplified.length - 1; j++) {
+			for (let i = 0; i < j - 1; i++) {
+				const fs = segmentIntercept(
+					[points[simplified[i]], points[simplified[i + 1]]],
+					[points[simplified[j]], points[simplified[j + 1]]],
+				);
+				if (fs.length === 2) {
+					// There is a crossing between simplified segments i and j
+					// But the actual intersection might be from adjacent segments... so check those if the intersection was close to the edge
+					const u1 = fs[0] < 0.5 && i > 0 ? simplified[i - 1] : simplified[i];
+					const u2 =
+						(fs[0] > 0.5 && i < simplified.length - 2
+							? simplified[i + 2]
+							: simplified[i + 1]) - 1;
+					const v1 = fs[1] < 0.5 && j > 0 ? simplified[j - 1] : simplified[j];
+					const v2 =
+						(fs[1] > 0.5 && j < simplified.length - 2
+							? simplified[j + 2]
+							: simplified[j + 1]) - 1;
+
+					// Find the specific segments and positions where the crossings occur
+					for (let u = u1; u <= u2; u++) {
+						for (let v = v1; v <= v2; v++) {
+							const gs = segmentIntercept(
+								[points[u], points[(u + 1) % points.length]],
+								[points[v], points[(v + 1) % points.length]],
+							);
+							if (gs.length === 2) {
+								const up1 = (u + 1) % points.length;
+								const vp1 = (v + 1) % points.length;
+								const cNew = [];
+								cNew.push(interpolatePoint(points[u], points[up1], gs[0]));
+								const z1 = cNew[cNew.length - 1].ele;
+								cNew.push(interpolatePoint(points[v], points[vp1], gs[1]));
+								const z2 = cNew[cNew.length - 1].ele;
+								const zAvg = (z1 + z2) / 2;
+
+								// Adjust the altitude of the crossing points
+								if (
+									Math.abs(
+										latlngCrossProduct(
+											points[u],
+											points[up1],
+											points[v],
+											points[vp1],
+										),
+									) > crossingX
+								) {
+									const crossingHeight = options.crossingHeight || 2;
+									if (Math.abs(z1 - z2) < crossingHeight / 2) {
+										note(
+											`crossing @ ${cNew[cNew.length - 2].distance} m and ${cNew[cNew.length - 1].distance} m: setting level crossing altitude to ${zAvg}`,
+										);
+										cNew[cNew.length - 2].ele = zAvg;
+										cNew[cNew.length - 1].ele = zAvg;
+									} else if (Math.abs(z1 - z2) < crossingHeight) {
+										cNew[cNew.length - 2].ele =
+											zAvg + (Math.sign(z1 - zAvg) * crossingHeight) / 2;
+										cNew[cNew.length - 1].ele =
+											zAvg + (Math.sign(z2 - zAvg) * crossingHeight) / 2;
+										note(
+											`crossing @ ${cNew[cNew.length - 2].distance} m and ${cNew[cNew.length - 1].distance} m: setting overpass altitudes to ${cNew[cNew.length - 2].ele} and ${cNew[cNew.length - 1].ele}`,
+										);
+									}
+									crossings.push(...cNew);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		note(`total crossings = ${crossings.length}`);
+
+		// Crossing parameters
+		const rCrossings = options.rCrossings || 6;
+		const r1 = rCrossings;
+		const r2 = options.crossingTransition || 3 * rCrossings;
+		const r3 = (r1 + r2) / 2;
+		const r4 = (3 * r1 + r2) / 4;
+
+		// Sort crossings and create interpolated point list
+		const si = [];
+		for (const c of crossings) {
+			const s = c.distance;
+			si.push(
+				s - r2,
+				s - r3,
+				s - r4,
+				s - r1,
+				s,
+				s + r1,
+				s + r4,
+				s + r3,
+				s + r2,
+			);
+		}
+
+		si.sort((a, b) => a - b);
+
+		// Remove points too close together
+		if (si.length > 0) {
+			const siNew = [si[0]];
+			for (let j = 1; j <= maxIndex(si); j++) {
+				if (Math.abs(si[j] - siNew[siNew.length - 1]) > 0.5) {
+					siNew.push(si[j]);
+				}
+			}
+			si.length = 0;
+			si.push(...siNew);
+		}
+
+		// Interpolate points at crossings
+		if (si.length > 0) {
+			note("adding additional points at crossings...");
+			const newPoints = [points[0]];
+			let j = 0;
+			for (let i = 0; i < points.length - 1; i++) {
+				const s1 = points[i].distance;
+				const s2 = points[i + 1].distance;
+
+				// Skip si entries that are before current segment
+				while (j <= maxIndex(si) && si[j] <= s1) {
+					j++;
+				}
+
+				// Add interpolated points within current segment
+				while (j < si.length && s2 > si[j]) {
+					if (Math.abs(si[j] - s1) > 0.5 && Math.abs(si[j] - s2) > 0.5) {
+						const f = (si[j] - s1) / (s2 - s1);
+						newPoints.push(interpolatePoint(points[i], points[i + 1], f));
+					}
+					j++;
+				}
+
+				newPoints.push(points[i + 1]);
+			}
+
+			points = newPoints;
+		}
+
+		dumpPoints(points, "26-js-crossings-fixed.txt");
+	}
+
+	if (options.prune) {
+		// STAGE 29: Prune points
+		// Prune in each direction
+		for (let n = 0; n < 2; n++) {
+			let pruneCount = 0;
+			const pNew = [points[0]];
+			for (let i = 1; i <= maxIndex(points) - 1; i++) {
+				const p1 = pNew[pNew.length - 1];
+				const p2 = points[i + 1];
+				const p3 = points[i];
+				if (
+					isPointPrunable(
+						[p1, p2, p3],
+						options.pruneD || 1,
+						options.pruneX || 0.001,
+						options.prunedg || 0.0005,
+					)
+				) {
+					pruneCount++;
+				} else {
+					pNew.push(p3);
+				}
+			}
+			pNew.push(points[maxIndex(points)]);
+			pNew.reverse();
+			points = pNew;
+			deleteDerivedFields(points);
+			note(`prune loop ${n}: pruned ${pruneCount} points.`);
+		}
+		dumpPoints(points, "29-js-pruned.txt");
+	}
+
+	// STAGE 35: U-turn loops
+	if (options.rUTurn !== undefined && Math.abs(options.rUTurn) > 1) {
+		note("checking for U-turn loops...");
+
+		// Get rid of duplicate point at end
+		const pointPopped = pointsAreClose(points[0], points[points.length - 1]);
+		if (pointPopped) {
+			points.pop();
+		}
+
+		// Two sweeps: one for 3-point turns, the next for 4-point turns
+		for (const turnType of [3, 4]) {
+			const pNew = [];
+			let i = 0;
+
+			if (!options.loop) {
+				pNew.push(points[i++]);
+			}
+
+			while (i <= maxIndex(points)) {
+				pNew.push(points[i]);
+
+				if (pointsAreClose(points[i], points[(i + 1) % points.length])) {
+					i++;
+					continue;
+				}
+
+				// Select points: check for duplicate points
+				let h = (i - 1 + points.length) % points.length;
+				if (h !== i && pointsAreClose(points[h], points[i])) {
+					h = (h - 1 + points.length) % points.length;
+				}
+				let j = (i + 1) % points.length;
+				let k = (j + 1) % points.length;
+				if (j !== i && pointsAreClose(points[j], points[i])) {
+					j = (j + 1) % points.length;
+					k = (k + 1) % points.length;
+				}
+				if (k !== i && pointsAreClose(points[j], points[k])) {
+					k = (k + 1) % points.length;
+				}
+
+				if (
+					turnType === 3 &&
+					(options.loop || i < maxIndex(points)) &&
+					UTurnCheck(points[h], points[i], points[i], points[j])
+				) {
+					const d1 = latlngDirection(points[h], points[i]);
+					const d2 = latlngDirection(points[j], points[i]);
+					note(
+						`3-point U-turn detected @\n` +
+							`   1: point ${h + 1} of ${points.length} (${points[h].lon}, ${points[h].lat})\n` +
+							`   2: point ${i + 1} of ${points.length} (${points[i].lon}, ${points[i].lat})\n` +
+							`   3: point ${j + 1} of ${points.length} (${points[j].lon}, ${points[j].lat})\n` +
+							`   directions = ${d1 / DEG2RAD}, ${d2 / DEG2RAD}`,
+					);
+					const dir = averageAngles(d1, d2);
+					const loop = makeLoop(
+						[points[i], points[i]],
+						dir,
+						options.rUTurn,
+						loopSign || 1,
+						{}, // segmentNames - simplified for now
+					);
+					pNew.push(...loop);
+					pNew.push({ ...points[i] }); // Put a copy of the turn-around point here
+				} else if (
+					turnType === 4 &&
+					(options.loop || (i > 0 && i < maxIndex(points) - 1)) &&
+					UTurnCheck(points[h], points[i], points[j], points[k]) &&
+					latlngDistance(points[i], points[j]) < 20
+				) {
+					const d1 = latlngDirection(points[h], points[i]);
+					const d2 = latlngDirection(points[k], points[j]);
+					note(
+						`4-point U-turn detected @\n` +
+							`   1: point ${h + 1} of ${points.length} (${points[h].lon}, ${points[h].lat})\n` +
+							`   2: point ${i + 1} of ${points.length} (${points[i].lon}, ${points[i].lat})\n` +
+							`   3: point ${j + 1} of ${points.length} (${points[j].lon}, ${points[j].lat})\n` +
+							`   4: point ${k + 1} of ${points.length} (${points[k].lon}, ${points[k].lat})\n` +
+							`   directions = ${d1 / DEG2RAD}, ${d2 / DEG2RAD}`,
+					);
+					const dir = averageAngles(d1, d2);
+					const loop = makeLoop(
+						[points[i], points[j]],
+						dir,
+						options.rUTurn,
+						loopSign || 1,
+						{}, // segmentNames - simplified for now
+					);
+					pNew.push(...loop);
+				}
+				i++;
+			}
+
+			while (i < maxIndex(points)) {
+				pNew.push(points[i++]);
+			}
+
+			points = pNew;
+		}
+
+		if (pointPopped) {
+			points.push({ ...points[0] });
+		}
+		dumpPoints(points, "35-js-u-turn-loops.txt");
+	}
+
+	// STAGE 36: Set minimum radius
+	if (options.minRadius !== undefined && options.minRadius > 0) {
+		const minRadius = options.minRadius;
+		const minRadiusStart = options.minRadiusStart;
+		const minRadiusEnd = options.minRadiusEnd;
+
+		note(`setting minimum radius to ${minRadius}...`);
+		addCurvatureField(points, options.loop);
+		addDistanceField(points);
+		const courseDistance = calcCourseDistance(points, options.loop);
+
+		// calculate a lane shift field
+		const maxCurvature = 1 / minRadius;
+		let count = 0;
+		const posShifts = points.map(() => 0);
+		const negShifts = points.map(() => 0);
+		const lambda = 16 * Math.sqrt(minRadius);
+
+		for (let u = 0; u < points.length; u++) {
+			const p = points[u];
+			const inRange =
+				(minRadiusStart === undefined || p.distance >= minRadiusStart ? 1 : 0) +
+				(minRadiusEnd === undefined || p.distance <= minRadiusEnd ? 1 : 0) +
+				(minRadiusEnd !== undefined &&
+				minRadiusStart !== undefined &&
+				minRadiusEnd < minRadiusStart
+					? 1
+					: 0);
+
+			if (inRange === 2 && Math.abs(p.curvature) > maxCurvature) {
+				const s = minRadius - Math.abs(1 / p.curvature);
+				const a = p.curvature > 0 ? posShifts : negShifts;
+				if (a[u] < s) {
+					a[u] = s;
+				}
+				count++;
+			}
+		}
+
+		if (count > 0) {
+			note(
+				"found " +
+					count +
+					" points tighter than minimum radius " +
+					minRadius +
+					" meters...",
+			);
+
+			for (const a of [posShifts, negShifts]) {
+				let u1 = 0;
+				let u2 = 0;
+
+				if (options.loop) {
+					while (
+						u1 > -maxIndex(points) &&
+						distanceDifference(
+							points[wrapIndex(u1 - 1, points.length)],
+							points[0],
+							courseDistance,
+							options.loop,
+						) < lambda
+					) {
+						u1--;
+					}
+				}
+
+				const newShifts = [...a];
+				for (let u0 = 0; u0 < points.length; u0++) {
+					if (a[u0] === 0) continue;
+
+					// u1 ... u0 ... u2
+					while (
+						u1 < u0 &&
+						distanceDifference(
+							points[wrapIndex(u1, points.length)],
+							points[u0],
+							courseDistance,
+							options.loop,
+						) > lambda
+					) {
+						u1++;
+					}
+					if (u2 < u0) u2 = u0;
+					while (
+						(options.loop
+							? (u2 + 1) % points.length !== u1
+							: u2 < maxIndex(points)) &&
+						distanceDifference(
+							points[u0],
+							points[(u2 + 1) % points.length],
+							courseDistance,
+							options.loop,
+						) < lambda
+					) {
+						u2 = (u2 + 1) % points.length;
+					}
+
+					for (let u = u1; u <= u2; u++) {
+						// the u0 point has already been set...
+						if (u === u0) continue;
+
+						const f =
+							((1 +
+								Math.cos(
+									(PI *
+										pointSeparation(
+											points[wrapIndex(u, points.length)],
+											points[u0],
+											courseDistance,
+											options.loop,
+										)) /
+										lambda,
+								)) /
+								2) **
+							2;
+						const shift = a[u0] * f;
+
+						// if there's an existing shift, then combine with that:
+						if (shift > newShifts[u]) {
+							newShifts[u] = shift;
+						}
+					}
+				}
+
+				// Copy back the new shifts
+				for (let u = 0; u < points.length; u++) {
+					a[u] = newShifts[u];
+				}
+			}
+
+			// fill in shifts... sum of positive and negative shifts.
+			for (let u = 0; u < points.length; u++) {
+				points[u].shift = (points[u].shift || 0) + posShifts[u] - negShifts[u];
+			}
+
+			points = applyLaneShift(points, options.loop);
+
+			// Debug: Check for NaN after lane shift
+			let _nanAfterShift = 0;
+			for (let i = 0; i < Math.min(5, points.length); i++) {
+				const p = points[i];
+				if (Number.isNaN(p.lat) || Number.isNaN(p.lon)) {
+					note(
+						`DEBUG: Point ${i} has NaN after lane shift: lat=${p.lat}, lon=${p.lon}`,
+					);
+					_nanAfterShift++;
+				}
+			}
+
+			// apply smoothing after shift: shifting can cause some noise
+			points = smoothing(
+				points,
+				["lat", "lon", "ele"],
+				options.loop,
+				"shift",
+				0.2,
+			);
+
+			// Debug: Check for NaN after post-shift smoothing
+			let _nanAfterSmoothing = 0;
+			for (let i = 0; i < Math.min(5, points.length); i++) {
+				const p = points[i];
+				if (Number.isNaN(p.lat) || Number.isNaN(p.lon)) {
+					note(
+						`DEBUG: Point ${i} has NaN after smoothing: lat=${p.lat}, lon=${p.lon}`,
+					);
+					_nanAfterSmoothing++;
+				}
+			}
+
+			deleteField2(points, "shift");
+			dumpPoints(points, "36-js-min-radius.txt");
+		}
+	}
+
+	// Add distance field for final calculations
+	addDistanceField(points);
+
+	// Add times from bike speed model, if requested
+	if (options.startTime !== undefined && options.startTime !== "") {
+		note("adding time...");
+		const tStart = new Date(options.startTime).getTime() / 1000; // Convert to Unix timestamp
+		if (tStart > 0) {
+			note(`start time found: ${tStart}`);
+			const ts = [0];
+			const gs = [0];
+
+			for (let i = 0; i < maxIndex(points); i++) {
+				const dd = points[i + 1].distance - points[i].distance;
+				const gradient =
+					dd === 0
+						? gs[gs.length - 1]
+						: (points[i + 1].ele - points[i].ele) / dd;
+				gs.push(gradient);
+				const speed = bikeSpeedModel(gradient);
+				const deltaTime = (points[i + 1].distance - points[i].distance) / speed;
+				ts.push(ts[ts.length - 1] + deltaTime);
+			}
+
+			for (let i = 0; i < points.length; i++) {
+				points[i].time = tStart + ts[i];
+				points[i].duration = ts[i];
+			}
+		}
+	}
+
+	const courseDistance = calcCourseDistance(points, options.loop);
+	note(`final number of points = ${points.length}`);
+	note(`course distance = ${(courseDistance / 1000).toFixed(4)} kilometers`);
+
+	const [finalScore, finalScoreD, finalScoreZ] = calcQualityScore(
+		points,
+		options.loop,
+	);
+	note(`quality score of final course = ${finalScore.toFixed(4)}`);
+	note(`direction score of final course = ${finalScoreD.toFixed(4)}`);
+	note(`altitude score of final course = ${finalScoreZ.toFixed(4)}`);
+
+	const lastToFirstDistance = latlngDistance(
+		points[maxIndex(points)],
+		points[0],
+	);
+	note(
+		`distance from last point to first point = ${lastToFirstDistance.toFixed(3)} meters`,
+	);
+
+	// Add curvature field if requested
+	if (options.addCurvature) {
+		note("checking curvature");
+		addCurvatureField(points, options.loop);
+	} else {
+		deleteField2(points, "curvature");
+	}
+
+	// Add gradient field if requested
+	if (options.addGradient) {
+		note("adding gradient field");
+		addGradientField(points, options.loop);
+	} else {
+		deleteField2(points, "gradient");
+	}
+
+	// Remove distance field unless explicitly requested
+	if (!options.addDistance) {
+		deleteField2(points, "distance");
+	}
+
+	// Add direction field if requested
+	if (options.addDirection) {
+		addDirectionField(points, options.loop);
+		// Convert heading from radians to degrees
+		for (const p of points) {
+			if (p.heading !== undefined) {
+				p.heading /= DEG2RAD;
+			}
+		}
+	} else {
+		deleteField2(points, "heading");
 	}
 
 	// Convert processed points back to coordinates format for output
