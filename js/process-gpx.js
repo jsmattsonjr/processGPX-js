@@ -4180,7 +4180,6 @@ export function processGPX(trackFeature, options = {}) {
 							: simplified[j + 1]) - 1;
 
 					// Find the specific segments and positions where the crossings occur
-					let crossingsFound = 0;
 					for (let u = u1; u <= u2; u++) {
 						for (let v = v1; v <= v2; v++) {
 							const gs = segmentIntercept(
@@ -4225,7 +4224,6 @@ export function processGPX(trackFeature, options = {}) {
 										);
 									}
 									crossings.push(...cNew);
-									crossingsFound++;
 								}
 							}
 						}
