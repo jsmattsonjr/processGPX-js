@@ -524,6 +524,181 @@ function interpolatePoint(p1, p2, f) {
 }
 
 /**
+ * Create a loop for U-turns between two points
+ * @param {Array} points - Array of two points [point1, point2]
+ * @param {number} direction - Direction in radians
+ * @param {number} radius - Radius of the loop in meters (default 4)
+ * @param {number} defaultSign - Default sign for loop direction (default 1)
+ * @param {Object} segmentNames - Object mapping segment numbers to names
+ * @returns {Array} Array of loop points
+ */
+function makeLoop(points, direction, radius = 4, defaultSign = 1, segmentNames = {}) {
+	if (!points || points.length < 2) {
+		die("makeLoop requires a reference to a list of two points.");
+	}
+	if (direction === undefined) {
+		die("makeLoop requires a direction parameter");
+	}
+
+	let sign = defaultSign;
+
+	// If radius is negative, swap the direction
+	if (radius < 0) {
+		radius = -radius;
+		sign = -sign;
+	}
+
+	const cdir = Math.cos(direction);
+	const sdir = Math.sin(direction);
+
+	const [point1, point2] = points;
+
+	// Loop points
+	const pLoop = [];
+
+	// Calculate distance of the two paths, where a left turn is positive,
+	// a right turn is negative. This is twice the "laneShift", for example
+	const [dx, dy] = latlng2dxdy(point1, point2);
+	const ds = Math.sqrt(dx ** 2 + dy ** 2);
+	let d = 0;
+	if (ds > 0.01) {
+		// The original route is along direction dir (c, s)
+		// so I need the end point along the orthogonal direction (-s, c)
+		// it's along the direction perpendicular, but proportional to dot product
+		d = -sdir * dx + cdir * dy;
+	}
+
+	// Make loop from point to reverse direction with specified shift
+	const lat0 = (point1.lat + point2.lat) / 2;
+	const lng0 = (point1.lon + point2.lon) / 2;
+	const delta = Math.abs(d / 2);
+	if (delta > 0.1) {
+		sign = Math.sign(d); // Override sign if the points are separate (L or R turn)
+	}
+
+	// Generate points... rotated coordinates
+	const xs = [];
+	const ys = [];
+	const cosTheta = (radius + delta) / (2 * radius);
+
+	// If cos theta > 1, then we'll generate a circle, but stretch it later
+	let theta;
+	let stretch;
+	if (cosTheta > 1) {
+		theta = 0;
+		stretch = delta / radius;
+	} else {
+		theta = Math.atan2(Math.sqrt(1 - cosTheta ** 2), cosTheta);
+		stretch = 1;
+	}
+
+	const dThetaMax = TWOPI / (16 * (1 + Math.sqrt(Math.abs(radius / 4))));
+
+	// Arc going into the circle
+	// First point (delta, 0)
+	// Last point (-delta, 0)
+	let nPoints = 1 + Math.floor(theta / dThetaMax);
+	for (let i = 1; i <= nPoints; i++) {
+		const t = (theta * i) / nPoints;
+		const x = radius + delta - radius * Math.cos(t);
+		const y = radius * Math.sin(t);
+		xs.push(x);
+		ys.push(y);
+	}
+
+	// Semi-circle
+	const theta2 = theta + PI / 2;
+	nPoints = 1 + Math.floor(stretch ** (2 / 3) * (theta2 / dThetaMax));
+	for (let i = 1; i <= nPoints; i++) {
+		const t = ((nPoints - i) * theta2) / nPoints;
+		const x = radius * Math.sin(t);
+		const y = 2 * radius * Math.sin(theta) + radius * Math.cos(t);
+		xs.push(x);
+		ys.push(y);
+	}
+
+	// Stretch points if separation exceeds target turn radius
+	for (let i = 1; i < xs.length; i++) {
+		xs[i] *= stretch;
+	}
+
+	// Swap x points if we're "driving on the left"
+	if (sign < 0) {
+		for (let i = 0; i < xs.length; i++) {
+			xs[i] = -xs[i];
+		}
+	}
+
+	// Finish route
+	for (let i = xs.length - 2; i >= 0; i--) {
+		xs.push(-xs[i]);
+		ys.push(ys[i]);
+	}
+
+	// Shear to align
+	// point1 => point2 : dx, dy
+	// point1 => origin:: -s, +c
+	const u = delta === 0 ? 0 : (dx / (2 * delta)) ** 2 + (dy / (2 * delta)) ** 2 - 1;
+	const shear = delta === 0 ? 0 : u > 0 ? Math.sqrt(u) : 0;
+	const shearSign = -sign * Math.sign(cdir * dx + sdir * dy);
+
+	// Transform to direction, adding shear transformation first
+	// Original road is aligned in direction dir
+	// This is aligned in direction 90 degrees
+	// Need to rotate by dir - 90 deg
+	// Also calculate distance
+	for (let i = 0; i < xs.length; i++) {
+		ys[i] += shear * shearSign * xs[i];
+		const x = sdir * xs[i] + cdir * ys[i];
+		const y = -cdir * xs[i] + sdir * ys[i];
+		xs[i] = x;
+		ys[i] = y;
+	}
+
+	// Convert to lat, lng
+	const c = Math.cos(DEG2RAD * lat0);
+	for (let i = 0; i < xs.length; i++) {
+		const h = { ...point1 };
+		h.lon = lng0 + xs[i] / (LAT2Y * c);
+		h.lat = lat0 + ys[i] / LAT2Y;
+		pLoop.push(h);
+	}
+
+	// May need to set segment
+	if (point1.segment !== point2.segment) {
+		if (segmentNames[point1.segment]) {
+			const s = segmentNames[point2.segment] ? 0 : point2.segment;
+			const p = { ...point1 };
+			pLoop.unshift(p);
+
+			for (const pt of pLoop) {
+				pt.segment = s;
+			}
+		}
+
+		if (pLoop[pLoop.length - 1].segment !== point2.segment) {
+			const p = { ...point2 };
+			p.segment = pLoop[pLoop.length - 1].segment;
+			pLoop.push(p);
+		}
+	}
+
+	// Create a distance field
+	const ss = [latlngDistance(point1, pLoop[0])];
+	for (let i = 0; i < pLoop.length - 1; i++) {
+		ss.push(ss[ss.length - 1] + latlngDistance(pLoop[i], pLoop[i + 1]));
+	}
+	const sLoop = ss[ss.length - 1] + latlngDistance(pLoop[pLoop.length - 1], point2);
+
+	// Interpolate elevation
+	for (let i = 0; i < pLoop.length; i++) {
+		pLoop[i].ele = (point1.ele * (sLoop - ss[i]) + point2.ele * ss[i]) / sLoop;
+	}
+
+	return pLoop;
+}
+
+/**
  * Check if a point can be pruned based on distance, cross product, and gradient
  * @param {Array} points - Array of 3 points [p1, p2, p3]
  * @param {number} distance - Maximum distance threshold (default 2)
@@ -781,7 +956,7 @@ function fixZigZags(points) {
 				let u = U1; // keep points up to u
 				let v = U2 + 1; // keep points starting with v
 
-				info(
+				note(
 					`DEBUG: initial u=${u}, initial v=${v}, points.length=${points.length}`,
 				);
 
@@ -789,7 +964,7 @@ function fixZigZags(points) {
 					v < maxIndex(points) &&
 					UTurnCheck(points[u], points[v], points[v], points[v + 1])
 				) {
-					info(`DEBUG: extending v from ${v} to ${v + 1} due to UTurn check`);
+					note(`DEBUG: extending v from ${v} to ${v + 1} due to UTurn check`);
 					v++;
 				}
 
@@ -797,11 +972,11 @@ function fixZigZags(points) {
 					u > 0 &&
 					UTurnCheck(points[u - 1], points[u], points[u], points[v])
 				) {
-					info(`DEBUG: extending u from ${u} to ${u - 1} due to UTurn check`);
+					note(`DEBUG: extending u from ${u} to ${u - 1} due to UTurn check`);
 					u--;
 				}
 
-				info(
+				note(
 					`DEBUG: final u=${u}, final v=${v}, eliminating points ${u + 1} to ${v - 1} (${v - u - 1} points)`,
 				);
 				warn(`eliminating ${v - u - 1} points`);
@@ -4334,6 +4509,114 @@ export function processGPX(trackFeature, options = {}) {
 			note(`prune loop ${n}: pruned ${pruneCount} points.`);
 		}
 		dumpPoints(points, "29-js-pruned.txt");
+	}
+
+	// STAGE 35: U-turn loops
+	if (options.rUTurn !== undefined && Math.abs(options.rUTurn) > 1) {
+		note("checking for U-turn loops...");
+
+		// Get rid of duplicate point at end
+		const pointPopped = pointsAreClose(points[0], points[points.length - 1]);
+		if (pointPopped) {
+			points.pop();
+		}
+
+		// Two sweeps: one for 3-point turns, the next for 4-point turns
+		for (const turnType of [3, 4]) {
+			const pNew = [];
+			let i = 0;
+
+			if (!isLoop) {
+				pNew.push(points[i++]);
+			}
+
+			while (i <= maxIndex(points)) {
+				pNew.push(points[i]);
+
+				if (pointsAreClose(points[i], points[(i + 1) % points.length])) {
+					i++;
+					continue;
+				}
+
+				// Select points: check for duplicate points
+				let h = (i - 1 + points.length) % points.length;
+				if (h !== i && pointsAreClose(points[h], points[i])) {
+					h = (h - 1 + points.length) % points.length;
+				}
+				let j = (i + 1) % points.length;
+				let k = (j + 1) % points.length;
+				if (j !== i && pointsAreClose(points[j], points[i])) {
+					j = (j + 1) % points.length;
+					k = (k + 1) % points.length;
+				}
+				if (k !== i && pointsAreClose(points[j], points[k])) {
+					k = (k + 1) % points.length;
+				}
+
+				if (
+					turnType === 3 &&
+					(isLoop || i < maxIndex(points)) &&
+					UTurnCheck(points[h], points[i], points[i], points[j])
+				) {
+					const d1 = latlngDirection(points[h], points[i]);
+					const d2 = latlngDirection(points[j], points[i]);
+					note(
+						`3-point U-turn detected @\n` +
+							`   1: point ${h + 1} of ${points.length} (${points[h].lon}, ${points[h].lat})\n` +
+							`   2: point ${i + 1} of ${points.length} (${points[i].lon}, ${points[i].lat})\n` +
+							`   3: point ${j + 1} of ${points.length} (${points[j].lon}, ${points[j].lat})\n` +
+							`   directions = ${d1 / DEG2RAD}, ${d2 / DEG2RAD}`,
+					);
+					const dir = averageAngles(d1, d2);
+					const loop = makeLoop(
+						[points[i], points[i]],
+						dir,
+						options.rUTurn,
+						options.loopSign || 1,
+						{}, // segmentNames - simplified for now
+					);
+					pNew.push(...loop);
+					pNew.push({ ...points[i] }); // Put a copy of the turn-around point here
+				} else if (
+					turnType === 4 &&
+					(isLoop || (i > 0 && i < maxIndex(points) - 1)) &&
+					UTurnCheck(points[h], points[i], points[j], points[k]) &&
+					latlngDistance(points[i], points[j]) < 20
+				) {
+					const d1 = latlngDirection(points[h], points[i]);
+					const d2 = latlngDirection(points[k], points[j]);
+					note(
+						`4-point U-turn detected @\n` +
+							`   1: point ${h + 1} of ${points.length} (${points[h].lon}, ${points[h].lat})\n` +
+							`   2: point ${i + 1} of ${points.length} (${points[i].lon}, ${points[i].lat})\n` +
+							`   3: point ${j + 1} of ${points.length} (${points[j].lon}, ${points[j].lat})\n` +
+							`   4: point ${k + 1} of ${points.length} (${points[k].lon}, ${points[k].lat})\n` +
+							`   directions = ${d1 / DEG2RAD}, ${d2 / DEG2RAD}`,
+					);
+					const dir = averageAngles(d1, d2);
+					const loop = makeLoop(
+						[points[i], points[j]],
+						dir,
+						options.rUTurn,
+						options.loopSign || 1,
+						{}, // segmentNames - simplified for now
+					);
+					pNew.push(...loop);
+				}
+				i++;
+			}
+
+			while (i < maxIndex(points)) {
+				pNew.push(points[i++]);
+			}
+
+			points = pNew;
+		}
+
+		if (pointPopped) {
+			points.push({ ...points[0] });
+		}
+		dumpPoints(points, "35-js-u-turn-loops.txt");
 	}
 
 	// Convert processed points back to coordinates format for output
