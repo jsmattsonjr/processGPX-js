@@ -378,7 +378,7 @@ function applyLaneShift(points, isLoop) {
 	for (let i = 0; i < points.length; i++) {
 		let dir1, dir2;
 		if (i > 0 || isLoop) {
-			dir1 = dirs[i - 1];
+			dir1 = dirs[wrapIndex(i - 1, dirs.length)];
 			dir2 = dir1 + reduceAngle(dirs[i] - dir1);
 		} else {
 			dir1 = dirs[i];
@@ -396,7 +396,7 @@ function applyLaneShift(points, isLoop) {
 			}
 			// check if there's a knot.. if not use the doubled points
 			const fs = segmentIntercept(
-				[points[i - 1], pTurns[0]],
+				[points[wrapIndex(i - 1, points.length)], pTurns[0]],
 				[pTurns[1], points[(i + 1) % points.length]],
 			);
 			if (fs.length === 0) {
@@ -4943,8 +4943,28 @@ export function processGPX(trackFeature, options = {}) {
 
 			points = applyLaneShift(points, options.loop);
 
+			// Debug: Check for NaN after lane shift
+			let nanAfterShift = 0;
+			for (let i = 0; i < Math.min(5, points.length); i++) {
+				const p = points[i];
+				if (isNaN(p.lat) || isNaN(p.lon)) {
+					note(`DEBUG: Point ${i} has NaN after lane shift: lat=${p.lat}, lon=${p.lon}`);
+					nanAfterShift++;
+				}
+			}
+
 			// apply smoothing after shift: shifting can cause some noise
 			points = smoothing(points, ["lat", "lon", "ele"], options.loop, "shift", 0.2);
+
+			// Debug: Check for NaN after post-shift smoothing  
+			let nanAfterSmoothing = 0;
+			for (let i = 0; i < Math.min(5, points.length); i++) {
+				const p = points[i];
+				if (isNaN(p.lat) || isNaN(p.lon)) {
+					note(`DEBUG: Point ${i} has NaN after smoothing: lat=${p.lat}, lon=${p.lon}`);
+					nanAfterSmoothing++;
+				}
+			}
 
 			deleteField2(points, "shift");
 			dumpPoints(points, "36-js-min-radius.txt");
@@ -4978,6 +4998,7 @@ export function processGPX(trackFeature, options = {}) {
 			}
 		}
 	}
+
 
 	const courseDistance = calcCourseDistance(points, options.loop);
 	note("final number of points = " + points.length);
