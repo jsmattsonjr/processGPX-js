@@ -276,6 +276,8 @@ async function main() {
 		console.log(`Successfully created ${outputFile}`);
 	} catch (error) {
 		console.error(`Error: ${error.message}`);
+		console.error("Stack trace:");
+		console.error(error.stack);
 		process.exit(1);
 	}
 }

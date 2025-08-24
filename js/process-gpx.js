@@ -2805,7 +2805,7 @@ function snapPoints(
 					while (
 						s < snapTransition &&
 						i_trans > 0 &&
-						i_trans <= maxIndex(points)
+						i_trans < maxIndex(points)
 					) {
 						s += latlngDistance(points[i_trans], points[i_trans + d]);
 						i_trans += d;
@@ -2822,7 +2822,7 @@ function snapPoints(
 					while (
 						s < snapTransition &&
 						j_trans > 0 &&
-						j_trans <= maxIndex(points)
+						j_trans < maxIndex(points)
 					) {
 						s += latlngDistance(points[j_trans], points[j_trans + jd]);
 						j_trans += jd;
@@ -3558,6 +3558,7 @@ export function processGPX(trackFeature, options = {}) {
 		lat: coord[1],
 		lon: coord[0],
 		ele: coord[2] || 0,
+		segment: 1,
 	}));
 
 	// Calculate quality score of original course
