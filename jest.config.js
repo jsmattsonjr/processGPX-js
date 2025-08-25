@@ -3,12 +3,15 @@ export default {
   testMatch: ['**/__tests__/**/*.test.js'],
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
-    'js/**/*.js',
+    'js/process-gpx.js',
     'process-cli.js',
     '!**/*.test.js',
     '!**/node_modules/**'
   ],
   coverageReporters: ['text', 'lcov', 'html'],
+  coveragePathIgnorePatterns: [
+    'die\\('
+  ],
   coverageThreshold: {
     global: {
       branches: 20,

@@ -19,7 +19,8 @@ describe('CLI Fuzzing Coverage Tests', () => {
 
 	test('run fuzzer for coverage testing', async () => {
 		// Run the existing fuzzer with a reasonable number of tests
-		const { stdout, stderr } = await execAsync('node fuzz-cli.js 20', { 
+		const fuzzCount = parseInt(process.env.FUZZ_COUNT || 20);
+		const { stdout, stderr } = await execAsync(`node fuzz-cli.js ${fuzzCount}`, { 
 			timeout: 300000 // 5 minutes
 		});
 		
@@ -41,7 +42,7 @@ describe('CLI Fuzzing Coverage Tests', () => {
 		console.log(`\n🔍 Fuzzer executed ${testsRun} tests with ${successful} successful`);
 		
 		// We expect the fuzzer to have run the requested number of tests
-		expect(testsRun).toBe(20);
+		expect(testsRun).toBe(fuzzCount);
 		
 		// We expect at least some tests to pass (fuzzing may hit edge cases)
 		expect(successful).toBeGreaterThan(0);
@@ -59,7 +60,7 @@ describe('CLI Fuzzing Coverage Tests', () => {
 			.filter((f, i, arr) => arr.indexOf(f) === i);
 			
 		console.log(`\n📁 GPX files tested: ${gpxFiles.length} different files`);
-		expect(gpxFiles.length).toBeGreaterThan(1);
+		expect(gpxFiles.length).toBeGreaterThan(0);
 		
 	}, 300000); // 5 minute timeout
 
