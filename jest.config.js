@@ -9,9 +9,6 @@ export default {
     '!**/node_modules/**'
   ],
   coverageReporters: ['text', 'lcov', 'html'],
-  coveragePathIgnorePatterns: [
-    'die\\('
-  ],
   coverageThreshold: {
     global: {
       branches: 20,

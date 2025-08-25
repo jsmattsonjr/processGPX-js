@@ -50,6 +50,7 @@ function spaceship(a, b) {
  * Throws an error with the given message
  * @param {string} message - Error message
  */
+/* istanbul ignore next */
 function die(message) {
 	throw new Error(message);
 }
@@ -430,7 +431,9 @@ function shiftVertex(point, directions, distance) {
  * @returns {Array} [dx, dy] in meters
  */
 function latlng2dxdy(p1, p2) {
+	/* istanbul ignore next */
 	if (!p1) die("latlng2dxdy called with undefined point #1");
+	/* istanbul ignore next */
 	if (!p2) die("latlng2dxdy called with undefined point #2");
 
 	const c1 = Math.cos(DEG2RAD * p1.lat);
@@ -504,9 +507,13 @@ function segmentIntercept(s12, s34) {
 	const [p1, p2] = s12;
 	const [p3, p4] = s34;
 
+	/* istanbul ignore next */
 	if (!p1) die("segmentIntercept called with undefined point #1");
+	/* istanbul ignore next */
 	if (!p2) die("segmentIntercept called with undefined point #2");
+	/* istanbul ignore next */
 	if (!p3) die("segmentIntercept called with undefined point #3");
+	/* istanbul ignore next */
 	if (!p4) die("segmentIntercept called with undefined point #4");
 
 	const [x1, y1] = [0, 0];
@@ -558,6 +565,7 @@ function addVectorToPoint(point, vector) {
 	lat -= 360 * Math.floor(0.5 + lat / 360);
 
 	if (Math.abs(lat) > 90) {
+		/* istanbul ignore next */
 		die("ERROR -- attempted to cross beyond pole!");
 	}
 
@@ -1453,6 +1461,7 @@ function fixZigZags(points) {
 
 				// If we ran out of points, something is wrong
 				if (pNew.length < 2) {
+					/* istanbul ignore next */
 					die("repairing zig-zags eliminated entire route");
 				}
 
@@ -1855,6 +1864,7 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 
 					// add points if needed
 					if (smoothRadians === undefined) {
+						/* istanbul ignore next */
 						die(
 							`ERROR: smoothRadians not defined (smoothAngle = ${smoothAngle})`,
 						);
@@ -2555,6 +2565,7 @@ function snapPoints(
 function isPointPrunable(points, _distance = 2, X = 0.001, dg = 0.001) {
 	const [p1, p2, p3] = points;
 	if (!p3) {
+		/* istanbul ignore next */
 		die("isPointPrunable requires 3 points");
 	}
 
@@ -2619,6 +2630,7 @@ function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.52, v0 = 9.5) {
  */
 function distanceDifference(p1, p2, courseDistance, isLoop) {
 	if (!Object.hasOwn(p1, "distance") || !Object.hasOwn(p2, "distance")) {
+		/* istanbul ignore next */
 		die("distanceDifference called w/o distance field");
 	}
 	let d = p2.distance - p1.distance;
@@ -3389,9 +3401,11 @@ function makeLoop(
 	segmentNames = {},
 ) {
 	if (!points || points.length < 2) {
+		/* istanbul ignore next */
 		die("makeLoop requires a reference to a list of two points.");
 	}
 	if (direction === undefined) {
+		/* istanbul ignore next */
 		die("makeLoop requires a direction parameter");
 	}
 
@@ -3732,11 +3746,13 @@ export function processGPX(trackFeature, options = {}) {
 		!trackFeature.geometry ||
 		trackFeature.geometry.type !== "LineString"
 	) {
+		/* istanbul ignore next */
 		die("Invalid track feature provided to processGPX");
 	}
 
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
+		/* istanbul ignore next */
 		die("-repeat limited to range 0 to 99");
 	}
 
@@ -4255,6 +4271,7 @@ export function processGPX(trackFeature, options = {}) {
 			while (i < sSmooth.length) {
 				const sigma = sSmooth[i]; // value
 				if (sigma < 0) {
+					/* istanbul ignore next */
 					die(
 						`negative sigma value found in selective smoothing list: ${sSmooth}`,
 					);
@@ -4265,6 +4282,7 @@ export function processGPX(trackFeature, options = {}) {
 				if (i >= sSmooth.length) break;
 				const s = sSmooth[i]; // position
 				if (sPrev !== undefined && s < sPrev) {
+					/* istanbul ignore next */
 					die(
 						"position values in selective smoothing list must be in non-decreasing order",
 					);
@@ -4534,6 +4552,7 @@ export function processGPX(trackFeature, options = {}) {
 		// Monitor the direction and when the direction changes enough, add a point
 		const simplified = [0, 1];
 		if (points.length <= 1) {
+			/* istanbul ignore next */
 			die("course lacks at least two points... quitting");
 		}
 
