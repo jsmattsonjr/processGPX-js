@@ -3,6 +3,7 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
+import path from "node:path";
 
 const execAsync = promisify(exec);
 
@@ -136,11 +137,43 @@ const OPTIONS_CONFIG = {
 
 class CLIOptionFuzzer {
 	constructor() {
-		this.testFile = "Twin_Bridges_Scenic_Bikeway.gpx";
+		this.gpxDirectory = "gpx";
+		this.testFiles = [];
 		this.maxOptions = 10; // Max options per test
 		this.runs = 0;
 		this.successful = 0;
 		this.failed = 0;
+		this.loadTestFiles();
+	}
+
+	/**
+	 * Load available GPX test files from the gpx directory
+	 */
+	loadTestFiles() {
+		try {
+			const files = fs.readdirSync(this.gpxDirectory);
+			this.testFiles = files.filter(file => 
+				file.toLowerCase().endsWith('.gpx') && 
+				!file.includes('_processed') &&
+				!file.includes('_jsprocessed')
+			);
+			
+			if (this.testFiles.length === 0) {
+				console.warn("⚠️  No GPX files found in gpx directory");
+				this.testFiles = ["Twin_Bridges_Scenic_Bikeway.gpx"]; // fallback
+			}
+		} catch (error) {
+			console.warn(`⚠️  Could not read gpx directory: ${error.message}`);
+			this.testFiles = ["Twin_Bridges_Scenic_Bikeway.gpx"]; // fallback
+		}
+	}
+
+	/**
+	 * Get a random test file
+	 */
+	getRandomTestFile() {
+		const randomFile = this.testFiles[Math.floor(Math.random() * this.testFiles.length)];
+		return path.join(this.gpxDirectory, randomFile);
 	}
 
 	/**
@@ -211,8 +244,8 @@ class CLIOptionFuzzer {
 		const selectedOptions = new Set();
 		const args = [];
 
-		// Always include the test file
-		args.push(this.testFile);
+		// Always include a random test file
+		args.push(this.getRandomTestFile());
 
 		let attempts = 0;
 		while (selectedOptions.size < numOptions && attempts < 100) {
@@ -274,7 +307,14 @@ class CLIOptionFuzzer {
 	 */
 	async runTest(args) {
 		this.runs++;
-		const command = `node process-cli.js ${args.join(" ")}`;
+		// Properly quote arguments that might contain spaces
+		const quotedArgs = args.map(arg => {
+			if (typeof arg === 'string' && arg.includes(' ')) {
+				return `"${arg}"`;
+			}
+			return arg;
+		});
+		const command = `node process-cli.js ${quotedArgs.join(" ")}`;
 		
 		try {
 			console.log(`\nTest ${this.runs}: ${command}`);
@@ -308,11 +348,11 @@ class CLIOptionFuzzer {
 	 */
 	async fuzz(numTests = 50) {
 		console.log(`🔍 Starting CLI fuzzer with ${numTests} tests`);
-		console.log(`📁 Using test file: ${this.testFile}`);
+		console.log(`📁 Using ${this.testFiles.length} GPX files from ${this.gpxDirectory}/ directory`);
 		
-		// Check test file exists
-		if (!fs.existsSync(this.testFile)) {
-			console.error(`❌ Test file not found: ${this.testFile}`);
+		// Check GPX directory exists
+		if (!fs.existsSync(this.gpxDirectory)) {
+			console.error(`❌ GPX directory not found: ${this.gpxDirectory}`);
 			return;
 		}
 
