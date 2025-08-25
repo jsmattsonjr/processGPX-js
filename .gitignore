@@ -1,3 +1,5 @@
+coverage
+debug
+gpx/*process*
+node_modules
 reference
-/node_modules
-debug/
