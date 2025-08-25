@@ -127,7 +127,69 @@ When porting Perl code to JavaScript, be aware of these subtle but critical diff
    - JavaScript: `array[index]++` on undefined results in `NaN`, breaking numeric logic
    - Solution: Use `array[index] = (array[index] || 0) + 1; if (array[index] > 1) ...`
 
+3. **Negative Array Indexing**:
+   - Perl: `$array[-1]` returns the last element, `$array[-2]` returns second-to-last, etc.
+   - JavaScript: `array[-1]` returns `undefined` (negative indices are not supported)
+   - Solution: Use the `ix(arr, i)` helper function: `ix(points, -1)` instead of `points[-1]`
+   - The `ix()` function handles both positive and negative indices correctly using modulo arithmetic
+   - For assignments to negative indices, normalize the index manually or use proper modulo arithmetic
+
 These issues can cause infinite loops or incorrect behavior that's difficult to debug.
+
+### Translation Progress and Function Organization
+
+The JavaScript functions in `js/process-gpx.js` are organized to exactly match the Perl function ordering from `reference/processGPX/processGPX`. This makes it easy to:
+- Compare implementations side-by-side
+- Check if dependencies are already translated
+- Find the correct placement for new translations
+
+#### Function Translation Status (70/81 Complete)
+
+**✅ Translated Functions** (70):
+- Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`
+- Distance/geometry: `latlngDistance`, `pointsAreClose`, `latlngDotProduct`, `crossProduct`, `latlngCrossProduct`, `turnDirection`, `latlngAngle`, `latlngDirection`, `pointDirection`, `latlng2dxdy`
+- Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToPoint`
+- Geometric algorithms: `segmentIntercept`, `splineInterpolation`, `arcFitInterpolation`, `circle3PointFit`
+- Point processing: `removeDuplicatePoints`, `cropCorners`, `addSplines`, `fixZigZags`, `findLoops`
+- Lane operations: `applyLaneShift`
+- Smoothing: `smoothing`, `calcSmoothingSigma`
+- Spacing/interpolation: `doAutoSpacing`, `doPointInterpolation`
+- Road detection: `xyPointOnLine`, `isPointOnRoad`, `isPointOnRoadCorner`, `roadTest`, `snapPoints`
+- Point filtering: `isPointPrunable`
+- Speed modeling: `bikeSpeedModel`, `distanceDifference`, `pointSeparation`
+- Straightening: `straightenPoints`, `calcDeviationStats`, `autoStraighten`
+- Field operations: `addDistanceField`, `addGradientField`, `integrateGradientField`, `addDirectionField`, `addCurvatureField`, `calcCourseDistance`
+- Data management: `deleteField`, `deleteExtensionField`, `deleteField2`, `deleteDerivedFields`
+- Route operations: `reversePoints`, `cropPoints`, `UTurnCheck`, `makeLoop`
+- Quality: `calcQualityScore`
+- Utilities: `note`
+
+**❌ Not Yet Translated** (19):
+- File operations: `setFileNameSuffix`
+- Geometry: `pointAtPosition`, `fitCircle`, `processCircle`
+- Point filtering: `simplifyPoints`
+- Climbing analysis: `climbRating`, `findClimbs`, `placeGradientSigns`
+- Auto segments: `addAutoSegments`
+- Straightening: `processStraight`
+- Circuit operations: `circuitFromPosition`, `shiftCircuit`
+- Profile operations: `simplifyProfile`, `simplifyMonotonicProfile`
+- Route operations: `splitPoints`
+- Extensions: `addPointExtensions`, `flattenPointExtensions`, `getExtensions`, `addExtensions`
+
+#### Finding Function Placement
+
+When translating a new Perl function:
+1. Find its position in the Perl `sub` declaration order (use `grep '^sub ' reference/processGPX/processGPX`)
+2. Look for the corresponding `// TODO: Translate functionName() from Perl` comment in `js/process-gpx.js`
+3. Replace the TODO comment with the translated function
+4. Check dependencies - all functions above it in the Perl order should already be translated
+
+#### Checking Dependencies
+
+Before translating a function, verify its dependencies are already available:
+- Functions can call any function that appears **earlier** in the Perl ordering
+- Functions can call utility functions (at the top of the file)
+- If a dependency is missing (has a TODO comment), translate it first
 
 ### Key Algorithms to Port
 - Gaussian smoothing for position and altitude

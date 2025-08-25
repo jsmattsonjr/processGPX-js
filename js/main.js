@@ -89,7 +89,7 @@ class ProcessGPXApp {
 			this.mapVisualization,
 		);
 		this.elevationChart.createChart(trackFeature);
-		
+
 		// Initialize UI options from defaults
 		this.initializeOptionsUI();
 	}
@@ -116,13 +116,13 @@ class ProcessGPXApp {
 
 			// Initialize processing options based on Perl processGPX defaults
 			const options = { ...defaultOptions };
-			
+
 			// Update options based on UI settings
 			const autoCheckbox = document.getElementById("autoOption");
 			options.auto = autoCheckbox.checked ? 1 : 0;
 
 			// Process the current route with options (yield to browser for UI update)
-			await new Promise(resolve => setTimeout(resolve, 10));
+			await new Promise((resolve) => setTimeout(resolve, 10));
 			const processedRoute = processGPX(this.currentRoute, options);
 			this.processedRoute = processedRoute;
 

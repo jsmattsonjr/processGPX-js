@@ -15,7 +15,7 @@ import { processGPX } from "./js/process-gpx.js";
 function setupYargsParser() {
 	return yargs(hideBin(process.argv))
 		.usage("Usage: $0 [options] <input.gpx>")
-		.version("0.1.0")
+		.version("0.1.1")
 		.alias("v", "version")
 		.alias("h", "help")
 		.options({
@@ -48,7 +48,9 @@ function setupYargsParser() {
 			prune: { type: "boolean", default: undefined },
 			quiet: { type: "boolean", default: false },
 			reverse: { type: "boolean", default: false },
+			saveCrossingsCSV: { type: "boolean", default: false },
 			saveSimplifiedCourse: { type: "boolean", default: false },
+			simplifyPoints: { type: "boolean", default: undefined },
 			stripSegments: { type: "boolean", default: false },
 
 			// Numeric options
@@ -89,7 +91,7 @@ function setupYargsParser() {
 				alias: ["finishCircuitStart"],
 			},
 			gAutoSmooth: { type: "number", default: 0, alias: ["autoSmoothG"] },
-			gSmooth: { type: "number", default: 0, alias: ["gSigma"] },
+			gSigma: { type: "number", default: 0, alias: ["sigmag", "smoothG"] },
 			gradientPower: { type: "number", default: 2 },
 			gradientThreshold: { type: "number", default: 100 },
 			laneShift: { type: "number" },
@@ -114,8 +116,8 @@ function setupYargsParser() {
 			shiftStart: { type: "number", alias: ["laneShiftStart"] },
 			shiftTransition: { type: "number", alias: ["laneShiftTransition"] },
 			sigma: { type: "number", alias: ["smooth"] },
-			sigmag: { type: "number", alias: ["smoothG"] },
-			sigmaz: { type: "number", alias: ["smoothZ", "zSigma", "zSmooth"] },
+			simplifyD: { type: "number", default: 0.3, alias: ["simplifyDistance"] },
+			simplifyZ: { type: "number", default: 0.1, alias: ["simplifyAltitude"] },
 			smoothAngle: { type: "number" },
 			smoothEnd: { type: "number" },
 			smoothStart: { type: "number" },
@@ -143,6 +145,7 @@ function setupYargsParser() {
 			zShift: { type: "number", default: 0, alias: ["shiftZ"] },
 			zShiftEnd: { type: "number", alias: ["shiftZEnd"] },
 			zShiftStart: { type: "number", alias: ["shiftZStart"] },
+			sigmaz: { type: "number", alias: ["smoothZ", "zSigma"] },
 
 			// String options
 			author: { type: "string" },
@@ -150,7 +153,7 @@ function setupYargsParser() {
 			copyright: { type: "string" },
 			description: { type: "string" },
 			keywords: { type: "string" },
-			name: { type: "string", alias: ["title"] },
+			title: { type: "string", alias: ["name"] },
 			out: { type: "string" },
 			namedSegments: { type: "string", alias: ["segment", "segments"] },
 			startTime: { type: "string" },
@@ -204,6 +207,50 @@ function setupYargsParser() {
 			"$0 --auto --splineDegs 5 input.gpx",
 			"Auto with custom spline angle",
 		)
+		.check((argv) => {
+			// Check mutual exclusion of loopLeft and loopRight
+			if (argv.loopLeft && argv.loopRight) {
+				throw new Error(
+					"ERROR: you cannot specify both -loopLeft and -loopRight",
+				);
+			}
+			// Check shiftSF dependency on lap/loop
+			if (argv.shiftSF && !argv.loop && !argv.lap) {
+				throw new Error(
+					"ERROR: -shiftSF is only compatible with the -lap (or -loop) option.",
+				);
+			}
+			return true;
+		})
+		.middleware((argv) => {
+			// Map Yargs option names to Perl variable names
+
+			// Smooth family mappings
+			if (argv.gSigma) {
+				argv.gSmooth = argv.gSigma;
+			}
+			if (argv.sigma) {
+				argv.lSmooth = argv.sigma;
+			}
+			if (argv.sigmaz) {
+				argv.zSmooth = argv.sigmaz;
+			}
+
+			// Boolean mappings
+			if (argv.lap) {
+				argv.isLoop = argv.lap;
+			}
+
+			// String mappings
+			if (argv.keywords) {
+				argv.newKeywords = argv.keywords;
+			}
+			if (argv.out) {
+				argv.outFile = argv.out;
+			}
+
+			return argv;
+		})
 		.help();
 }
 
