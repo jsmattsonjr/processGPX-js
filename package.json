@@ -1,6 +1,6 @@
 {
   "name": "app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A JavaScript port of processGPX, designed to improve and create GPX files for cycling emulation platforms like BikeTerra. This client-side application brings the powerful GPX processing capabilities of the original Perl tool to the browser.",
   "main": "index.js",
   "scripts": {

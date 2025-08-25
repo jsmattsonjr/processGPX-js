@@ -15,7 +15,7 @@ import { processGPX } from "./js/process-gpx.js";
 function setupYargsParser() {
 	return yargs(hideBin(process.argv))
 		.usage("Usage: $0 [options] <input.gpx>")
-		.version("0.1.0")
+		.version("0.1.1")
 		.alias("v", "version")
 		.alias("h", "help")
 		.options({
