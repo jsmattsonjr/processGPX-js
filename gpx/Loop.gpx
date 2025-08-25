@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+ <metadata>
+  <name>Loop</name>
+  <author>
+   <name>Jim Mattson</name>
+   <link href="https://www.strava.com/athletes/31196954"/>
+  </author>
+  <copyright author="OpenStreetMap contributors">
+   <year>2020</year>
+   <license>https://www.openstreetmap.org/copyright</license>
+  </copyright>
+  <link href="https://www.strava.com/routes/3392474967605843314"/>
+ </metadata>
+ <trk>
+  <name>Loop</name>
+  <link href="https://www.strava.com/routes/3392474967605843314"/>
+  <type>gravel_biking</type>
+  <trkseg>
+   <trkpt lat="47.061530000000005" lon="-122.98922">
+    <ele>49.96</ele>
+   </trkpt>
+   <trkpt lat="47.061960000000006" lon="-122.98916000000001">
+    <ele>51.410000000000004</ele>
+   </trkpt>
+   <trkpt lat="47.06223000000001" lon="-122.98960000000001">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.062200000000004" lon="-122.98967">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.06223000000001" lon="-122.98973000000001">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.06226" lon="-122.98972">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.062290000000004" lon="-122.98967">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.062270000000005" lon="-122.98963">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.06223000000001" lon="-122.98960000000001">
+    <ele>51.4</ele>
+   </trkpt>
+   <trkpt lat="47.061960000000006" lon="-122.98916000000001">
+    <ele>51.410000000000004</ele>
+   </trkpt>
+   <trkpt lat="47.06237" lon="-122.98909">
+    <ele>52.29</ele>
+   </trkpt>
+   <trkpt lat="47.06284" lon="-122.98890000000002">
+    <ele>51.74</ele>
+   </trkpt>
+  </trkseg>
+ </trk>
+</gpx>
