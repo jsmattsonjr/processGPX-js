@@ -3697,10 +3697,7 @@ export function processGPX(trackFeature, options = {}) {
 		die("-repeat limited to range 0 to 99");
 	}
 
-	// Check loopLeft and loopRight
-	if (options.loopLeft && options.loopRight) {
-		die("ERROR: you cannot specify both -loopLeft and -loopRight");
-	}
+	// Mutual exclusion of loopLeft and loopRight is enforced by Yargs validation
 
 	// Short-cut for out-and-back
 	if (options.outAndBack || options.outAndBackLap) {
@@ -3956,10 +3953,7 @@ export function processGPX(trackFeature, options = {}) {
 		}
 	}
 
-	// If shiftSF is specified but not loop, that's an error
-	if (options.laneShiftSF !== 0 && !options.isLoop) {
-		die("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
-	}
+	// shiftSF dependency on lap/loop option is enforced by Yargs validation
 
 	// Look for zig-zags
 	points = fixZigZags(points);
