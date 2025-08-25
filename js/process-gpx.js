@@ -9,6 +9,11 @@ const REARTH = 20037392 / PI;
 const DEG2RAD = PI / 180;
 const LAT2Y = REARTH * DEG2RAD;
 
+function ix(arr, i) {
+	const n = arr.length;
+	return arr[((i % n) + n) % n];
+}
+
 /**
  * Perl-style int() function that truncates towards zero
  * @param {number} x - Number to truncate
@@ -36,16 +41,6 @@ function spaceship(a, b) {
  */
 function die(message) {
 	throw new Error(message);
-}
-
-/**
- * Wrap array index to handle negative indices like Perl
- * @param {number} i - Index (can be negative)
- * @param {number} len - Array length
- * @returns {number} Wrapped index
- */
-function wrapIndex(i, len) {
-	return ((i % len) + len) % len;
 }
 
 /**
@@ -412,7 +407,7 @@ function applyLaneShift(points, isLoop) {
 	for (let i = 0; i < points.length; i++) {
 		let dir1, dir2;
 		if (i > 0 || isLoop) {
-			dir1 = dirs[wrapIndex(i - 1, dirs.length)];
+			dir1 = ix(dirs, i - 1);
 			dir2 = dir1 + reduceAngle(dirs[i] - dir1);
 		} else {
 			dir1 = dirs[i];
@@ -430,7 +425,7 @@ function applyLaneShift(points, isLoop) {
 			}
 			// check if there's a knot.. if not use the doubled points
 			const fs = segmentIntercept(
-				[points[wrapIndex(i - 1, points.length)], pTurns[0]],
+				[ix(points, i - 1), pTurns[0]],
 				[pTurns[1], points[(i + 1) % points.length]],
 			);
 			if (fs.length === 0) {
@@ -1639,8 +1634,8 @@ function smoothing(
 			let j = i;
 			let s = 0;
 			while ((j > 0 || isLoop) && j > i - points.length && s < dsMax) {
-				const p1 = points[wrapIndex(j, points.length)];
-				const p2 = points[wrapIndex(j - 1, points.length)];
+				const p1 = points[j];
+				const p2 = ix(points, j - 1);
 				const ds = latlngDistance(p1, p2);
 				s += ds;
 
@@ -1677,10 +1672,7 @@ function smoothing(
 			s = 0;
 			const ss = [0];
 			for (let ii = j; ii < k; ii++) {
-				s += latlngDistance(
-					points[wrapIndex(ii + 1, points.length)],
-					points[wrapIndex(ii, points.length)],
-				);
+				s += latlngDistance(ix(points, ii + 1), ix(points, ii));
 				ss.push(s);
 			}
 
@@ -1703,7 +1695,7 @@ function smoothing(
 			// more sophisticated approach could use 2D convolution
 			for (let ii = 0; ii < us.length; ii++) {
 				const u = us[ii];
-				const point = points[wrapIndex(j + ii, points.length)];
+				const point = ix(points, j + ii);
 
 				// weight by distance
 				let du = ii > 0 ? u - us[ii - 1] : 0;
@@ -2757,7 +2749,7 @@ function snapPoints(
 					j1 < maxIndex(points) &&
 					pointsAreClose(
 						points[i1 - 1],
-						points[j1 - sign],
+						ix(points, j1 - sign),
 						dsClose,
 						snapAltitude,
 					)
@@ -2922,7 +2914,7 @@ function snapPoints(
 			while (true) {
 				const p1_zig = points[j2];
 				const p2_zig = points[i2];
-				const p3_zig = points[i2 - 1];
+				const p3_zig = ix(points, i2 - 1);
 				if (p1_zig && p2_zig && p3_zig) {
 					const dot_zig = latlngDotProduct(p1_zig, p2_zig, p2_zig, p3_zig);
 					if (dot_zig !== null && dot_zig > -0.9) break;
@@ -2951,7 +2943,7 @@ function snapPoints(
 					for (let i = i1; i <= i2; i++) {
 						if (
 							j < j2 &&
-							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
+							Math.abs(points[i].distance - ix(points, i - 1).distance) < 0.05
 						) {
 							j++;
 						}
@@ -2983,7 +2975,7 @@ function snapPoints(
 					for (let i = i2; i >= i1; i--) {
 						if (
 							j < j1 &&
-							Math.abs(points[i].distance - points[i - 1].distance) < 0.05
+							Math.abs(points[i].distance - ix(points, i - 1).distance) < 0.05
 						) {
 							j++;
 						}
@@ -3160,12 +3152,12 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 
 				if (isLoop || i < maxIndex(points)) {
 					// find points which define an angle
-					let i1 = wrapIndex(i - 1, points.length);
+					let i1 = i - 1;
 					let i2 = (i + 1) % points.length;
 					let d1;
 					let d2;
 
-					while ((d1 = latlngDistance(points[i1], points[i])) < 0.01) {
+					while ((d1 = latlngDistance(ix(points, i1), points[i])) < 0.01) {
 						i1--;
 						if ((!isLoop && i1 < 0) || i1 === i) {
 							continue iLoop;
@@ -3182,7 +3174,7 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 					}
 
 					// determine the angle between the points
-					const a = latlngAngle(points[i1], points[i], points[i2]);
+					const a = latlngAngle(ix(points, i1), points[i], points[i2]);
 
 					// add points if needed
 					if (smoothRadians === undefined) {
@@ -4900,7 +4892,7 @@ export function processGPX(trackFeature, options = {}) {
 					while (
 						u1 > -maxIndex(points) &&
 						distanceDifference(
-							points[wrapIndex(u1 - 1, points.length)],
+							ix(points, u1 - 1),
 							points[0],
 							courseDistance,
 							options.loop,
@@ -4918,7 +4910,7 @@ export function processGPX(trackFeature, options = {}) {
 					while (
 						u1 < u0 &&
 						distanceDifference(
-							points[wrapIndex(u1, points.length)],
+							ix(points, u1),
 							points[u0],
 							courseDistance,
 							options.loop,
@@ -4950,7 +4942,7 @@ export function processGPX(trackFeature, options = {}) {
 								Math.cos(
 									(PI *
 										pointSeparation(
-											points[wrapIndex(u, points.length)],
+											ix(points, u),
 											points[u0],
 											courseDistance,
 											options.loop,
@@ -4962,8 +4954,9 @@ export function processGPX(trackFeature, options = {}) {
 						const shift = a[u0] * f;
 
 						// if there's an existing shift, then combine with that:
-						if (shift > newShifts[u]) {
-							newShifts[u] = shift;
+						const normalizedU = ((u % newShifts.length) + newShifts.length) % newShifts.length;
+						if (shift > newShifts[normalizedU]) {
+							newShifts[normalizedU] = shift;
 						}
 					}
 				}

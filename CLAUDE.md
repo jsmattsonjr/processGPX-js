@@ -127,6 +127,13 @@ When porting Perl code to JavaScript, be aware of these subtle but critical diff
    - JavaScript: `array[index]++` on undefined results in `NaN`, breaking numeric logic
    - Solution: Use `array[index] = (array[index] || 0) + 1; if (array[index] > 1) ...`
 
+3. **Negative Array Indexing**:
+   - Perl: `$array[-1]` returns the last element, `$array[-2]` returns second-to-last, etc.
+   - JavaScript: `array[-1]` returns `undefined` (negative indices are not supported)
+   - Solution: Use the `ix(arr, i)` helper function: `ix(points, -1)` instead of `points[-1]`
+   - The `ix()` function handles both positive and negative indices correctly using modulo arithmetic
+   - For assignments to negative indices, normalize the index manually or use proper modulo arithmetic
+
 These issues can cause infinite loops or incorrect behavior that's difficult to debug.
 
 ### Key Algorithms to Port
