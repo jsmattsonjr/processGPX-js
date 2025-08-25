@@ -255,24 +255,17 @@ function setupYargsParser() {
 }
 
 /**
- * Main function for the CLI tool
+ * Parse command line arguments using yargs
  */
-async function main() {
-	// Parse command line arguments with yargs
+export async function parseArgs(args) {
 	const parser = setupYargsParser();
-	const argv = await parser.argv;
+	return await parser.parse(args);
+}
 
-	// Get input files from positional arguments
-	const inputFiles = argv._;
-	if (inputFiles.length === 0) {
-		console.error("Error: No input file specified");
-		parser.showHelp();
-		process.exit(1);
-	}
-
-	const inputFile = inputFiles[0]; // Use first input file
-	const options = argv; // yargs provides all parsed options
-
+/**
+ * Process a GPX file with given options
+ */
+export async function processGpxFile(inputFile, options) {
 	try {
 		console.log(`Processing file: ${inputFile}`);
 
@@ -328,12 +321,43 @@ async function main() {
 		// Write output GPX file
 		fs.writeFileSync(outputFile, gpxOutput);
 		console.log(`Successfully created ${outputFile}`);
+		
+		return { processedRoute, outputFile };
 	} catch (error) {
 		console.error(`Error: ${error.message}`);
 		console.error("Stack trace:");
 		console.error(error.stack);
+		throw error;
+	}
+}
+
+/**
+ * Main function for the CLI tool
+ */
+async function main() {
+	// Parse command line arguments with yargs
+	const parser = setupYargsParser();
+	const argv = await parser.argv;
+
+	// Get input files from positional arguments
+	const inputFiles = argv._;
+	if (inputFiles.length === 0) {
+		console.error("Error: No input file specified");
+		parser.showHelp();
+		process.exit(1);
+	}
+
+	const inputFile = inputFiles[0]; // Use first input file
+	const options = argv; // yargs provides all parsed options
+
+	try {
+		await processGpxFile(inputFile, options);
+	} catch (error) {
 		process.exit(1);
 	}
 }
 
-main();
+// Only run main if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+	main();
+}

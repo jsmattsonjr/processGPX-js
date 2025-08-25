@@ -37,6 +37,63 @@ processGPX-js/
 └── dist/                     # Built distribution files
 ```
 
+## Testing
+
+This project uses Jest for testing with a comprehensive fuzzing approach to ensure robust coverage of the GPX processing pipeline.
+
+### Test Setup
+
+The testing framework combines:
+- **CLI Option Fuzzer**: Generates random combinations of CLI options for comprehensive testing
+- **Jest Integration**: Collects code coverage while testing both `process-cli.js` and `js/process-gpx.js`
+- **Direct Function Testing**: Tests the core processing functions with realistic option combinations
+
+### Running Tests
+
+```bash
+# Run basic tests
+npm test
+
+# Run tests with coverage reporting
+npm run test:coverage
+
+# Run standalone fuzzer (without Jest)
+npm run test:fuzz 50  # Run 50 random test combinations
+```
+
+### Fuzzing Architecture
+
+The fuzzer (`fuzz-cli.js`) provides comprehensive testing by:
+1. **Generating Random Options**: Creates realistic combinations of CLI options
+2. **Testing Multiple GPX Files**: Uses 70+ real-world GPX files from the `gpx/` directory
+3. **Validating Constraints**: Respects option dependencies and mutual exclusions
+4. **Collecting Coverage**: Jest tracks code paths exercised during fuzzing
+
+```bash
+# Generate sample fuzz commands
+node fuzz-cli.js --generate
+
+# Generate option arrays for Jest
+node fuzz-cli.js --generate-options
+```
+
+### Test Coverage
+
+The Jest setup captures coverage from:
+- **CLI Processing** (`process-cli.js`): Argument parsing, file I/O, error handling
+- **Core Algorithms** (`js/process-gpx.js`): GPX processing pipeline, smoothing, interpolation
+- **Edge Cases**: Random option combinations reveal corner cases and error conditions
+
+Example coverage output:
+```
+--------------------------|---------|----------|---------|---------|
+File                      | % Stmts | % Branch | % Funcs | % Lines |
+--------------------------|---------|----------|---------|---------|
+process-cli.js           |   85.2  |   73.1   |  100.0  |   84.8  |
+js/process-gpx.js        |   78.9  |   65.4   |   91.3  |   78.2  |
+--------------------------|---------|----------|---------|---------|
+```
+
 ## Debugging
 
 The `dumpPoints()` function in `js/process-gpx.js` is used to dump the state of the points array at various stages of processing. These dumps are saved as tab-separated text files in the `debug/` directory.

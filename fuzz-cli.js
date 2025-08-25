@@ -247,6 +247,25 @@ class CLIOptionFuzzer {
 		// Always include a random test file
 		args.push(this.getRandomTestFile());
 
+		return this._generateOptionsInternal(numOptions, selectedOptions, args);
+	}
+
+	/**
+	 * Generate just the option arguments (no file)
+	 */
+	generateOptionArgs() {
+		const numOptions = Math.floor(Math.random() * this.maxOptions) + 1;
+		const selectedOptions = new Set();
+		const args = [];
+
+		return this._generateOptionsInternal(numOptions, selectedOptions, args);
+	}
+
+	/**
+	 * Internal method to generate options
+	 */
+	_generateOptionsInternal(numOptions, selectedOptions, args) {
+
 		let attempts = 0;
 		while (selectedOptions.size < numOptions && attempts < 100) {
 			attempts++;
@@ -385,6 +404,13 @@ class CLIOptionFuzzer {
 		const args = this.generateOptions();
 		return `node process-cli.js ${args.join(" ")}`;
 	}
+
+	/**
+	 * Generate just the option arguments as an array
+	 */
+	generateOptionArgsArray() {
+		return this.generateOptionArgs();
+	}
 }
 
 // CLI interface
@@ -397,19 +423,23 @@ if (args.length === 0 || args[0] === "--help") {
 CLI Option Fuzzer for processGPX-js
 
 Usage:
-  node fuzz-cli.js [num-tests]     Run fuzzer with specified number of tests (default: 50)
-  node fuzz-cli.js --generate      Generate a single random command
-  node fuzz-cli.js --help          Show this help
+  node fuzz-cli.js [num-tests]        Run fuzzer with specified number of tests (default: 50)
+  node fuzz-cli.js --generate         Generate a single random command
+  node fuzz-cli.js --generate-options Generate random option arguments as JSON
+  node fuzz-cli.js --help             Show this help
 
 Examples:
-  node fuzz-cli.js 100            # Run 100 random tests
-  node fuzz-cli.js --generate     # Generate one random command
+  node fuzz-cli.js 100               # Run 100 random tests
+  node fuzz-cli.js --generate        # Generate one random command
+  node fuzz-cli.js --generate-options # Generate option args for Jest testing
 `);
 	process.exit(0);
 }
 
 if (args[0] === "--generate") {
 	console.log(fuzzer.generateCommand());
+} else if (args[0] === "--generate-options") {
+	console.log(JSON.stringify(fuzzer.generateOptionArgsArray()));
 } else {
 	const numTests = parseInt(args[0]) || 50;
 	fuzzer.fuzz(numTests);
