@@ -210,11 +210,15 @@ function setupYargsParser() {
 		.check((argv) => {
 			// Check mutual exclusion of loopLeft and loopRight
 			if (argv.loopLeft && argv.loopRight) {
-				throw new Error("ERROR: you cannot specify both -loopLeft and -loopRight");
+				throw new Error(
+					"ERROR: you cannot specify both -loopLeft and -loopRight",
+				);
 			}
 			// Check shiftSF dependency on lap/loop
 			if (argv.shiftSF && !argv.loop && !argv.lap) {
-				throw new Error("ERROR: -shiftSF is only compatible with the -lap (or -loop) option.");
+				throw new Error(
+					"ERROR: -shiftSF is only compatible with the -lap (or -loop) option.",
+				);
 			}
 			return true;
 		})
