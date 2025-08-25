@@ -7,7 +7,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:fuzz": "node fuzz-cli.js",
-    "debug:to-gpx": "node debug_to_gpx.js"
+    "debug:to-gpx": "node debug_to_gpx.js",
+    "gpx-compare": "node gpx-compare.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +24,7 @@
   "homepage": "https://github.com/jsmattsonjr/processGPX-js#readme",
   "dependencies": {
     "@tmcw/togeojson": "^7.1.2",
+    "@turf/turf": "^7.2.0",
     "@xmldom/xmldom": "^0.8.11",
     "togpx": "^0.5.4",
     "yargs": "^18.0.0"
