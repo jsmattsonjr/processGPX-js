@@ -1,6 +1,7 @@
 /**
- * GPX export functionality using togpx
+ * GPX export functionality using togpx with XML formatting
  */
+import { formatXML } from "./xml-formatter.js";
 
 /**
  * Convert a track feature to GPX XML format using togpx
@@ -15,7 +16,7 @@ function trackFeatureToGPX(trackFeature) {
 	};
 
 	// Convert to GPX using togpx
-	return togpx(featureCollection, {
+	const gpxOutput = togpx(featureCollection, {
 		creator: "processGPX-js",
 		metadata: {
 			name: trackFeature.properties?.name || "Processed Route",
@@ -25,6 +26,9 @@ function trackFeatureToGPX(trackFeature) {
 			},
 		},
 	});
+
+	// Format the XML with proper indentation and newlines
+	return formatXML(gpxOutput);
 }
 
 /**

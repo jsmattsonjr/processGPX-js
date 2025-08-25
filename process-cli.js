@@ -8,6 +8,7 @@ import togpx from "togpx";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { processGPX } from "./js/process-gpx.js";
+import { formatXML } from "./js/xml-formatter.js";
 
 /**
  * Configure yargs parser matching processGPX Perl script options
@@ -312,6 +313,9 @@ export async function processGpxFile(inputFile, options) {
 			},
 		});
 
+		// Format the XML with proper indentation and newlines
+		const formattedGpxOutput = formatXML(gpxOutput);
+
 		// Generate output filename
 		const dirname = path.dirname(inputFile);
 		const ext = path.extname(inputFile);
@@ -319,7 +323,7 @@ export async function processGpxFile(inputFile, options) {
 		const outputFile = path.join(dirname, `${base}_jsprocessed.gpx`);
 
 		// Write output GPX file
-		fs.writeFileSync(outputFile, gpxOutput);
+		fs.writeFileSync(outputFile, formattedGpxOutput);
 		console.log(`Successfully created ${outputFile}`);
 		
 		return { processedRoute, outputFile };
