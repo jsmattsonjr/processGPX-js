@@ -186,18 +186,12 @@ function transition(x) {
 // TODO: Translate setFileNameSuffix() from Perl
 
 /**
- * Reduce angle to range (-π, π]
+ * Reduce angle to range [-π, π]
  * @param {number} theta - Angle in radians
  * @returns {number} Reduced angle
  */
 function reduceAngle(theta) {
 	theta -= TWOPI * Math.floor(0.5 + theta / TWOPI);
-
-	// Ensure -π maps to π to match atan2()
-	if (Math.abs(theta + PI) < PI * Number.EPSILON) {
-		theta = PI;
-	}
-
 	return theta;
 }
 
