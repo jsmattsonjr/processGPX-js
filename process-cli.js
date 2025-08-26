@@ -51,7 +51,6 @@ function setupYargsParser() {
 			reverse: { type: "boolean", default: false },
 			saveCrossingsCSV: { type: "boolean", default: false },
 			saveSimplifiedCourse: { type: "boolean", default: false },
-			simplifyPoints: { type: "boolean", default: undefined },
 			stripSegments: { type: "boolean", default: false },
 
 			// Numeric options
@@ -119,6 +118,7 @@ function setupYargsParser() {
 			sigma: { type: "number", alias: ["smooth"] },
 			simplifyD: { type: "number", default: 0.3, alias: ["simplifyDistance"] },
 			simplifyZ: { type: "number", default: 0.1, alias: ["simplifyAltitude"] },
+			simplifyPoints: { type: "boolean", default: undefined, alias: ["simplify"] },
 			smoothAngle: { type: "number" },
 			smoothEnd: { type: "number" },
 			smoothStart: { type: "number" },

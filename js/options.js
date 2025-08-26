@@ -89,6 +89,10 @@ export const defaultOptions = {
 	snapAltitude: 1,
 	snapDistance: 2,
 
+	// Simplify settings
+	simplifyD: 0.3,
+	simplifyZ: 0.1,
+
 	// Spline settings
 	splineDegs: 0,
 	splineMaxDegs: 60,
