@@ -4894,6 +4894,14 @@ export function processGPX(trackFeature, options = {}) {
 		const minRadiusStart = options.minRadiusStart;
 		const minRadiusEnd = options.minRadiusEnd;
 
+		// For loops, remove duplicate final point before processing
+		// For the purposes of corner smoothing, the start and finish should be viewed as a single point.
+		// Hence, the penultimate point should immediately be followed by the start point.
+		// Enumerating the same point twice messes up the corner smoothing algorithm.
+		if (options.isLoop && points.length > 1 && pointsAreClose(points[0], points[maxIndex(points)])) {
+			points.pop();
+		}
+
 		note(`setting minimum radius to ${minRadius}...`);
 		addCurvatureField(points, options.isLoop);
 		addDistanceField(points);
@@ -5062,6 +5070,12 @@ export function processGPX(trackFeature, options = {}) {
 
 			deleteField2(points, "shift");
 			dumpPoints(points, "36-js-min-radius.txt");
+		}
+
+		// For loops, restore final point by copying the (possibly moved) start point
+		// After processing, copy the start point to restore loop closure
+		if (options.isLoop && points.length > 0) {
+			points.push({ ...points[0] });
 		}
 	}
 

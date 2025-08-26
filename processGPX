@@ -1242,14 +1242,19 @@ sub fixZigZags {
         warn("repairing zig-zag...\n");
         my $u = $U1;            # keep points up to u
         my $v = $U2 + 1;        # keep points starting with v
-        
+
         print STDERR "DEBUG: initial u=$u, initial v=$v, points.length=", scalar(@$points), "\n";
-        
+
         while (($v < $#$points) && UTurnCheck($points->[$u], $points->[$v], $points->[$v], $points->[$v + 1])) {
           print STDERR "DEBUG: extending v from $v to ", $v + 1, " due to UTurn check\n";
           $v++;
         }
-        
+
+				while (($u > 0) && UTurnCheck($points->[$u - 1], $points->[$u], $points->[$u], $points->[$v])) {
+					print STDERR "DEBUG: extending u from $u to ", $u - 1, " due to UTurn check\n";
+					$u--;
+				}
+
         print STDERR "DEBUG: final u=$u, final v=$v, eliminating points ", $u + 1, " to ", $v - 1, " (", $v - $u - 1, " points)\n";
         warn("eliminating ", $v - $u - 1, " points\n");
         $zigzagCount ++;
@@ -4675,28 +4680,28 @@ sub note {
 sub dumpPoints {
   my ($points_ref, $filename) = @_;
   my @points = @$points_ref;
-  
+
   # Create debug directory if it doesn't exist
   unless (-d "debug") {
     mkdir "debug" or die "Cannot create debug directory: $!";
   }
-  
+
   my $debug_path = "debug/$filename";
   open(my $fh, '>', $debug_path) or die "Cannot open $debug_path: $!";
-  
+
   print $fh "# Points dump: " . scalar(@points) . " points\n";
   print $fh "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
-  
+
   for my $i (0..$#points) {
     my $p = $points[$i];
     my $lat = sprintf("%.8f", $p->{lat});
     my $lon = sprintf("%.8f", $p->{lon});
     my $ele = $p->{ele} // 0;
     my $dist = $p->{distance} // 0;
-    
+
     print $fh "$i\t$lat\t$lon\t$ele\t\t$dist\n";
   }
-  
+
   close($fh);
   note("Dumped " . scalar(@points) . " points to $debug_path\n");
 }
@@ -6234,6 +6239,15 @@ for my $file ( @files ) {
   #
   if ( (defined $minRadius) && ($minRadius > 0) ) {
     ## STAGE 36: Set minimum radius
+
+    # For loops, remove duplicate final point before processing
+    # For the purposes of corner smoothing, the start and finish should be viewed as a single point.
+    # Hence, the penultimate point should immediately be followed by the start point.
+    # Enumerating the same point twice messes up the corner smoothing algorithm.
+    if ($isLoop && @$points > 1 && pointsAreClose($points->[0], $points->[-1])) {
+      pop @$points;
+    }
+
     note("setting minimum radius to $minRadius...\n");
     addCurvatureField(points=> $points, isLoop=> $isLoop);
     addDistanceField(points=> $points);
@@ -6326,6 +6340,12 @@ for my $file ( @files ) {
 
       deleteField2(points=> $points, field=> "shift");
       dumpPoints($points, "36-perl-min-radius.txt");
+    }
+
+    # For loops, restore final point by copying the (possibly moved) start point
+    # After processing, copy the start point to restore loop closure
+    if ($isLoop && @$points > 0) {
+      push @$points, { %{$points->[0]} };
     }
   }
 

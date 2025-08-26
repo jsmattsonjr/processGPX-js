@@ -87,6 +87,7 @@ When crossporting code from `reference/processGPX/processGPX`, be watchful for b
 2. **L2 assignment bug** in `autoStraighten()` function (commit c679fd6)
 3. **Elevation differences ignored** in `pointsAreClose()` function (commit ee3854f)
 4. **Inconsistent documentation** - `-auto` sets `-RUTurn 6` (commit e777e96)
+5. **Incomplete zig-zag repair** in `fixZigZags()` function - the Perl version only extends `v` forward when eliminating UTurns, but fails to extend `u` backwards as described in the algorithm comments. The JavaScript version correctly implements both forward and backward extension, resulting in more thorough zig-zag elimination.
 
 The Perl reference code, while comprehensive, is not perfect and should be reviewed carefully during porting.
 
