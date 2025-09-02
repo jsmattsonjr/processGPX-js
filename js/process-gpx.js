@@ -2595,7 +2595,78 @@ function isPointPrunable(points, _distance = 2, X = 0.001, dg = 0.001) {
 	return false;
 }
 
-// TODO: Translate simplifyPoints() from Perl
+/**
+ * Simplify points using Ramer-Douglas-Peucker-like algorithm
+ * Similar to prune, but with alternative recursive algorithm
+ * @param {Object[]} points - Array of points to simplify
+ * @param {number} z0 - Altitude deviation threshold in meters (default: 0.1)
+ * @param {number} r0 - Distance deviation threshold in meters (default: 1)
+ * @returns {Object[]} Simplified array of points
+ */
+function simplifyPoints(points, z0 = 0.1, r0 = 1) {
+	if (points.length < 3) {
+		return points;
+	}
+
+	// Search for segment boundaries
+	for (let i = 0; i < points.length - 1; i++) {
+		if (points[i].segment !== points[i + 1].segment) {
+			const p1 = simplifyPoints(points.slice(0, i + 1), z0, r0);
+			const p2 = simplifyPoints(points.slice(i + 1), z0, r0);
+			return [...p1, ...p2];
+		}
+	}
+
+	// Find the point of maximum deviation and recurse around that point
+	// Find distance between points and 3D line connecting endpoints
+	const [xf, yf] = latlng2dxdy(points[0], ix(points, -1));
+
+	// If this point is too close to the first point, then find the furthest point and simplify on that
+	if (xf * xf + yf * yf < 10) {
+		let iFurthest;
+		let dFurthest = 0;
+		for (let i = 1; i < points.length - 1; i++) {
+			const d = latlngDistance(points[0], points[i]);
+			if (d > dFurthest) {
+				iFurthest = i;
+				dFurthest = d;
+			}
+		}
+		if (iFurthest !== undefined) {
+			const p1 = simplifyPoints(points.slice(0, iFurthest + 1), z0, r0);
+			const p2 = simplifyPoints(points.slice(iFurthest + 1), z0, r0);
+			return [...p1, ...p2];
+		} else {
+			return points;
+		}
+	}
+
+	const zi = points[0].ele;
+	const dzf = ix(points, -1).ele - zi;
+	let iMax;
+	let scoreMax = 1; // Only accept points if score is at least 1
+
+	for (let i = 1; i < points.length - 1; i++) {
+		const [x, y] = latlng2dxdy(points[0], points[i]);
+		const dz = points[i].ele - zi;
+		// Find the nearest point on the curve
+		const [f, d] = xyPointOnLine([0, 0], [xf, yf], [x, y]); // Distance of the interpolated point
+		const ddz = dzf * f - dz; // Interpolated altitude difference
+		const score = (d / r0) ** 2 + (ddz / z0) ** 2;
+		if (score > scoreMax) {
+			iMax = i;
+			scoreMax = score;
+		}
+	}
+
+	if (iMax !== undefined) {
+		const p1 = simplifyPoints(points.slice(0, iMax + 1), z0, r0);
+		const p2 = simplifyPoints(points.slice(iMax), z0, r0);
+		return [...p1, ...p2.slice(1)]; // Remove duplicate point at junction
+	} else {
+		return [points[0], ix(points, -1)];
+	}
+}
 
 /**
  * Bike speed model for realistic time calculations
@@ -5077,6 +5148,13 @@ export function processGPX(trackFeature, options = {}) {
 		if (options.isLoop && points.length > 0) {
 			points.push({ ...points[0] });
 		}
+	}
+
+	// STAGE 41: Simplify points
+	if (options.simplifyPoints) {
+		note("simplifying points...");
+		points = simplifyPoints(points, options.simplifyZ || 0.1, options.simplifyD || 0.3);
+		dumpPoints(points, "41-js-simplified.txt");
 	}
 
 	// Add distance field for final calculations
