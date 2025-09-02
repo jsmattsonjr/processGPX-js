@@ -18,7 +18,7 @@ processGPX is a series of algorithms to improve and create GPX files, particular
 
 ### Original processGPX
 
-The original processGPX (v0.52) was written in Perl by Daniel Connelly. It addresses common issues with GPX files exported from tools like Strava Route Editor:
+The original processGPX (v0.53) was written in Perl by Daniel Connelly. It addresses common issues with GPX files exported from tools like Strava Route Editor:
 
 - Too low resolution in position data
 - Small errors in altitude measurements
@@ -184,7 +184,7 @@ This is a port of the original Perl processGPX tool to JavaScript. The following
 
 ## Reference
 
-This JavaScript port is based on the original processGPX v0.52 by Daniel Connelly. See `reference/processGPX/` for the complete original documentation and specifications.
+This JavaScript port is based on the original processGPX v0.53 by Daniel Connelly. See <https://github.com/djconnel/processGPX> for the complete original documentation and specifications.
 
 ## License
 
