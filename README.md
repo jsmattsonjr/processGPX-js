@@ -1,6 +1,6 @@
 # processGPX-js
 
-A JavaScript port of processGPX, designed to improve and create GPX files for cycling emulation platforms like BikeTerra. This client-side application brings the powerful GPX processing capabilities of the original Perl tool to the browser.
+A JavaScript port of processGPX, designed to improve and create GPX files for cycling emulation platforms like BikeTerra. This project provides both a working web interface and command-line tool with the powerful GPX processing capabilities of the original Perl tool.
 
 ## About
 
@@ -29,12 +29,22 @@ The original processGPX (v0.53) was written in Perl by Daniel Connelly. It addre
 
 ```
 processGPX-js/
-├── reference/processGPX/     # Original Perl documentation and reference
-├── src/                      # JavaScript source code
-├── docs/                     # Documentation
-├── examples/                 # Example GPX files and usage
-├── tests/                    # Test files
-└── dist/                     # Built distribution files
+├── js/                       # Core JavaScript modules
+│   ├── process-gpx.js        # Main GPX processing algorithms (5200+ lines, 70+ functions)
+│   ├── gpx-parser.js         # GPX XML parsing
+│   ├── gpx-export.js         # GPX file generation
+│   ├── options.js            # CLI option definitions
+│   ├── main.js               # Web interface controller
+│   ├── map-visualization.js  # Leaflet map integration
+│   └── elevation-chart.js    # Route elevation profiles
+├── gpx/                      # Test GPX files and processing results
+├── __tests__/                # Jest test suite with fuzzing
+├── debug/                    # Processing debug outputs
+├── coverage/                 # Test coverage reports
+├── index.html               # Web interface
+├── process-cli.js           # Command-line interface
+├── fuzz-cli.js              # CLI option fuzzer
+└── gpx-compare.js           # GPX file comparison utility
 ```
 
 ## Testing
@@ -110,71 +120,81 @@ npm run debug:to-gpx -- debug/your_debug_file.txt
 
 This will create a new file, `your_debug_file.gpx`, in the same directory.
 
-## Usage (Planned)
+## Usage
 
-The JavaScript port will provide both programmatic API access and a web interface:
+The project provides both a web interface and command-line tool:
 
 ### Web Interface
-```html
-<!-- Load processGPX in the browser -->
-<script src="processGPX.js"></script>
-<script>
-  const processor = new ProcessGPX();
-  processor.loadFile(gpxFile)
-    .process({ auto: true })
-    .then(result => {
-      // Download processed GPX
-      result.download();
-    });
-</script>
+
+Open `index.html` in a browser to access the web interface:
+- Drag and drop GPX files for processing
+- Interactive map visualization with before/after comparison
+- Elevation profile charts
+- Downloadable processed GPX files
+- Real-time processing with configurable options
+
+### Command Line Interface
+
+Process GPX files from the command line:
+
+```bash
+# Basic usage with auto processing
+node process-cli.js input.gpx
+
+# Custom options
+node process-cli.js input.gpx --smooth 15 --smoothZ 25 --spacing 10
+
+# Loop processing
+node process-cli.js loop.gpx --loop --spacing 5
+
+# Out-and-back route creation
+node process-cli.js route.gpx --outAndBack --laneShift 3
 ```
 
-### Node.js API
-```javascript
-import { ProcessGPX } from 'processGPX-js';
+The CLI supports all major processGPX options including smoothing, spacing, loop processing, and advanced features.
 
-const processor = new ProcessGPX();
-const result = await processor
-  .loadFile('input.gpx')
-  .process({
-    auto: true,
-    smooth: 10,
-    smoothZ: 20,
-    spacing: 5
-  });
+## Key Processing Options
 
-await result.save('output.gpx');
-```
-
-## Key Processing Options (Planned)
-
-Based on the original processGPX functionality:
+The JavaScript port implements the full range of processGPX options:
 
 - `auto`: Automatic processing with reasonable defaults
 - `smooth`: Position smoothing distance in meters
-- `smoothZ`: Altitude smoothing distance in meters
+- `smoothZ`: Altitude smoothing distance in meters  
 - `spacing`: Point interpolation spacing in meters
 - `loop`: Treat as loop/circuit course
 - `outAndBack`: Create out-and-back course with turn-around
 - `laneShift`: Shift lanes for out-and-back separation
 - `minRadius`: Minimum corner radius enforcement
 - `prune`: Remove unnecessary points
+- `straighten`: Straighten sections of route
+- `simplify`: Reduce point density while preserving route shape
+
+See `node process-cli.js --help` for the complete list of available options.
 
 ## Development Status
 
-🚧 **This project is currently in development** 🚧
+**Current Status: Functional Beta (v0.1.1)**
 
-This is a port of the original Perl processGPX tool to JavaScript. The following components are planned:
+This JavaScript port of processGPX is now functionally complete with the core processing pipeline implemented:
 
-- [ ] Core GPX parsing and generation
-- [ ] Position and altitude smoothing algorithms
-- [ ] Point interpolation and spacing
-- [ ] Corner detection and rounding
-- [ ] Gradient analysis and correction
-- [ ] Out-and-back route generation
-- [ ] Quality scoring system
-- [ ] Web interface for browser usage
-- [ ] Command-line interface for Node.js
+✅ **Completed Features:**
+- Core GPX parsing and generation
+- Position and altitude smoothing algorithms (Gaussian smoothing)
+- Point interpolation and spacing algorithms
+- Corner detection, rounding, and spline fitting
+- Gradient analysis and correction
+- Out-and-back route generation with lane shifting
+- Loop/circuit processing
+- Route straightening and simplification
+- Quality scoring system
+- Web interface with interactive maps and elevation charts
+- Command-line interface with full option support
+- Comprehensive testing with fuzzing (70+ functions, 5200+ lines of core algorithms)
+- XML formatting and GPX export
+- Route comparison and validation tools
+
+🚧 **In Development:**
+- Expanded web interface options and controls
 
 ## Target Platforms
 
@@ -184,7 +204,7 @@ This is a port of the original Perl processGPX tool to JavaScript. The following
 
 ## Reference
 
-This JavaScript port is based on the original processGPX v0.53 by Daniel Connelly. See <https://github.com/djconnel/processGPX> for the complete original documentation and specifications.
+This JavaScript port is based on the original processGPX v0.53 by Daniel Connelly, maintaining algorithmic compatibility while providing modern web and CLI interfaces. The project has been synchronized with processGPX version 0.53 as of the latest commits.
 
 ## License
 
