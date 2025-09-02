@@ -456,6 +456,48 @@ function latlng2dxdy(p1, p2) {
 }
 
 /**
+ * For a range of points, interpolate the fields based on distance between
+ * the first and last point.
+ * Use distance field if present on internal points else calculate distance field.
+ * @param {...Object} points - Variable number of points to interpolate
+ */
+function interpolateFields(...points) {
+	if (points.length <= 2) return;
+	
+	const p1 = points[0];
+	const p2 = points[points.length - 1];
+	
+	// Calculate distance: don't trust existing distance field
+	const ds = [0];
+	for (let i = 1; i < points.length; i++) {
+		ds.push(ds[ds.length - 1] + latlngDistance(points[i - 1], points[i]));
+	}
+	
+	for (let i = 1; i < points.length - 1; i++) {
+		const p = points[i];
+		const f = ds[i] / ds[ds.length - 1];
+		
+		for (const k in p1) {
+			if (k === "lat" || k === "lon") continue;
+			
+			if (p1[k] !== undefined && p2[k] !== undefined) {
+				if (k === "segment") {
+					if (p1[k] === p2[k]) {
+						p[k] = p1[k];
+					} else {
+						p[k] = 0;
+					}
+				} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
+					p[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
+				} else {
+					p[k] = f < 0.5 ? p1[k] : p2[k];
+				}
+			}
+		}
+	}
+}
+
+/**
  * point linearly interpolated between p1 and p2, with f the
  * fraction of the distance to p2
  * note since deleting repeated points results in the second point of a pair being deleted,
