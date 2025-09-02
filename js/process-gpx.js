@@ -534,17 +534,26 @@ function interpolatePoint(p1, p2, f) {
 // TODO: Translate pointAtPosition() from Perl
 
 /**
- * for splines... p1 projects to p3, p2 projects to p4
- * interpolate and do a weighted average
- * @param {Array} points - Array of 4 points [p1, p2, p3, p4]
- * @param {number} f - interpolation factor (0-1)
- * @returns {Object} interpolated point
+ * Catmull-Rom spline interpolation for corners.
+ * f is the fraction between points 2 and 3.
+ * f1 is the normalized distance from p1 to p2.
+ * f4 is the normalized distance from p3 to p4.
+ * @param {Object} p1 - First control point
+ * @param {Object} p2 - Start point of interpolation
+ * @param {Object} p3 - End point of interpolation  
+ * @param {Object} p4 - Second control point
+ * @param {number} f1 - Normalized distance p1->p2 relative to p2->p3
+ * @param {number} f4 - Normalized distance p3->p4 relative to p2->p3
+ * @param {number} f - Fraction between p2 and p3 (0 to 1)
+ * @returns {Object} Interpolated corner point
  */
-function interpolateCorner(points, f) {
-	const [p1, p2, p3, p4] = points;
-	const px1 = interpolatePoint(p1, p3, f);
-	const px2 = interpolatePoint(p4, p2, f);
-	const px = interpolatePoint(px1, px2, f);
+function interpolateCorner(p1, p2, p3, p4, f1, f4, f) {
+	const a1 = interpolatePoint(p1, p2, 1 + f / f1);
+	const a2 = interpolatePoint(p2, p3, f);
+	const a3 = interpolatePoint(p3, p4, (f - 1) / f4);
+	const b1 = interpolatePoint(a1, a2, (f1 + f) / (f1 + 1));
+	const b2 = interpolatePoint(a2, a3, f / (f4 + 1));
+	const px = interpolatePoint(b1, b2, f);
 	return px;
 }
 
