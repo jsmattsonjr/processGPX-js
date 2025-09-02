@@ -2780,15 +2780,25 @@ function circle3PointFit(p1, p2, p3) {
  * @param {number} startIndex - Start index
  * @param {number} endIndex - End index
  */
-function straightenPoints(points, _isLoop, startIndex, endIndex) {
+function straightenPoints(points, isLoop, startIndex, endIndex) {
 	// Ensure distance field exists
 	if (points[0].distance === undefined) {
 		addDistanceField(points);
 	}
 
+	// Early return checks for insufficient points
+	if (points.length < (isLoop ? 4 : 3)) {
+		return;
+	}
+
 	// If we wrap around, then use a negative number for the start index
 	if (startIndex > endIndex) {
 		startIndex -= points.length;
+	}
+
+	// We need at least two intermediate points
+	if (endIndex < startIndex + 2) {
+		return;
 	}
 
 	const [rx, ry] = latlng2dxdy(points[startIndex], points[endIndex]);
