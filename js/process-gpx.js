@@ -498,35 +498,37 @@ function interpolateFields(...points) {
 }
 
 /**
- * point linearly interpolated between p1 and p2, with f the
- * fraction of the distance to p2
- * note since deleting repeated points results in the second point of a pair being deleted,
- * for non-numeric fields, I need to assume interpolated points are associated with the
- * latter point
- * for segments, I need to have the interpolated interval be a fresh segment
+ * Point linearly interpolated between p1 and p2, with f the fraction of the distance to p2.
+ * Uses distance-based interpolation for lat/lng, not simple linear interpolation.
  * @param {Object} p1 - First point
  * @param {Object} p2 - Second point
  * @param {number} f - Fraction (0 = p1, 1 = p2)
  * @returns {Object} Interpolated point
  */
 function interpolatePoint(p1, p2, f) {
-	const newPoint = {};
+	// Interpolate lat and lng using distances, not angles
+	const [dx, dy] = latlng2dxdy(p1, p2);
+	const p = addVectorToPoint(p1, [dx * f, dy * f]);
+	
+	// Interpolate other random values
 	for (const k in p1) {
+		if (k === "lat" || k === "lon") continue;
+		
 		if (p1[k] !== undefined && p2[k] !== undefined) {
 			if (k === "segment") {
 				if (p1[k] === p2[k]) {
-					newPoint[k] = p1[k];
+					p[k] = p1[k];
 				} else {
-					newPoint[k] = 0;
+					p[k] = 0;
 				}
 			} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
-				newPoint[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
+				p[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
 			} else {
-				newPoint[k] = f < 0.5 ? p1[k] : p2[k];
+				p[k] = f < 0.5 ? p1[k] : p2[k];
 			}
 		}
 	}
-	return newPoint;
+	return p;
 }
 
 // TODO: Translate pointAtPosition() from Perl
