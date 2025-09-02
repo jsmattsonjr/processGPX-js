@@ -137,6 +137,44 @@ When porting Perl code to JavaScript, be aware of these subtle but critical diff
 
 These issues can cause infinite loops or incorrect behavior that's difficult to debug.
 
+### Version Upgrades and Algorithmic Changes
+
+When upgrading the JavaScript port to match newer versions of processGPX, be aware that some changes involve major algorithmic rewrites, not just minor modifications:
+
+#### processGPX 0.52 → 0.53 Upgrade Lessons (January 2025)
+
+This upgrade involved **6 major algorithmic changes** that required complete function rewrites:
+
+1. **`latlng2dxdy()` - Spherical Geometry**: Changed from linear approximation to proper spherical coordinate calculation using distance and heading formulas. This is a fundamental change that affects all coordinate interpolation.
+
+2. **`interpolateFields()` - New Function**: Added to handle field interpolation for spline functions, replacing inline code that was duplicated across multiple functions.
+
+3. **`interpolatePoint()` - Distance-Based Interpolation**: Changed from simple linear lat/lng interpolation to using `latlng2dxdy()` and `addVectorToPoint()` for accurate spherical geometry.
+
+4. **`interpolateCorner()` - Catmull-Rom Splines**: Complete rewrite from simple 4-point averaging to proper Catmull-Rom spline mathematics with normalized distance parameters.
+
+5. **`splineInterpolation()` - 4-Point Catmull-Rom**: Complete algorithmic change from direction-based spline generation to 4-point Catmull-Rom splines, changing both the algorithm and function signature.
+
+6. **`fixZigZags()` - Loop Support & Iterations**: Added multi-iteration logic (up to 10 passes), proper loop route support, and improved zig-zag detection ranges.
+
+#### Key Insights for Future Upgrades
+
+- **Function signatures can change**: Don't assume parameter lists remain the same
+- **Dependencies cascade**: Changes to fundamental functions like `latlng2dxdy()` affect many other functions
+- **Test thoroughly**: Algorithmic changes can introduce subtle bugs that only appear with specific route geometries
+- **Check all callers**: When function signatures change, update all call sites
+- **Use positional parameters**: Maintain consistency with the established pattern rather than switching to destructured objects
+- **Follow the diff carefully**: Version upgrade diffs from the Perl source are the authoritative reference for changes
+
+#### Recommended Upgrade Process
+
+1. **Read the complete diff**: Understand all changes before starting implementation
+2. **Identify algorithmic vs cosmetic changes**: Focus on algorithmic changes first
+3. **Update fundamental functions first**: Start with utility functions that other functions depend on
+4. **Test incrementally**: Test after each major function update
+5. **Update all callers**: When signatures change, find and update all call sites
+6. **Validate with reference**: Compare output with Perl version to ensure correctness
+
 ### Translation Progress and Function Organization
 
 The JavaScript functions in `js/process-gpx.js` are organized to exactly match the Perl function ordering from `reference/processGPX/processGPX`. This makes it easy to:
@@ -144,19 +182,19 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Check if dependencies are already translated
 - Find the correct placement for new translations
 
-#### Function Translation Status (70/81 Complete)
+#### Function Translation Status (71/81 Complete)
 
-**✅ Translated Functions** (70):
+**✅ Translated Functions** (71):
 - Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`
 - Distance/geometry: `latlngDistance`, `pointsAreClose`, `latlngDotProduct`, `crossProduct`, `latlngCrossProduct`, `turnDirection`, `latlngAngle`, `latlngDirection`, `pointDirection`, `latlng2dxdy`
-- Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToPoint`
+- Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToPoint`, `interpolateFields`
 - Geometric algorithms: `segmentIntercept`, `splineInterpolation`, `arcFitInterpolation`, `circle3PointFit`
 - Point processing: `removeDuplicatePoints`, `cropCorners`, `addSplines`, `fixZigZags`, `findLoops`
 - Lane operations: `applyLaneShift`
 - Smoothing: `smoothing`, `calcSmoothingSigma`
 - Spacing/interpolation: `doAutoSpacing`, `doPointInterpolation`
 - Road detection: `xyPointOnLine`, `isPointOnRoad`, `isPointOnRoadCorner`, `roadTest`, `snapPoints`
-- Point filtering: `isPointPrunable`
+- Point filtering: `isPointPrunable`, `simplifyPoints`
 - Speed modeling: `bikeSpeedModel`, `distanceDifference`, `pointSeparation`
 - Straightening: `straightenPoints`, `calcDeviationStats`, `autoStraighten`
 - Field operations: `addDistanceField`, `addGradientField`, `integrateGradientField`, `addDirectionField`, `addCurvatureField`, `calcCourseDistance`
@@ -165,10 +203,9 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Quality: `calcQualityScore`
 - Utilities: `note`
 
-**❌ Not Yet Translated** (19):
+**❌ Not Yet Translated** (18):
 - File operations: `setFileNameSuffix`
 - Geometry: `pointAtPosition`, `fitCircle`, `processCircle`
-- Point filtering: `simplifyPoints`
 - Climbing analysis: `climbRating`, `findClimbs`, `placeGradientSigns`
 - Auto segments: `addAutoSegments`
 - Straightening: `processStraight`
