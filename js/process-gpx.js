@@ -419,10 +419,11 @@ function shiftVertex(point, directions, distance) {
 }
 
 /**
- * Convert lat/lng difference to dx/dy in meters
+ * Calculate a coordinate difference between points:
+ * uses formula for distance and heading between points on a sphere
  * @param {Object} p1 - First point with {lat, lon} properties
  * @param {Object} p2 - Second point with {lat, lon} properties
- * @returns {Array} [dx, dy] in meters
+ * @returns {Array} [dx, dy] coordinate differences in meters
  */
 function latlng2dxdy(p1, p2) {
 	/* istanbul ignore next */
@@ -430,15 +431,27 @@ function latlng2dxdy(p1, p2) {
 	/* istanbul ignore next */
 	if (!p2) die("latlng2dxdy called with undefined point #2");
 
-	const c1 = Math.cos(DEG2RAD * p1.lat);
-	const c2 = Math.cos(DEG2RAD * p2.lat);
-	let dlon = p2.lon - p1.lon;
-	dlon -= 360 * Math.floor(0.5 + dlon / 360);
-	let dlat = p2.lat - p1.lat;
-	dlat -= 360 * Math.floor(0.5 + dlat / 360);
+	const lat1 = DEG2RAD * p1.lat;
+	const lat2 = DEG2RAD * p2.lat;
+	const lng1 = DEG2RAD * p1.lon;
+	const lng2 = DEG2RAD * p2.lon;
+	const dlng = lng2 - lng1;
 
-	const dx = ((c1 + c2) * LAT2Y * dlon) / 2;
-	const dy = LAT2Y * dlat;
+	const u = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dlng);
+	const v = Math.sin(dlng) * Math.cos(lat2);
+	const uv = Math.sqrt(u ** 2 + v ** 2);
+	
+	let dx, dy;
+	if (uv === 0) {
+		dx = 0;
+		dy = 0;
+	} else {
+		const s = u / uv;
+		const c = v / uv;
+		const d = latlngDistance(p1, p2);
+		dx = d * c;
+		dy = d * s;
+	}
 	return [dx, dy];
 }
 
