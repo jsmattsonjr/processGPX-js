@@ -638,85 +638,35 @@ function addVectorToPoint(point, vector) {
 }
 
 /**
- * return points between p1 and p2 using a spline
- * using angles at beginning and end of the interval
- * @param {Object} p1 - start point
- * @param {Object} p2 - end point
- * @param {number} d1 - direction at p1 (radians)
- * @param {number} d2 - direction at p2 (radians)
- * @param {number} dd - minimum angle for spline (default PI/16)
- * @returns {Array} array of interpolated points
+ * Return points between p2 and p3 using a Catmull-Rom spline.
+ * @param {Object} p1 - First control point
+ * @param {Object} p2 - Starting point for interpolation
+ * @param {Object} p3 - Ending point for interpolation
+ * @param {Object} p4 - Second control point
+ * @param {number} dd - Minimum angle for spline (default PI/16)
+ * @returns {Array} Array of interpolated points between p2 and p3
  */
-function splineInterpolation(p1, p2, d1, d2, dd = PI / 16) {
-	const sqrt2 = Math.sqrt(2);
+function splineInterpolation(p1, p2, p3, p4, dd = PI / 16) {
+	// Calculate number of points based on the angles
+	const angle = Math.abs(latlngAngle(p1, p2, p3)) + Math.abs(latlngAngle(p2, p3, p4));
+	const NPoints = Math.floor(angle / dd);
 
-	// calculate number of points based on the angle
-	const deltad = reduceAngle(d2 - d1);
-	let NPoints = Math.floor(Math.abs(deltad) / dd);
-
-	// if the points are close, reduce the number of points: 1 point per 10 cm separation
-	const NPointsMax = Math.floor(latlngDistance(p1, p2) / 0.1);
-	if (NPoints > NPointsMax) {
-		NPoints = NPointsMax;
-	}
-
-	if (NPoints <= 0) {
-		return [];
-	}
+	// Calculate normalized distances
+	const d23 = latlngDistance(p2, p3);
+	const f1 = latlngDistance(p1, p2) / d23;
+	const f4 = latlngDistance(p3, p4) / d23;
 
 	const points = [];
 
-	// distance to control points
-	const r = latlngDistance(p1, p2) / sqrt2;
-
-	// find projections of points along the directions
-	const dx1 = Math.cos(d1) * r;
-	const dy1 = Math.sin(d1) * r;
-	const dx2 = -Math.cos(d2) * r;
-	const dy2 = -Math.sin(d2) * r;
-	const px1 = addVectorToPoint(p1, [dx1, dy1]);
-	const px2 = addVectorToPoint(p2, [dx2, dy2]);
-
-	// create points along asymptotes
 	for (let i = 1; i <= NPoints; i++) {
 		const f = i / (NPoints + 1);
-		const p = interpolateCorner([p1, p2, px1, px2], f);
+		const p = interpolateCorner(p1, p2, p3, p4, f1, f4, f);
 		points.push(p);
 	}
 
-	// adjust non-position fields to be linear with distance
-	// since points are not necessarily equally spaced
+	// Interpolate fields onto the new points
 	if (points.length > 0) {
-		const ss = [latlngDistance(p1, points[0])];
-		for (let i = 0; i < points.length - 1; i++) {
-			ss.push(ss[ss.length - 1] + latlngDistance(points[i], points[i + 1]));
-		}
-		ss.push(ss[ss.length - 1] + latlngDistance(points[maxIndex(points)], p2));
-
-		for (let i = 0; i < points.length; i++) {
-			const f = ss[i] / ss[ss.length - 1];
-			const p = points[i];
-			for (const k in p1) {
-				if (k !== "lat" && k !== "lon") {
-					if (k === "segment") {
-						if (p1[k] === p2[k]) {
-							p[k] = p1[k];
-						} else {
-							p[k] = 0;
-						}
-					} else if (
-						p1[k] !== undefined &&
-						p2[k] !== undefined &&
-						isNumeric(p1[k]) &&
-						isNumeric(p2[k])
-					) {
-						p[k] = (1 - f) * p1[k] + f * p2[k];
-					} else {
-						p[k] = p1[k];
-					}
-				}
-			}
-		}
+		interpolateFields(p2, ...points, p3);
 	}
 
 	return points;
@@ -1275,10 +1225,10 @@ function addSplines(
 					);
 				} else {
 					newPoints = splineInterpolation(
+						points[k],
 						points[i],
 						points[j],
-						points[i].heading,
-						points[j].heading,
+						points[l],
 						minRadians,
 					);
 				}
