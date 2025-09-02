@@ -1392,112 +1392,102 @@ function roadTest(points, j, k, l, m, i, d) {
 }
 
 /**
- * zig-zags: pairs of 180 degree turns within a certain distance are probably misplaced control points
- * this is just a warning for now... easy to fix if it's along a line, but what if it goes around a corner?
- * @param {Array} points - Array of points
- * @returns {Array} New array with zig-zags fixed
+ * Fix zig-zag patterns in the route with loop support and iteration logic.
+ * Added 0.53: fix zig-zags @ S/F on loops
+ * @param {Array} points - Array of points to fix
+ * @param {boolean} isLoop - Whether route is a loop (default: false)
+ * @returns {Array} Fixed points array
  */
-function fixZigZags(points) {
-	note("checking for zig-zags...");
-	const dzigzag = 100;
-	const UTurns = [];
+function fixZigZags(points, isLoop = false) {
+	for (let zigZagIter = 1; zigZagIter <= 10; zigZagIter++) {
+		note(`checking for zig-zags iteration ${zigZagIter}...`);
+		const dzigZag = 100;
+		const UTurns = [];
+		const iStart = isLoop ? 0 : 1;
+		const iEnd = isLoop ? maxIndex(points) : maxIndex(points) - 1;
 
-	// Find all U-turns
-	for (let i = 1; i <= maxIndex(points) - 1; i++) {
-		if (UTurnCheck(points[i - 1], points[i], points[i], points[i + 1], -0.9)) {
-			UTurns.push(i);
-		}
-	}
-
-	addDistanceField(points);
-
-	if (UTurns.length > 0) {
-		let zigzagCount = 0;
-
-		while (UTurns.length > 1) {
-			const U1 = UTurns.shift();
-			const U2 = UTurns[0];
-			const p1 = points[U1];
-			const p2 = points[U2];
-
-			if (p2.distance - p1.distance < dzigzag) {
-				warn(
-					`WARNING: zig-zag found on points (0, 2, 3 ...) : ${U1} and ${U2} : ` +
-						`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
-						`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
-						`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
-				);
-
-				// Repairing zig-zags...
-				// zig-zags are two U-turns within a specified distance
-				// p1 -> p2 -> ... -> p3 -> p4
-				// U-turn @ p2, and U-turn @ p3
-				// 1. eliminate all points between p2 and p3
-				// 2. as long as P3 has a U-turn, delete it... there will be a new P3
-				// 3. as long as P2 has a U-turn, delete it...
-				// 4. go back step 2 if we deleted any U-turns
-
-				warn("repairing zig-zag...");
-				let u = U1; // keep points up to u
-				let v = U2 + 1; // keep points starting with v
-
-				note(
-					`DEBUG: initial u=${u}, initial v=${v}, points.length=${points.length}`,
-				);
-
-				while (
-					v < maxIndex(points) &&
-					UTurnCheck(points[u], points[v], points[v], points[v + 1])
-				) {
-					note(`DEBUG: extending v from ${v} to ${v + 1} due to UTurn check`);
-					v++;
-				}
-
-				while (
-					u > 0 &&
-					UTurnCheck(points[u - 1], points[u], points[u], points[v])
-				) {
-					note(`DEBUG: extending u from ${u} to ${u - 1} due to UTurn check`);
-					u--;
-				}
-
-				note(
-					`DEBUG: final u=${u}, final v=${v}, eliminating points ${u + 1} to ${v - 1} (${v - u - 1} points)`,
-				);
-				warn(`eliminating ${v - u - 1} points`);
-				zigzagCount++;
-
-				const pNew = [...points.slice(0, u + 1), ...points.slice(v)];
-
-				// If we ran out of points, something is wrong
-				if (pNew.length < 2) {
-					/* istanbul ignore next */
-					die("repairing zig-zags eliminated entire route");
-				}
-
-				points = pNew;
-
-				// We've eliminated the next U-turn, so remove it
-				UTurns.shift();
-
-				// Adjust coordinates of remaining U-turns
-				for (let i = 0; i < UTurns.length; i++) {
-					UTurns[i] += u - v + 1;
-				}
-
-				// Get rid of obsolete U-turns
-				while (UTurns.length > 0 && UTurns[0] < 0) {
-					UTurns.shift();
-				}
+		for (let i = iStart; i <= iEnd; i++) {
+			if (UTurnCheck(ix(points, i - 1), points[i], points[i], ix(points, i + 1), -0.9)) {
+				UTurns.push(i);
 			}
 		}
 
-		// May need to redo distance if zig-zag repair
-		if (zigzagCount > 0) {
-			addDistanceField(points);
+		addDistanceField(points);
+		let zigZagCount = 0;
+		
+		if (UTurns.length > 0) {
+			while (UTurns.length > 1) {
+				const U1 = UTurns.shift();
+				const U2 = UTurns[0];
+				const p1 = points[U1];
+				const p2 = points[U2];
+
+				if (p2.distance - p1.distance < dzigZag) {
+					warn(
+						`WARNING: zig-zag found on points : ${U1} and ${U2} : ` +
+							`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
+							`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
+							`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
+					);
+
+					// Repairing zig-zags...
+					// zig-zags are two U-turns within a specified distance
+					// p1 -> p2 -> ... -> p3 -> p4
+					// U-turn @ p2, and U-turn @ p3
+					// 1. eliminate all points between p2 and p3
+					// 2. as long as P3 has a U-turn, delete it... there will be a new P3
+					// 3. as long as P2 has a U-turn, delete it...
+					// 4. go back step 2 if we deleted any U-turns
+
+					// eliminate points between
+					warn(`repairing zig-zag iteration ${zigZagIter}...`);
+					let u = U1;      // keep points up to u
+					let v = U2 + 1;  // keep points starting with v
+					
+					while (
+						v < maxIndex(points) &&
+						UTurnCheck(points[u], points[v], points[v], points[v + 1])
+					) {
+						v++;
+					}
+
+					warn(`eliminating ${v - u - 1} points`);
+					zigZagCount++;
+
+					const pNew = [...points.slice(0, u + 1), ...points.slice(v)];
+
+					// If we ran out of points, something is wrong
+					if (pNew.length < 2) {
+						/* istanbul ignore next */
+						die("repairing zig-zags eliminated entire route");
+					}
+
+					points = pNew;
+
+					// Adjust U-turn coordinates
+					// We've eliminated the next Uturn, so pop it
+					UTurns.shift();
+
+					// Adjust coordinates of remaining U-turns
+					for (let i = 0; i < UTurns.length; i++) {
+						UTurns[i] += u - v + 1;
+					}
+
+					// Get rid of obsolete U-turns
+					while (UTurns.length > 0 && UTurns[0] < 0) {
+						UTurns.shift();
+					}
+				}
+			}
+			// May need to redo distance if zig-zag repair
+			if (zigZagCount > 0) {
+				deleteDerivedFields(points);
+			}
+		}
+		if (zigZagCount === 0) {
+			return points;
 		}
 	}
-
 	return points;
 }
 
@@ -4096,7 +4086,7 @@ export function processGPX(trackFeature, options = {}) {
 	// shiftSF dependency on lap/loop option is enforced by Yargs validation
 
 	// Look for zig-zags
-	points = fixZigZags(points);
+	points = fixZigZags(points, options.isLoop);
 	dumpPoints(points, "06-js-zigzags-fixed.txt");
 
 	// Look for loops
