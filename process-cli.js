@@ -252,6 +252,15 @@ function setupYargsParser() {
 				argv.outFile = argv.out;
 			}
 
+			// CSV option can be inferred from filename, if specified (matches Perl logic)
+			if (argv.outFile) {
+				if (/csv$/i.test(argv.outFile)) {
+					argv.csv = true;
+				} else if (/gpx$/i.test(argv.outFile)) {
+					argv.csv = false;
+				}
+			}
+
 			return argv;
 		})
 		.help();
