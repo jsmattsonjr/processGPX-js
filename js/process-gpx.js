@@ -3949,7 +3949,7 @@ export function processGPX(trackFeature, options = {}) {
 	let points = trackFeature.geometry.coordinates.map((coord) => ({
 		lat: coord[1],
 		lon: coord[0],
-		ele: coord[2] || 0,
+		ele: coord[2], // Preserve undefined if no elevation data
 		segment: 1,
 	}));
 
@@ -5339,7 +5339,13 @@ export function processGPX(trackFeature, options = {}) {
 		type: trackFeature.type,
 		geometry: {
 			type: trackFeature.geometry.type,
-			coordinates: points.map((p) => [p.lon, p.lat, p.ele]),
+			coordinates: points.map((p) => {
+			const coord = [p.lon, p.lat];
+			if (p.ele !== undefined) {
+				coord.push(p.ele);
+			}
+			return coord;
+		}),
 		},
 		properties: {
 			...trackFeature.properties,
