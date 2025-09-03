@@ -1065,7 +1065,16 @@ function cropCorners(
 
 		// Skip points in crop interval
 		while (dp2 < dc2 - epsilon) {
-			if (i > maxIndex(points)) break pointsLoop;
+			// If p1 will extend to point set of points, we're done
+			// Note for laps we can wrap around
+			if (isLoop) {
+				if (i + 1 > maxIndex(points)) {
+					// Corner wraps around: for now just break
+					break pointsLoop;
+				}
+			} else if (i > maxIndex(points)) {
+				break pointsLoop;
+			}
 			i++;
 			p1 = p2;
 			p2 = points[(i + 1) % points.length];
@@ -2780,25 +2789,15 @@ function circle3PointFit(p1, p2, p3) {
  * @param {number} startIndex - Start index
  * @param {number} endIndex - End index
  */
-function straightenPoints(points, isLoop, startIndex, endIndex) {
+function straightenPoints(points, _isLoop, startIndex, endIndex) {
 	// Ensure distance field exists
 	if (points[0].distance === undefined) {
 		addDistanceField(points);
 	}
 
-	// Early return checks for insufficient points
-	if (points.length < (isLoop ? 4 : 3)) {
-		return;
-	}
-
 	// If we wrap around, then use a negative number for the start index
 	if (startIndex > endIndex) {
 		startIndex -= points.length;
-	}
-
-	// We need at least two intermediate points
-	if (endIndex < startIndex + 2) {
-		return;
 	}
 
 	const [rx, ry] = latlng2dxdy(points[startIndex], points[endIndex]);
