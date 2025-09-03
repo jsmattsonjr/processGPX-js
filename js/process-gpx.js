@@ -4101,6 +4101,25 @@ export function processGPX(trackFeature, options = {}) {
 	// Look for loops
 	findLoops(points, options.isLoop);
 
+	// Adjust positions if requested
+	if (
+		(options.xShift !== undefined && options.xShift !== 0) ||
+		(options.yShift !== undefined && options.yShift !== 0)
+	) {
+		const xShift = options.xShift || 0;
+		const yShift = options.yShift || 0;
+		const dLat = yShift / LAT2Y;
+		note(`shifting points by distance ${xShift}, ${yShift}: will cause distortion near poles.`);
+		
+		for (const p of points) {
+			p.lat += dLat;
+			const c = Math.cos(DEG2RAD * p.lat);
+			if (c > 0) {
+				p.lon += xShift / (c * LAT2Y);
+			}
+		}
+	}
+
 	// Adjust altitudes if requested
 	if (
 		(options.zShift !== undefined && options.zShift !== 0) ||

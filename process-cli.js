@@ -139,6 +139,8 @@ function setupYargsParser() {
 			},
 			startCircuits: { type: "number", default: 0 },
 			selectedTrack: { type: "number", default: 0, alias: ["track"] },
+			xShift: { type: "number", default: 0, alias: ["shiftX"] },
+			yShift: { type: "number", default: 0, alias: ["shiftY"] },
 			zAutoSmooth: { type: "number", default: 0, alias: ["autoSmoothZ"] },
 			zOffset: { type: "number", default: 0 },
 			zScaleRef: { type: "number", default: 0, alias: ["zScaleReference"] },

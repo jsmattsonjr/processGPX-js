@@ -107,6 +107,8 @@ export const defaultOptions = {
 
 	// Altitude settings
 	zAutoSmooth: 0,
+	xShift: 0,
+	yShift: 0,
 	zOffset: 0,
 	zScale: 1,
 	zScaleRef: 0,
