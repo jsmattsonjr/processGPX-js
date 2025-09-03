@@ -7,7 +7,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import togpx from "togpx";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { processGPX } from "./js/process-gpx.js";
+import { processGPX, generateTabularOutput } from "./js/process-gpx.js";
 import { formatXML } from "./js/xml-formatter.js";
 
 /**
@@ -269,6 +269,7 @@ function setupYargsParser() {
 /**
  * Parse command line arguments using yargs
  */
+
 /**
  * Generate CSV output from processed route data (matches Perl implementation)
  */
@@ -290,26 +291,12 @@ function generateCSVOutput(processedRoute) {
 		ele: coord[2] || ''
 	}));
 
-	// Get keys from first point (like Perl: @keys = keys %{$points->[0]};)
-	const keys = Object.keys(points[0]);
-	
-	// Header row: track, segment, then all point keys
-	let csvContent = "track,segment," + keys.join(",") + "\n";
-	
-	// Data rows (assuming single track, single segment for now)
-	const nTrack = 1;
-	const nSegment = 1;
-	
-	for (const point of points) {
-		const values = [nTrack, nSegment];
-		for (const key of keys) {
-			const value = point[key] ?? "";
-			values.push(value);
-		}
-		csvContent += values.join(",") + "\n";
-	}
-	
-	return csvContent;
+	// Use common tabular output function with CSV defaults
+	return generateTabularOutput(points, { 
+		separator: ",",
+		extraFields: ["track", "segment"],
+		extraValues: [1, 1]
+	});
 }
 
 export async function parseArgs(args) {

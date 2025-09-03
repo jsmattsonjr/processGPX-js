@@ -108,6 +108,46 @@ function warn(...args) {
  * @param {Array} points - Array of point objects with lat, lon, ele, distance properties
  * @param {string} filename - Output filename
  */
+
+/**
+ * Generate tabular output from points array
+ * @param {Array} points - Array of point objects
+ * @param {Object} options - Options for output format
+ * @param {string} options.separator - Field separator (default: ",")
+ * @param {Array} options.extraFields - Extra fields to prepend (default: [])
+ * @param {Array} options.extraValues - Values for extra fields (default: [])
+ * @returns {string} Tabular content
+ */
+export function generateTabularOutput(points, options = {}) {
+	const {
+		separator = ",",
+		extraFields = [],
+		extraValues = []
+	} = options;
+
+	if (!points || points.length === 0) {
+		return extraFields.join(separator) + "\n";
+	}
+
+	// Get keys from first point (like Perl: @keys = keys %{$points->[0]};)
+	const keys = Object.keys(points[0]);
+	
+	// Header row: extra fields, then all point keys
+	let content = [...extraFields, ...keys].join(separator) + "\n";
+	
+	// Data rows
+	for (const point of points) {
+		const values = [...extraValues];
+		for (const key of keys) {
+			const value = point[key] ?? "";
+			values.push(value);
+		}
+		content += values.join(separator) + "\n";
+	}
+	
+	return content;
+}
+
 function dumpPoints(points, filename) {
 	const match = filename.match(/^(\d+)-js-(.+)\.txt$/);
 	if (match) {
@@ -117,17 +157,18 @@ function dumpPoints(points, filename) {
 		note(`Stage ${filename} complete: ${points.length} points`);
 	}
 
-	let output = `# Points dump: ${points.length} points\n`;
-	output += "# Index\tLat\t\tLon\t\tEle\t\tDistance\n";
+	// Add index to each point for debugging
+	const indexedPoints = points.map((point, index) => ({ index, ...point }));
+	
+	// Generate tabular output (tab-separated for debug files)
+	const tabularContent = generateTabularOutput(indexedPoints, { 
+		separator: "\t",
+		extraFields: [],
+		extraValues: []
+	});
 
-	for (let i = 0; i < points.length; i++) {
-		const p = points[i];
-		const lat = p.lat.toFixed(8);
-		const lon = p.lon.toFixed(8);
-		const ele = (p.ele || 0).toString();
-		const dist = (p.distance || 0).toString();
-		output += `${i}\t${lat}\t${lon}\t${ele}\t\t${dist}\n`;
-	}
+	let output = `# Points dump: ${points.length} points\n`;
+	output += "# " + tabularContent;
 
 	if (
 		typeof process !== "undefined" &&
