@@ -157,7 +157,7 @@ function setupYargsParser() {
 			description: { type: "string" },
 			keywords: { type: "string" },
 			title: { type: "string", alias: ["name"] },
-			out: { type: "string" },
+			out: { type: "string", alias: "o" },
 			namedSegments: { type: "string", alias: ["segment", "segments"] },
 			startTime: { type: "string" },
 
@@ -260,6 +260,49 @@ function setupYargsParser() {
 /**
  * Parse command line arguments using yargs
  */
+/**
+ * Generate CSV output from processed route data (matches Perl implementation)
+ */
+function generateCSVOutput(processedRoute) {
+	// Extract coordinates from GeoJSON feature
+	if (!processedRoute || !processedRoute.geometry || !processedRoute.geometry.coordinates) {
+		return "track,segment\n";
+	}
+	
+	const coordinates = processedRoute.geometry.coordinates;
+	if (!coordinates || coordinates.length === 0) {
+		return "track,segment\n";
+	}
+
+	// Convert coordinates to point objects
+	const points = coordinates.map(coord => ({
+		lat: coord[1],
+		lon: coord[0],
+		ele: coord[2] || ''
+	}));
+
+	// Get keys from first point (like Perl: @keys = keys %{$points->[0]};)
+	const keys = Object.keys(points[0]);
+	
+	// Header row: track, segment, then all point keys
+	let csvContent = "track,segment," + keys.join(",") + "\n";
+	
+	// Data rows (assuming single track, single segment for now)
+	const nTrack = 1;
+	const nSegment = 1;
+	
+	for (const point of points) {
+		const values = [nTrack, nSegment];
+		for (const key of keys) {
+			const value = point[key] ?? "";
+			values.push(value);
+		}
+		csvContent += values.join(",") + "\n";
+	}
+	
+	return csvContent;
+}
+
 export async function parseArgs(args) {
 	const parser = setupYargsParser();
 	return await parser.parse(args);
@@ -318,15 +361,34 @@ export async function processGpxFile(inputFile, options) {
 		// Format the XML with proper indentation and newlines
 		const formattedGpxOutput = formatXML(gpxOutput);
 
-		// Generate output filename
-		const dirname = path.dirname(inputFile);
-		const ext = path.extname(inputFile);
-		const base = path.basename(inputFile, ext);
-		const outputFile = path.join(dirname, `${base}_jsprocessed.gpx`);
-
-		// Write output GPX file
-		fs.writeFileSync(outputFile, formattedGpxOutput);
-		console.log(`Successfully created ${outputFile}`);
+		// Generate output filename and write output file
+		let outputFile;
+		if (options.outFile) {
+			// Use specified output file
+			outputFile = options.outFile;
+		} else {
+			// Generate default filename
+			const dirname = path.dirname(inputFile);
+			const ext = path.extname(inputFile);
+			const base = path.basename(inputFile, ext);
+			
+			if (options.csv) {
+				outputFile = path.join(dirname, `${base}_jsprocessed.csv`);
+			} else {
+				outputFile = path.join(dirname, `${base}_jsprocessed.gpx`);
+			}
+		}
+		
+		if (options.csv) {
+			// CSV output
+			const csvContent = generateCSVOutput(processedRoute);
+			fs.writeFileSync(outputFile, csvContent);
+			console.log(`Successfully created ${outputFile}`);
+		} else {
+			// GPX output
+			fs.writeFileSync(outputFile, formattedGpxOutput);
+			console.log(`Successfully created ${outputFile}`);
+		}
 		
 		return { processedRoute, outputFile };
 	} catch (error) {
