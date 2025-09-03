@@ -7,7 +7,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import togpx from "togpx";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { processGPX, generateTabularOutput } from "./js/process-gpx.js";
+import { generateTabularOutput, processGPX } from "./js/process-gpx.js";
 import { formatXML } from "./js/xml-formatter.js";
 
 /**
@@ -118,7 +118,11 @@ function setupYargsParser() {
 			sigma: { type: "number", alias: ["smooth"] },
 			simplifyD: { type: "number", default: 0.3, alias: ["simplifyDistance"] },
 			simplifyZ: { type: "number", default: 0.1, alias: ["simplifyAltitude"] },
-			simplifyPoints: { type: "boolean", default: undefined, alias: ["simplify"] },
+			simplifyPoints: {
+				type: "boolean",
+				default: undefined,
+				alias: ["simplify"],
+			},
 			smoothAngle: { type: "number" },
 			smoothEnd: { type: "number" },
 			smoothStart: { type: "number" },
@@ -269,39 +273,42 @@ function setupYargsParser() {
 /**
  * Parse command line arguments using yargs
  */
+export async function parseArgs(args) {
+	const parser = setupYargsParser();
+	return await parser.parse(args);
+}
 
 /**
  * Generate CSV output from processed route data (matches Perl implementation)
  */
 function generateCSVOutput(processedRoute) {
 	// Extract coordinates from GeoJSON feature
-	if (!processedRoute || !processedRoute.geometry || !processedRoute.geometry.coordinates) {
+	if (
+		!processedRoute ||
+		!processedRoute.geometry ||
+		!processedRoute.geometry.coordinates
+	) {
 		return "track,segment\n";
 	}
-	
+
 	const coordinates = processedRoute.geometry.coordinates;
 	if (!coordinates || coordinates.length === 0) {
 		return "track,segment\n";
 	}
 
 	// Convert coordinates to point objects
-	const points = coordinates.map(coord => ({
+	const points = coordinates.map((coord) => ({
 		lat: coord[1],
 		lon: coord[0],
-		ele: coord[2] || ''
+		ele: coord[2] || "",
 	}));
 
 	// Use common tabular output function with CSV defaults
-	return generateTabularOutput(points, { 
+	return generateTabularOutput(points, {
 		separator: ",",
 		extraFields: ["track", "segment"],
-		extraValues: [1, 1]
+		extraValues: [1, 1],
 	});
-}
-
-export async function parseArgs(args) {
-	const parser = setupYargsParser();
-	return await parser.parse(args);
 }
 
 /**
@@ -367,14 +374,14 @@ export async function processGpxFile(inputFile, options) {
 			const dirname = path.dirname(inputFile);
 			const ext = path.extname(inputFile);
 			const base = path.basename(inputFile, ext);
-			
+
 			if (options.csv) {
 				outputFile = path.join(dirname, `${base}_jsprocessed.csv`);
 			} else {
 				outputFile = path.join(dirname, `${base}_jsprocessed.gpx`);
 			}
 		}
-		
+
 		if (options.csv) {
 			// CSV output
 			const csvContent = generateCSVOutput(processedRoute);
@@ -385,7 +392,7 @@ export async function processGpxFile(inputFile, options) {
 			fs.writeFileSync(outputFile, formattedGpxOutput);
 			console.log(`Successfully created ${outputFile}`);
 		}
-		
+
 		return { processedRoute, outputFile };
 	} catch (error) {
 		console.error(`Error: ${error.message}`);

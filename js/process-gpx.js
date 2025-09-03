@@ -119,11 +119,7 @@ function warn(...args) {
  * @returns {string} Tabular content
  */
 export function generateTabularOutput(points, options = {}) {
-	const {
-		separator = ",",
-		extraFields = [],
-		extraValues = []
-	} = options;
+	const { separator = ",", extraFields = [], extraValues = [] } = options;
 
 	if (!points || points.length === 0) {
 		return extraFields.join(separator) + "\n";
@@ -131,10 +127,10 @@ export function generateTabularOutput(points, options = {}) {
 
 	// Get keys from first point (like Perl: @keys = keys %{$points->[0]};)
 	const keys = Object.keys(points[0]);
-	
+
 	// Header row: extra fields, then all point keys
 	let content = [...extraFields, ...keys].join(separator) + "\n";
-	
+
 	// Data rows
 	for (const point of points) {
 		const values = [...extraValues];
@@ -144,7 +140,7 @@ export function generateTabularOutput(points, options = {}) {
 		}
 		content += values.join(separator) + "\n";
 	}
-	
+
 	return content;
 }
 
@@ -159,12 +155,12 @@ function dumpPoints(points, filename) {
 
 	// Add index to each point for debugging
 	const indexedPoints = points.map((point, index) => ({ index, ...point }));
-	
+
 	// Generate tabular output (tab-separated for debug files)
-	const tabularContent = generateTabularOutput(indexedPoints, { 
+	const tabularContent = generateTabularOutput(indexedPoints, {
 		separator: "\t",
 		extraFields: [],
-		extraValues: []
+		extraValues: [],
 	});
 
 	let output = `# Points dump: ${points.length} points\n`;
@@ -478,10 +474,12 @@ function latlng2dxdy(p1, p2) {
 	const lng2 = DEG2RAD * p2.lon;
 	const dlng = lng2 - lng1;
 
-	const u = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dlng);
+	const u =
+		Math.cos(lat1) * Math.sin(lat2) -
+		Math.sin(lat1) * Math.cos(lat2) * Math.cos(dlng);
 	const v = Math.sin(dlng) * Math.cos(lat2);
 	const uv = Math.sqrt(u ** 2 + v ** 2);
-	
+
 	let dx, dy;
 	if (uv === 0) {
 		dx = 0;
@@ -504,23 +502,23 @@ function latlng2dxdy(p1, p2) {
  */
 function interpolateFields(...points) {
 	if (points.length <= 2) return;
-	
+
 	const p1 = points[0];
 	const p2 = points[points.length - 1];
-	
+
 	// Calculate distance: don't trust existing distance field
 	const ds = [0];
 	for (let i = 1; i < points.length; i++) {
 		ds.push(ds[ds.length - 1] + latlngDistance(points[i - 1], points[i]));
 	}
-	
+
 	for (let i = 1; i < points.length - 1; i++) {
 		const p = points[i];
 		const f = ds[i] / ds[ds.length - 1];
-		
+
 		for (const k in p1) {
 			if (k === "lat" || k === "lon") continue;
-			
+
 			if (p1[k] !== undefined && p2[k] !== undefined) {
 				if (k === "segment") {
 					if (p1[k] === p2[k]) {
@@ -550,11 +548,11 @@ function interpolatePoint(p1, p2, f) {
 	// Interpolate lat and lng using distances, not angles
 	const [dx, dy] = latlng2dxdy(p1, p2);
 	const p = addVectorToPoint(p1, [dx * f, dy * f]);
-	
+
 	// Interpolate other random values
 	for (const k in p1) {
 		if (k === "lat" || k === "lon") continue;
-		
+
 		if (p1[k] !== undefined && p2[k] !== undefined) {
 			if (k === "segment") {
 				if (p1[k] === p2[k]) {
@@ -581,7 +579,7 @@ function interpolatePoint(p1, p2, f) {
  * f4 is the normalized distance from p3 to p4.
  * @param {Object} p1 - First control point
  * @param {Object} p2 - Start point of interpolation
- * @param {Object} p3 - End point of interpolation  
+ * @param {Object} p3 - End point of interpolation
  * @param {Object} p4 - Second control point
  * @param {number} f1 - Normalized distance p1->p2 relative to p2->p3
  * @param {number} f4 - Normalized distance p3->p4 relative to p2->p3
@@ -689,7 +687,8 @@ function addVectorToPoint(point, vector) {
  */
 function splineInterpolation(p1, p2, p3, p4, dd = PI / 16) {
 	// Calculate number of points based on the angles
-	const angle = Math.abs(latlngAngle(p1, p2, p3)) + Math.abs(latlngAngle(p2, p3, p4));
+	const angle =
+		Math.abs(latlngAngle(p1, p2, p3)) + Math.abs(latlngAngle(p2, p3, p4));
 	const NPoints = Math.floor(angle / dd);
 
 	// Calculate normalized distances
@@ -1457,14 +1456,22 @@ function fixZigZags(points, isLoop = false) {
 		const iEnd = isLoop ? maxIndex(points) : maxIndex(points) - 1;
 
 		for (let i = iStart; i <= iEnd; i++) {
-			if (UTurnCheck(ix(points, i - 1), points[i], points[i], ix(points, i + 1), -0.9)) {
+			if (
+				UTurnCheck(
+					ix(points, i - 1),
+					points[i],
+					points[i],
+					ix(points, i + 1),
+					-0.9,
+				)
+			) {
 				UTurns.push(i);
 			}
 		}
 
 		addDistanceField(points);
 		let zigZagCount = 0;
-		
+
 		if (UTurns.length > 0) {
 			while (UTurns.length > 1) {
 				const U1 = UTurns.shift();
@@ -1491,9 +1498,9 @@ function fixZigZags(points, isLoop = false) {
 
 					// eliminate points between
 					warn(`repairing zig-zag iteration ${zigZagIter}...`);
-					let u = U1;      // keep points up to u
-					let v = U2 + 1;  // keep points starting with v
-					
+					const u = U1; // keep points up to u
+					let v = U2 + 1; // keep points starting with v
+
 					while (
 						v < maxIndex(points) &&
 						UTurnCheck(points[u], points[v], points[v], points[v + 1])
@@ -4150,8 +4157,10 @@ export function processGPX(trackFeature, options = {}) {
 		const xShift = options.xShift || 0;
 		const yShift = options.yShift || 0;
 		const dLat = yShift / LAT2Y;
-		note(`shifting points by distance ${xShift}, ${yShift}: will cause distortion near poles.`);
-		
+		note(
+			`shifting points by distance ${xShift}, ${yShift}: will cause distortion near poles.`,
+		);
+
 		for (const p of points) {
 			p.lat += dLat;
 			const c = Math.cos(DEG2RAD * p.lat);
@@ -5044,7 +5053,11 @@ export function processGPX(trackFeature, options = {}) {
 		// For the purposes of corner smoothing, the start and finish should be viewed as a single point.
 		// Hence, the penultimate point should immediately be followed by the start point.
 		// Enumerating the same point twice messes up the corner smoothing algorithm.
-		if (options.isLoop && points.length > 1 && pointsAreClose(points[0], points[maxIndex(points)])) {
+		if (
+			options.isLoop &&
+			points.length > 1 &&
+			pointsAreClose(points[0], points[maxIndex(points)])
+		) {
 			points.pop();
 		}
 
@@ -5228,7 +5241,11 @@ export function processGPX(trackFeature, options = {}) {
 	// STAGE 41: Simplify points
 	if (options.simplifyPoints) {
 		note("simplifying points...");
-		points = simplifyPoints(points, options.simplifyZ || 0.1, options.simplifyD || 0.3);
+		points = simplifyPoints(
+			points,
+			options.simplifyZ || 0.1,
+			options.simplifyD || 0.3,
+		);
 		dumpPoints(points, "41-js-simplified.txt");
 	}
 

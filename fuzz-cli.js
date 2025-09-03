@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
 
@@ -16,12 +16,30 @@ const execAsync = promisify(exec);
 const OPTIONS_CONFIG = {
 	// Boolean options
 	boolean: [
-		"addCurvature", "addDirection", "addDistance", "addGradient", 
-		"addGradientSigns", "addSigma", "anchorSF", "auto", "autoLoop", 
-		"copyPoint", "csv", "enableAdvancedSmoothing", "enableElevationFixes",
-		"loop", "loopLeft", "loopRight", "noSave", "outAndBack", 
-		"outAndBackLap", "quiet", "reverse", "saveCrossingsCSV", 
-		"saveSimplifiedCourse", "stripSegments"
+		"addCurvature",
+		"addDirection",
+		"addDistance",
+		"addGradient",
+		"addGradientSigns",
+		"addSigma",
+		"anchorSF",
+		"auto",
+		"autoLoop",
+		"copyPoint",
+		"csv",
+		"enableAdvancedSmoothing",
+		"enableElevationFixes",
+		"loop",
+		"loopLeft",
+		"loopRight",
+		"noSave",
+		"outAndBack",
+		"outAndBackLap",
+		"quiet",
+		"reverse",
+		"saveCrossingsCSV",
+		"saveSimplifiedCourse",
+		"stripSegments",
 	],
 
 	// Numeric options with reasonable ranges
@@ -105,34 +123,54 @@ const OPTIONS_CONFIG = {
 		zShift: [-50, 50],
 		zShiftEnd: [-50, 50],
 		zShiftStart: [-50, 50],
-		sigmaz: [1, 100]
+		sigmaz: [1, 100],
 	},
 
 	// String options
 	string: [
-		"author", "autoSegmentNames", "copyright", "description", 
-		"keywords", "title", "out", "namedSegments", "startTime"
+		"author",
+		"autoSegmentNames",
+		"copyright",
+		"description",
+		"keywords",
+		"title",
+		"out",
+		"namedSegments",
+		"startTime",
 	],
 
 	// Array options (generate 1-3 values each)
 	array: [
-		"autoSegments", "autoStraighten", "circleStart", "circleEnd", 
-		"circle", "circuitFromPosition", "circuitToPosition", "deleteRange", 
-		"flatten", "join", "selectiveLaneShift", "selectiveSmoothG", 
-		"selectiveSmooth", "selectiveSmoothZ", "splitAt", "straight", 
-		"straightStart", "straightEnd"
+		"autoSegments",
+		"autoStraighten",
+		"circleStart",
+		"circleEnd",
+		"circle",
+		"circuitFromPosition",
+		"circuitToPosition",
+		"deleteRange",
+		"flatten",
+		"join",
+		"selectiveLaneShift",
+		"selectiveSmoothG",
+		"selectiveSmooth",
+		"selectiveSmoothZ",
+		"splitAt",
+		"straight",
+		"straightStart",
+		"straightEnd",
 	],
 
 	// Constraints from Yargs validation
 	constraints: {
 		mutuallyExclusive: [["loopLeft", "loopRight"]],
 		dependencies: [
-			{ option: "shiftSF", requires: ["loop"] } // shiftSF needs loop/lap
-		]
+			{ option: "shiftSF", requires: ["loop"] }, // shiftSF needs loop/lap
+		],
 	},
 
 	// Options that use undefined as default (special handling)
-	undefinedDefaults: ["autoSpacing", "fixCrossings", "prune", "simplifyPoints"]
+	undefinedDefaults: ["autoSpacing", "fixCrossings", "prune", "simplifyPoints"],
 };
 
 class CLIOptionFuzzer {
@@ -152,12 +190,13 @@ class CLIOptionFuzzer {
 	loadTestFiles() {
 		try {
 			const files = fs.readdirSync(this.gpxDirectory);
-			this.testFiles = files.filter(file => 
-				file.toLowerCase().endsWith('.gpx') && 
-				!file.includes('_processed') &&
-				!file.includes('_jsprocessed')
+			this.testFiles = files.filter(
+				(file) =>
+					file.toLowerCase().endsWith(".gpx") &&
+					!file.includes("_processed") &&
+					!file.includes("_jsprocessed"),
 			);
-			
+
 			if (this.testFiles.length === 0) {
 				console.warn("⚠️  No GPX files found in gpx directory");
 				this.testFiles = ["Twin_Bridges_Scenic_Bikeway.gpx"]; // fallback
@@ -172,7 +211,8 @@ class CLIOptionFuzzer {
 	 * Get a random test file
 	 */
 	getRandomTestFile() {
-		const randomFile = this.testFiles[Math.floor(Math.random() * this.testFiles.length)];
+		const randomFile =
+			this.testFiles[Math.floor(Math.random() * this.testFiles.length)];
 		return path.join(this.gpxDirectory, randomFile);
 	}
 
@@ -182,7 +222,7 @@ class CLIOptionFuzzer {
 	randomNumeric(option) {
 		const range = OPTIONS_CONFIG.numeric[option];
 		if (!range) return Math.floor(Math.random() * 100);
-		
+
 		const [min, max] = range;
 		if (Number.isInteger(min) && Number.isInteger(max)) {
 			return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -217,7 +257,7 @@ class CLIOptionFuzzer {
 	violatesConstraints(selectedOptions) {
 		// Check mutual exclusions
 		for (const group of OPTIONS_CONFIG.constraints.mutuallyExclusive) {
-			const found = group.filter(opt => selectedOptions.has(opt));
+			const found = group.filter((opt) => selectedOptions.has(opt));
 			if (found.length > 1) {
 				return `Mutually exclusive: ${found.join(", ")}`;
 			}
@@ -226,7 +266,9 @@ class CLIOptionFuzzer {
 		// Check dependencies
 		for (const dep of OPTIONS_CONFIG.constraints.dependencies) {
 			if (selectedOptions.has(dep.option)) {
-				const hasRequired = dep.requires.some(req => selectedOptions.has(req));
+				const hasRequired = dep.requires.some((req) =>
+					selectedOptions.has(req),
+				);
 				if (!hasRequired) {
 					return `${dep.option} requires one of: ${dep.requires.join(", ")}`;
 				}
@@ -265,51 +307,60 @@ class CLIOptionFuzzer {
 	 * Internal method to generate options
 	 */
 	_generateOptionsInternal(numOptions, selectedOptions, args) {
-
 		let attempts = 0;
 		while (selectedOptions.size < numOptions && attempts < 100) {
 			attempts++;
-			
+
 			// Pick a random option type
 			const typeChoice = Math.random();
 			let option, value;
 
-			if (typeChoice < 0.4) { // 40% boolean
-				option = OPTIONS_CONFIG.boolean[Math.floor(Math.random() * OPTIONS_CONFIG.boolean.length)];
+			if (typeChoice < 0.4) {
+				// 40% boolean
+				option =
+					OPTIONS_CONFIG.boolean[
+						Math.floor(Math.random() * OPTIONS_CONFIG.boolean.length)
+					];
 				if (selectedOptions.has(option)) continue;
-				
+
 				selectedOptions.add(option);
-				
+
 				// Test constraint violation before adding
 				const violation = this.violatesConstraints(selectedOptions);
 				if (violation) {
 					selectedOptions.delete(option);
 					continue;
 				}
-				
+
 				args.push(`--${option}`);
-				
-			} else if (typeChoice < 0.7) { // 30% numeric
+			} else if (typeChoice < 0.7) {
+				// 30% numeric
 				const numericKeys = Object.keys(OPTIONS_CONFIG.numeric);
 				option = numericKeys[Math.floor(Math.random() * numericKeys.length)];
 				if (selectedOptions.has(option)) continue;
-				
+
 				selectedOptions.add(option);
 				value = this.randomNumeric(option);
 				args.push(`--${option}`, value.toString());
-				
-			} else if (typeChoice < 0.85) { // 15% string
-				option = OPTIONS_CONFIG.string[Math.floor(Math.random() * OPTIONS_CONFIG.string.length)];
+			} else if (typeChoice < 0.85) {
+				// 15% string
+				option =
+					OPTIONS_CONFIG.string[
+						Math.floor(Math.random() * OPTIONS_CONFIG.string.length)
+					];
 				if (selectedOptions.has(option)) continue;
-				
+
 				selectedOptions.add(option);
 				value = this.randomString();
 				args.push(`--${option}`, value);
-				
-			} else { // 15% array
-				option = OPTIONS_CONFIG.array[Math.floor(Math.random() * OPTIONS_CONFIG.array.length)];
+			} else {
+				// 15% array
+				option =
+					OPTIONS_CONFIG.array[
+						Math.floor(Math.random() * OPTIONS_CONFIG.array.length)
+					];
 				if (selectedOptions.has(option)) continue;
-				
+
 				selectedOptions.add(option);
 				const arrayValues = this.randomArray();
 				for (const val of arrayValues) {
@@ -327,37 +378,38 @@ class CLIOptionFuzzer {
 	async runTest(args) {
 		this.runs++;
 		// Properly quote arguments that might contain spaces
-		const quotedArgs = args.map(arg => {
-			if (typeof arg === 'string' && arg.includes(' ')) {
+		const quotedArgs = args.map((arg) => {
+			if (typeof arg === "string" && arg.includes(" ")) {
 				return `"${arg}"`;
 			}
 			return arg;
 		});
 		const command = `node process-cli.js ${quotedArgs.join(" ")}`;
-		
+
 		try {
 			console.log(`\nTest ${this.runs}: ${command}`);
 			const { stdout, stderr } = await execAsync(command, { timeout: 30000 });
-			
+
 			if (stderr && !stderr.includes("Successfully created")) {
 				console.log(`⚠️  Stderr: ${stderr.trim()}`);
 			}
-			
+
 			this.successful++;
 			console.log("✅ Success");
 			return true;
-			
 		} catch (error) {
 			this.failed++;
 			console.log(`❌ Failed: ${error.message}`);
-			
+
 			// Log interesting failures (not just validation errors)
-			if (!error.message.includes("ERROR: you cannot specify both") &&
-			    !error.message.includes("ERROR: -shiftSF is only compatible")) {
+			if (
+				!error.message.includes("ERROR: you cannot specify both") &&
+				!error.message.includes("ERROR: -shiftSF is only compatible")
+			) {
 				console.log(`   Command: ${command}`);
 				console.log(`   Error: ${error.message.split("\n")[0]}`);
 			}
-			
+
 			return false;
 		}
 	}
@@ -367,8 +419,10 @@ class CLIOptionFuzzer {
 	 */
 	async fuzz(numTests = 50) {
 		console.log(`🔍 Starting CLI fuzzer with ${numTests} tests`);
-		console.log(`📁 Using ${this.testFiles.length} GPX files from ${this.gpxDirectory}/ directory`);
-		
+		console.log(
+			`📁 Using ${this.testFiles.length} GPX files from ${this.gpxDirectory}/ directory`,
+		);
+
 		// Check GPX directory exists
 		if (!fs.existsSync(this.gpxDirectory)) {
 			console.error(`❌ GPX directory not found: ${this.gpxDirectory}`);
@@ -376,25 +430,29 @@ class CLIOptionFuzzer {
 		}
 
 		const startTime = Date.now();
-		
+
 		for (let i = 0; i < numTests; i++) {
 			const args = this.generateOptions();
 			await this.runTest(args);
-			
+
 			// Brief pause between tests
-			await new Promise(resolve => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
 
 		const duration = (Date.now() - startTime) / 1000;
-		
+
 		console.log("\n" + "=".repeat(60));
 		console.log("📊 FUZZER RESULTS");
 		console.log("=".repeat(60));
 		console.log(`Tests run: ${this.runs}`);
-		console.log(`Successful: ${this.successful} (${(this.successful/this.runs*100).toFixed(1)}%)`);
-		console.log(`Failed: ${this.failed} (${(this.failed/this.runs*100).toFixed(1)}%)`);
+		console.log(
+			`Successful: ${this.successful} (${((this.successful / this.runs) * 100).toFixed(1)}%)`,
+		);
+		console.log(
+			`Failed: ${this.failed} (${((this.failed / this.runs) * 100).toFixed(1)}%)`,
+		);
 		console.log(`Duration: ${duration.toFixed(1)}s`);
-		console.log(`Rate: ${(this.runs/duration).toFixed(1)} tests/sec`);
+		console.log(`Rate: ${(this.runs / duration).toFixed(1)} tests/sec`);
 	}
 
 	/**
