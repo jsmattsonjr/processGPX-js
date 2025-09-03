@@ -74,7 +74,7 @@ function interpolateAltitudePoints(lineString, intervalMeters) {
 
 	const interpolatedPoints = [];
 	let totalDistance = 0;
-	let nextInterpolationDistance = 0;
+	let nextInterpolationDistance = intervalMeters; // Start at first interval, since we add point 0 separately
 
 	// Add first point
 	const firstPoint = coordinates[0];
@@ -172,7 +172,7 @@ function compareRouteGeometry(lineString1, lineString2, bufferDistance) {
 	};
 }
 
-function compareAltitudes(points1, points2, tolerance) {
+function compareAltitudes(points1, points2, tolerance, intervalMeters = 100) {
 	if (points1.length === 0 && points2.length === 0) {
 		return {
 			altitudesEqual: true,
@@ -201,7 +201,7 @@ function compareAltitudes(points1, points2, tolerance) {
 	let p2Index = 0;
 
 	// Compare altitudes at matching distances
-	for (let distance = 0; distance <= maxDistance; distance += 100) {
+	for (let distance = 0; distance <= maxDistance; distance += intervalMeters) {
 		// Find closest points at this distance
 		while (
 			p1Index < points1.length - 1 &&
@@ -323,6 +323,7 @@ function main() {
 		altitudePoints1,
 		altitudePoints2,
 		altitudeTolerance,
+		altitudeInterval,
 	);
 
 	console.log(
