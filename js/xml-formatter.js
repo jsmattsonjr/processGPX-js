@@ -9,5 +9,5 @@
  */
 export function formatXML(xmlString) {
 	// Simple formatter that adds newlines between tags
-	return xmlString.replace(/>(<)/g, ">\n$1") + "\n";
+	return `${xmlString.replace(/>(<)/g, ">\n$1")}\n`;
 }

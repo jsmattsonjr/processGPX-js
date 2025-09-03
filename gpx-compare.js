@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import { gpx } from "@tmcw/togeojson";
 import * as turf from "@turf/turf";
 import { DOMParser } from "@xmldom/xmldom";
-import fs from "fs";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 

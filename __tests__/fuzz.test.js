@@ -19,13 +19,10 @@ describe("CLI Fuzzing Coverage Tests", () => {
 
 	test("run fuzzer for coverage testing", async () => {
 		// Run the existing fuzzer with a reasonable number of tests
-		const fuzzCount = parseInt(process.env.FUZZ_COUNT || 20);
-		const { stdout, stderr } = await execAsync(
-			`node fuzz-cli.js ${fuzzCount}`,
-			{
-				timeout: 300000, // 5 minutes
-			},
-		);
+		const fuzzCount = parseInt(process.env.FUZZ_COUNT || 20, 10);
+		const { stdout } = await execAsync(`node fuzz-cli.js ${fuzzCount}`, {
+			timeout: 300000, // 5 minutes
+		});
 
 		// Parse the fuzzer output to get statistics
 		const lines = stdout.split("\n");
@@ -41,8 +38,11 @@ describe("CLI Fuzzing Coverage Tests", () => {
 		expect(successfulLine).toBeTruthy();
 
 		// Extract numbers from the output
-		const testsRun = parseInt(testsRunLine.match(/Tests run: (\d+)/)[1]);
-		const successful = parseInt(successfulLine.match(/Successful: (\d+)/)[1]);
+		const testsRun = parseInt(testsRunLine.match(/Tests run: (\d+)/)[1], 10);
+		const successful = parseInt(
+			successfulLine.match(/Successful: (\d+)/)[1],
+			10,
+		);
 
 		console.log(
 			`\n🔍 Fuzzer executed ${testsRun} tests with ${successful} successful`,
@@ -59,7 +59,9 @@ describe("CLI Fuzzing Coverage Tests", () => {
 			.filter((line) => line.startsWith("Test "))
 			.slice(0, 3);
 		console.log("\n📋 Sample fuzz tests executed:");
-		sampleTests.forEach((test) => console.log(`  ${test}`));
+		for (const test of sampleTests) {
+			console.log(`  ${test}`);
+		}
 
 		// Verify that various GPX files were used
 		const gpxFiles = lines
@@ -82,12 +84,9 @@ describe("CLI Fuzzing Coverage Tests", () => {
 
 		for (const testCase of testCases) {
 			try {
-				const { stdout, stderr } = await execAsync(
-					`node process-cli.js ${testCase}`,
-					{
-						timeout: 30000,
-					},
-				);
+				const { stdout } = await execAsync(`node process-cli.js ${testCase}`, {
+					timeout: 30000,
+				});
 
 				expect(stdout).toContain("Processing complete");
 				expect(stdout).toContain("Successfully created");
@@ -117,7 +116,9 @@ describe("CLI Fuzzing Coverage Tests", () => {
 		});
 
 		console.log("\n🎲 Sample generated fuzz commands:");
-		commands.forEach((cmd) => console.log(`  ${cmd}`));
+		for (const cmd of commands) {
+			console.log(`  ${cmd}`);
+		}
 	});
 
 	test("test processGPX with fuzzer-generated options", async () => {

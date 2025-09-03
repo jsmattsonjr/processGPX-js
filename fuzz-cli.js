@@ -388,7 +388,7 @@ class CLIOptionFuzzer {
 
 		try {
 			console.log(`\nTest ${this.runs}: ${command}`);
-			const { stdout, stderr } = await execAsync(command, { timeout: 30000 });
+			const { stderr } = await execAsync(command, { timeout: 30000 });
 
 			if (stderr && !stderr.includes("Successfully created")) {
 				console.log(`⚠️  Stderr: ${stderr.trim()}`);
@@ -441,7 +441,7 @@ class CLIOptionFuzzer {
 
 		const duration = (Date.now() - startTime) / 1000;
 
-		console.log("\n" + "=".repeat(60));
+		console.log(`\n${"=".repeat(60)}`);
 		console.log("📊 FUZZER RESULTS");
 		console.log("=".repeat(60));
 		console.log(`Tests run: ${this.runs}`);
@@ -499,6 +499,6 @@ if (args[0] === "--generate") {
 } else if (args[0] === "--generate-options") {
 	console.log(JSON.stringify(fuzzer.generateOptionArgsArray()));
 } else {
-	const numTests = parseInt(args[0]) || 50;
+	const numTests = parseInt(args[0], 10) || 50;
 	fuzzer.fuzz(numTests);
 }

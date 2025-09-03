@@ -423,7 +423,7 @@ async function main() {
 
 	try {
 		await processGpxFile(inputFile, options);
-	} catch (error) {
+	} catch (_error) {
 		process.exit(1);
 	}
 }

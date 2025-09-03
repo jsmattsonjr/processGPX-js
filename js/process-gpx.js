@@ -122,14 +122,14 @@ export function generateTabularOutput(points, options = {}) {
 	const { separator = ",", extraFields = [], extraValues = [] } = options;
 
 	if (!points || points.length === 0) {
-		return extraFields.join(separator) + "\n";
+		return `${extraFields.join(separator)}\n`;
 	}
 
 	// Get keys from first point (like Perl: @keys = keys %{$points->[0]};)
 	const keys = Object.keys(points[0]);
 
 	// Header row: extra fields, then all point keys
-	let content = [...extraFields, ...keys].join(separator) + "\n";
+	let content = `${[...extraFields, ...keys].join(separator)}\n`;
 
 	// Data rows
 	for (const point of points) {
@@ -138,7 +138,7 @@ export function generateTabularOutput(points, options = {}) {
 			const value = point[key] ?? "";
 			values.push(value);
 		}
-		content += values.join(separator) + "\n";
+		content += `${values.join(separator)}\n`;
 	}
 
 	return content;
@@ -164,7 +164,7 @@ function dumpPoints(points, filename) {
 	});
 
 	let output = `# Points dump: ${points.length} points\n`;
-	output += "# " + tabularContent;
+	output += `# ${tabularContent}`;
 
 	if (
 		typeof process !== "undefined" &&
