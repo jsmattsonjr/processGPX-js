@@ -153,19 +153,6 @@ function dumpPoints(points, filename) {
 		note(`Stage ${filename} complete: ${points.length} points`);
 	}
 
-	// Add index to each point for debugging
-	const indexedPoints = points.map((point, index) => ({ index, ...point }));
-
-	// Generate tabular output (tab-separated for debug files)
-	const tabularContent = generateTabularOutput(indexedPoints, {
-		separator: "\t",
-		extraFields: [],
-		extraValues: [],
-	});
-
-	let output = `# Points dump: ${points.length} points\n`;
-	output += `# ${tabularContent}`;
-
 	if (
 		typeof process !== "undefined" &&
 		process.versions &&
@@ -173,13 +160,62 @@ function dumpPoints(points, filename) {
 	) {
 		import("node:fs")
 			.then((fs) => {
-				const debugPath = `debug/${filename}`;
-				fs.writeFileSync(debugPath, output);
+				// Create debug directory if it doesn't exist
+				if (!fs.existsSync("debug")) {
+					fs.mkdirSync("debug");
+				}
+
+				// Change extension from .txt to .gpx
+				const gpxFilename = filename.replace(/\.txt$/, ".gpx");
+				const debugPath = `debug/${gpxFilename}`;
+
+				// Extract stage information for naming
+				let stageName = "debug";
+				if (filename.match(/^(\d+)-js-(.+)\.txt$/)) {
+					const [, stageNum, stageDesc] = filename.match(/^(\d+)-js-(.+)\.txt$/);
+					stageName = `stage-${stageNum}-${stageDesc}`;
+				}
+
+				// Generate GPX XML
+				let gpxContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+				gpxContent += '<gpx version="1.1" creator="processGPX-debug" xmlns="http://www.topografix.com/GPX/1/1">\n';
+				gpxContent += '<metadata>\n';
+				gpxContent += `<name>Debug: ${stageName}</name>\n`;
+				gpxContent += `<desc>ProcessGPX debug stage: ${points.length} points</desc>\n`;
+				gpxContent += `<time>${new Date().toISOString()}</time>\n`;
+				gpxContent += '</metadata>\n';
+				gpxContent += '<trk>\n';
+				gpxContent += `<name>Debug: ${stageName}</name>\n`;
+				gpxContent += `<desc>Processing stage debug output: ${points.length} points</desc>\n`;
+				gpxContent += '<trkseg>\n';
+
+				// Output track points
+				for (const point of points) {
+					const lat = point.lat;
+					const lon = point.lon;
+					const ele = point.ele;
+					
+					gpxContent += `<trkpt lat="${lat}" lon="${lon}">`;
+					if (ele !== undefined && ele !== null && ele !== "") {
+						gpxContent += '\n';
+						gpxContent += `<ele>${ele}</ele>\n`;
+						gpxContent += '</trkpt>';
+					} else {
+						gpxContent += '</trkpt>';
+					}
+					gpxContent += '\n';
+				}
+
+				gpxContent += '</trkseg>\n';
+				gpxContent += '</trk>\n';
+				gpxContent += '</gpx>\n';
+
+				fs.writeFileSync(debugPath, gpxContent);
 				note(`Dumped ${points.length} points to ${debugPath}`);
 			})
 			.catch(() => {
 				note(`=== Points dump to ${filename} ===`);
-				note(output);
+				note(`${points.length} points`);
 				note(`=== End dump ${filename} ===`);
 			});
 	}
@@ -970,6 +1006,12 @@ function cropCorners(
 	// Create a direction field
 	addDirectionField(points, isLoop);
 
+	// Make sure last point isn't same as first point
+	// Assume rest of code can deal with this
+	while (isLoop && points.length > 0 && pointsAreClose(points[0], points[maxIndex(points)])) {
+		points.pop();
+	}
+
 	// Find indices of corners meeting the cropping criteria
 	const cropCorners = [];
 	for (let i = 0; i <= maxIndex(points); i++) {
@@ -985,6 +1027,8 @@ function cropCorners(
 			cropCorners.push(i);
 		}
 	}
+
+	note(`cropping ${cropCorners.length} corners`);
 
 	if (cropCorners.length === 0) return points;
 
@@ -1053,16 +1097,8 @@ function cropCorners(
 	// Insert points before and after, then eliminate points between the inserted points
 	const pNew = [];
 
-	// Wrap-around cropped corners
-	let pointAdded = false;
-	if (isLoop && !pointsAreClose(points[0], points[maxIndex(points)])) {
-		pointAdded = true;
-		points.push({ ...points[0] });
-	}
-
 	let ic = 0;
 	let dc1 = points[finalCropCorners[ic]].distance - cornerCrop;
-	dc1 -= courseDistance * Math.floor(dc1 / courseDistance);
 	let dc2 = dc1 + 2 * cornerCrop;
 	let i = 0;
 	let p1 = points[i];
@@ -1154,12 +1190,9 @@ function cropCorners(
 
 		// Set corner points for new corner
 		dc1 = points[finalCropCorners[ic]].distance - cornerCrop;
-		dc1 -= courseDistance * Math.floor(dc1 / courseDistance);
-		dc2 = dc1 + 2 * cornerCrop;
-	}
-
-	if (pointAdded) {
-		points.pop();
+		while (dc1 < dp1) dc1 += courseDistance;
+		dc2 = points[finalCropCorners[ic]].distance + cornerCrop;
+		while (dc2 < dc1) dc2 += courseDistance;
 	}
 
 	deleteDerivedFields(pNew);
