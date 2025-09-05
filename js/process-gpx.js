@@ -1181,11 +1181,15 @@ function cropCorners(
 
 		// Skip to next crop corner, else dump rest of points
 		if (ic > finalCropCorners.length - 1) {
-			if (!(pNew.length > 0 && pointsAreClose(pNew[pNew.length - 1], p1))) {
-				pNew.push(p1);
+			if (isLoop) {
+				ic -= finalCropCorners.length;
+			} else {
+				if (!(pNew.length > 0 && pointsAreClose(pNew[pNew.length - 1], p1))) {
+					pNew.push(p1);
+				}
+				pNew.push(...points.slice(i + 1));
+				break pointsLoop;
 			}
-			pNew.push(...points.slice(i + 1));
-			break;
 		}
 
 		// Set corner points for new corner
