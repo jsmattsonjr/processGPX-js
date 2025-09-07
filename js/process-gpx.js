@@ -153,72 +153,10 @@ function dumpPoints(points, filename) {
 	} else {
 		note(`Stage ${filename} complete: ${points.length} points`);
 	}
-
-	if (
-		typeof process !== "undefined" &&
-		process.versions &&
-		process.versions.node
-	) {
-		import("node:fs")
-			.then((fs) => {
-				// Create debug directory if it doesn't exist
-				if (!fs.existsSync("debug")) {
-					fs.mkdirSync("debug");
-				}
-
-				// Change extension from .txt to .gpx
-				const gpxFilename = filename.replace(/\.txt$/, ".gpx");
-				const debugPath = `debug/${gpxFilename}`;
-
-				// Extract stage information for naming
-				let stageName = "debug";
-				if (filename.match(/^(\d+)-js-(.+)\.txt$/)) {
-					const [, stageNum, stageDesc] = filename.match(/^(\d+)-js-(.+)\.txt$/);
-					stageName = `stage-${stageNum}-${stageDesc}`;
-				}
-
-				// Generate GPX XML
-				let gpxContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
-				gpxContent += '<gpx version="1.1" creator="processGPX-debug" xmlns="http://www.topografix.com/GPX/1/1">\n';
-				gpxContent += '<metadata>\n';
-				gpxContent += `<name>Debug: ${stageName}</name>\n`;
-				gpxContent += `<desc>ProcessGPX debug stage: ${points.length} points</desc>\n`;
-				gpxContent += `<time>${new Date().toISOString()}</time>\n`;
-				gpxContent += '</metadata>\n';
-				gpxContent += '<trk>\n';
-				gpxContent += `<name>Debug: ${stageName}</name>\n`;
-				gpxContent += `<desc>Processing stage debug output: ${points.length} points</desc>\n`;
-				gpxContent += '<trkseg>\n';
-
-				// Output track points
-				for (const point of points) {
-					const lat = point.lat;
-					const lon = point.lon;
-					const ele = point.ele;
-					
-					gpxContent += `<trkpt lat="${lat}" lon="${lon}">`;
-					if (ele !== undefined && ele !== null && ele !== "") {
-						gpxContent += '\n';
-						gpxContent += `<ele>${ele}</ele>\n`;
-						gpxContent += '</trkpt>';
-					} else {
-						gpxContent += '</trkpt>';
-					}
-					gpxContent += '\n';
-				}
-
-				gpxContent += '</trkseg>\n';
-				gpxContent += '</trk>\n';
-				gpxContent += '</gpx>\n';
-
-				fs.writeFileSync(debugPath, gpxContent);
-				note(`Dumped ${points.length} points to ${debugPath}`);
-			})
-			.catch(() => {
-				note(`=== Points dump to ${filename} ===`);
-				note(`${points.length} points`);
-				note(`=== End dump ${filename} ===`);
-			});
+	
+	// Call Node.js-specific dumper if available
+	if (typeof globalThis.debugDumper === "function") {
+		globalThis.debugDumper(points, filename);
 	}
 }
 
