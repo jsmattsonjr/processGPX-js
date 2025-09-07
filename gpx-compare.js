@@ -149,7 +149,7 @@ function interpolateAltitudePoints(lineString, intervalMeters) {
 	return interpolatedPoints;
 }
 
-function compareRouteGeometry(lineString1, lineString2, bufferDistance) {
+function compareRouteGeometry(lineString1, lineString2, bufferDistance, verbose = false) {
 	// Create buffered polygons from each route
 	const line1 = turf.lineString(lineString1.coordinates);
 	const line2 = turf.lineString(lineString2.coordinates);
@@ -165,10 +165,36 @@ function compareRouteGeometry(lineString1, lineString2, bufferDistance) {
 	const line1InBuffer2 = turf.booleanWithin(line1, buffer2);
 	const line2InBuffer1 = turf.booleanWithin(line2, buffer1);
 
+	let divergentPoints1 = [];
+	let divergentPoints2 = [];
+
+	// If verbose mode is enabled, check each individual point
+	if (verbose) {
+		// Check each point of route 1 against buffer 2
+		for (let i = 0; i < lineString1.coordinates.length; i++) {
+			const point = turf.point(lineString1.coordinates[i]);
+			const pointInBuffer = turf.booleanPointInPolygon(point, buffer2);
+			if (!pointInBuffer) {
+				divergentPoints1.push(i);
+			}
+		}
+
+		// Check each point of route 2 against buffer 1
+		for (let i = 0; i < lineString2.coordinates.length; i++) {
+			const point = turf.point(lineString2.coordinates[i]);
+			const pointInBuffer = turf.booleanPointInPolygon(point, buffer1);
+			if (!pointInBuffer) {
+				divergentPoints2.push(i);
+			}
+		}
+	}
+
 	return {
 		route1WithinRoute2Buffer: line1InBuffer2,
 		route2WithinRoute1Buffer: line2InBuffer1,
 		routesEqual: line1InBuffer2 && line2InBuffer1,
+		divergentPoints1: divergentPoints1,
+		divergentPoints2: divergentPoints2,
 	};
 }
 
@@ -291,6 +317,7 @@ function main() {
 		mainRoute1,
 		mainRoute2,
 		bufferDistance,
+		verbose,
 	);
 
 	console.log(
@@ -345,20 +372,46 @@ function main() {
 	);
 
 	// Verbose output
-	if (verbose && altitudeResult.differences.length > 0) {
-		console.log("\n📊 Detailed Altitude Differences:");
-		console.log("Distance(m) | Route1(m) | Route2(m) | Diff(m)");
-		console.log("-----------|-----------|-----------|--------");
-		for (const diff of altitudeResult.differences.slice(0, 20)) {
-			// Show first 20
-			console.log(
-				`${diff.distance.toString().padStart(10)} | ${diff.elevation1.toFixed(1).padStart(9)} | ${diff.elevation2.toFixed(1).padStart(9)} | ${diff.difference.toFixed(1).padStart(7)}`,
-			);
+	if (verbose) {
+		// Show divergent geometry points
+		if (geometryResult.divergentPoints1.length > 0 || geometryResult.divergentPoints2.length > 0) {
+			console.log("\n🎯 Divergent Geometry Points:");
+			
+			if (geometryResult.divergentPoints1.length > 0) {
+				console.log(`\nRoute 1 points outside Route 2 buffer (${bufferDistance}m):`);
+				console.log(`Point indices (0-based): ${geometryResult.divergentPoints1.join(", ")}`);
+				console.log(`Total divergent points: ${geometryResult.divergentPoints1.length} of ${mainRoute1.coordinates.length}`);
+			} else {
+				console.log(`\nRoute 1: All ${mainRoute1.coordinates.length} points within Route 2 buffer ✅`);
+			}
+			
+			if (geometryResult.divergentPoints2.length > 0) {
+				console.log(`\nRoute 2 points outside Route 1 buffer (${bufferDistance}m):`);
+				console.log(`Point indices (0-based): ${geometryResult.divergentPoints2.join(", ")}`);
+				console.log(`Total divergent points: ${geometryResult.divergentPoints2.length} of ${mainRoute2.coordinates.length}`);
+			} else {
+				console.log(`\nRoute 2: All ${mainRoute2.coordinates.length} points within Route 1 buffer ✅`);
+			}
+		} else {
+			console.log("\n🎯 Divergent Geometry Points: None - all points within buffers ✅");
 		}
-		if (altitudeResult.differences.length > 20) {
-			console.log(
-				`... and ${altitudeResult.differences.length - 20} more points`,
-			);
+
+		// Show altitude differences
+		if (altitudeResult.differences.length > 0) {
+			console.log("\n📊 Detailed Altitude Differences:");
+			console.log("Distance(m) | Route1(m) | Route2(m) | Diff(m)");
+			console.log("-----------|-----------|-----------|--------");
+			for (const diff of altitudeResult.differences.slice(0, 20)) {
+				// Show first 20
+				console.log(
+					`${diff.distance.toString().padStart(10)} | ${diff.elevation1.toFixed(1).padStart(9)} | ${diff.elevation2.toFixed(1).padStart(9)} | ${diff.difference.toFixed(1).padStart(7)}`,
+				);
+			}
+			if (altitudeResult.differences.length > 20) {
+				console.log(
+					`... and ${altitudeResult.differences.length - 20} more points`,
+				);
+			}
 		}
 	}
 
