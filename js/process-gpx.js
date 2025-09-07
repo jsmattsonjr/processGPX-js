@@ -5,6 +5,7 @@
 
 // Mathematical constants
 const PI = Math.atan2(0, -1);
+const PI2 = Math.atan2(1, 0); // π/2 - used by transition function
 const TWOPI = 2 * PI;
 const REARTH = 20037392 / PI;
 const DEG2RAD = PI / 180;
@@ -252,7 +253,6 @@ function isNumeric(value) {
  * @returns {number} Transition value
  */
 function transition(x) {
-	const PI2 = Math.atan2(1, 0); // π/2
 	return x < -1 ? 1 : x > 1 ? 0 : (1 - Math.sin(x * PI2)) / 2;
 }
 
@@ -440,6 +440,15 @@ function pointDirection(p1, p2, p3) {
  * @returns {Object} New shifted point
  */
 function shiftPoint(point, direction, distance) {
+	if (direction === undefined || direction === null) {
+		/* istanbul ignore next */
+		die("ERROR: shiftPoint() called without valid direction.");
+	}
+	if (distance === undefined || distance === null) {
+		/* istanbul ignore next */
+		die("ERROR: shiftPoint() called without valid point distance.");
+	}
+
 	const c = Math.cos(direction);
 	const s = Math.sin(direction);
 
@@ -548,7 +557,7 @@ function interpolateFields(...points) {
 		ds.push(ds[ds.length - 1] + latlngDistance(points[i - 1], points[i]));
 	}
 
-	for (let i = 1; i < points.length - 1; i++) {
+	for (let i = 1; i < points.length; i++) {
 		const p = points[i];
 		const f = ds[i] / ds[ds.length - 1];
 
@@ -3951,6 +3960,11 @@ export function processGPX(trackFeature, options = {}) {
 				? -1
 				: 1;
 
+	// Segment variables (simplified for JavaScript - we don't implement full segment support)
+	let nSegment = 0;
+	const segmentDefined = {};
+	const segmentNames = {}; // names of each segment
+
 	// Auto-straighten
 	options.autoStraightenDeviation =
 		options.autoStraightenDeviation ?? options.autoStraighten?.[0] ?? 0;
@@ -4977,7 +4991,7 @@ export function processGPX(trackFeature, options = {}) {
 		note("checking for U-turn loops...");
 
 		// Get rid of duplicate point at end
-		const pointPopped = pointsAreClose(points[0], points[points.length - 1]);
+		const pointPopped = pointsAreClose(points[0], points[maxIndex(points)]);
 		if (pointPopped) {
 			points.pop();
 		}
@@ -5033,8 +5047,8 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[i]],
 						dir,
 						options.rUTurn,
-						loopSign || 1,
-						{}, // segmentNames - simplified for now
+						loopSign,
+						segmentNames,
 					);
 					pNew.push(...loop);
 					pNew.push({ ...points[i] }); // Put a copy of the turn-around point here
@@ -5059,15 +5073,16 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[j]],
 						dir,
 						options.rUTurn,
-						loopSign || 1,
-						{}, // segmentNames - simplified for now
+						loopSign,
+						segmentNames,
 					);
 					pNew.push(...loop);
 				}
 				i++;
 			}
 
-			while (i < maxIndex(points)) {
+			// Add remaining points that weren't processed in the main loop
+			while (i < points.length) {
 				pNew.push(points[i++]);
 			}
 
