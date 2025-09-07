@@ -4977,8 +4977,8 @@ for my $file ( @files ) {
       }
     }
     $points = \@pNew;
+    dumpPoints($points, "03-perl-repeated.txt");
   }
-  dumpPoints($points, "03-perl-repeated.txt");
 
   ## STAGE 4: Join files
   # if join was specified, join points from a second file
