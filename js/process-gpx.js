@@ -1131,8 +1131,8 @@ function cropCorners(
 		// Next point > start of crop interval: interpolate a point if needed
 		if (dc1 > dp1 + epsilon && dc1 < dp2 - epsilon) {
 			p1 = interpolatePoint(
-				points[i],
-				points[(i + 1) % points.length],
+				p1,
+				p2,
 				(dc1 - dp1) / (dp2 - dp1),
 			);
 			dp1 = dc1;
