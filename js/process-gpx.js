@@ -5,6 +5,7 @@
 
 // Mathematical constants
 const PI = Math.atan2(0, -1);
+const PI2 = Math.atan2(1, 0); // π/2 - used by transition function
 const TWOPI = 2 * PI;
 const REARTH = 20037392 / PI;
 const DEG2RAD = PI / 180;
@@ -153,71 +154,9 @@ function dumpPoints(points, filename) {
 		note(`Stage ${filename} complete: ${points.length} points`);
 	}
 
-	if (
-		typeof process !== "undefined" &&
-		process.versions &&
-		process.versions.node
-	) {
-		import("node:fs")
-			.then((fs) => {
-				// Create debug directory if it doesn't exist
-				if (!fs.existsSync("debug")) {
-					fs.mkdirSync("debug");
-				}
-
-				// Change extension from .txt to .gpx
-				const gpxFilename = filename.replace(/\.txt$/, ".gpx");
-				const debugPath = `debug/${gpxFilename}`;
-
-				// Extract stage information for naming
-				let stageName = "debug";
-				if (filename.match(/^(\d+)-js-(.+)\.txt$/)) {
-					const [, stageNum, stageDesc] = filename.match(/^(\d+)-js-(.+)\.txt$/);
-					stageName = `stage-${stageNum}-${stageDesc}`;
-				}
-
-				// Generate GPX XML
-				let gpxContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
-				gpxContent += '<gpx version="1.1" creator="processGPX-debug" xmlns="http://www.topografix.com/GPX/1/1">\n';
-				gpxContent += '<metadata>\n';
-				gpxContent += `<name>Debug: ${stageName}</name>\n`;
-				gpxContent += `<desc>ProcessGPX debug stage: ${points.length} points</desc>\n`;
-				gpxContent += `<time>${new Date().toISOString()}</time>\n`;
-				gpxContent += '</metadata>\n';
-				gpxContent += '<trk>\n';
-				gpxContent += `<name>Debug: ${stageName}</name>\n`;
-				gpxContent += `<desc>Processing stage debug output: ${points.length} points</desc>\n`;
-				gpxContent += '<trkseg>\n';
-
-				// Output track points
-				for (const point of points) {
-					const lat = point.lat;
-					const lon = point.lon;
-					const ele = point.ele;
-					
-					gpxContent += `<trkpt lat="${lat}" lon="${lon}">`;
-					if (ele !== undefined && ele !== null && ele !== "") {
-						gpxContent += '\n';
-						gpxContent += `<ele>${ele}</ele>\n`;
-						gpxContent += '</trkpt>';
-					} else {
-						gpxContent += '</trkpt>';
-					}
-					gpxContent += '\n';
-				}
-
-				gpxContent += '</trkseg>\n';
-				gpxContent += '</trk>\n';
-				gpxContent += '</gpx>\n';
-
-				fs.writeFileSync(debugPath, gpxContent);
-				note(`Dumped ${points.length} points to ${debugPath}`);
-			})
-			.catch(() => {
-				note(`=== Points dump to ${filename} ===`);
-				note(`${points.length} points`);
-				note(`=== End dump ${filename} ===`);
-			});
+	// Call Node.js-specific dumper if available
+	if (typeof globalThis.debugDumper === "function") {
+		globalThis.debugDumper(points, filename);
 	}
 }
 
@@ -252,7 +191,6 @@ function isNumeric(value) {
  * @returns {number} Transition value
  */
 function transition(x) {
-	const PI2 = Math.atan2(1, 0); // π/2
 	return x < -1 ? 1 : x > 1 ? 0 : (1 - Math.sin(x * PI2)) / 2;
 }
 
@@ -440,6 +378,15 @@ function pointDirection(p1, p2, p3) {
  * @returns {Object} New shifted point
  */
 function shiftPoint(point, direction, distance) {
+	if (direction === undefined || direction === null) {
+		/* istanbul ignore next */
+		die("ERROR: shiftPoint() called without valid direction.");
+	}
+	if (distance === undefined || distance === null) {
+		/* istanbul ignore next */
+		die("ERROR: shiftPoint() called without valid point distance.");
+	}
+
 	const c = Math.cos(direction);
 	const s = Math.sin(direction);
 
@@ -548,7 +495,7 @@ function interpolateFields(...points) {
 		ds.push(ds[ds.length - 1] + latlngDistance(points[i - 1], points[i]));
 	}
 
-	for (let i = 1; i < points.length - 1; i++) {
+	for (let i = 1; i < points.length; i++) {
 		const p = points[i];
 		const f = ds[i] / ds[ds.length - 1];
 
@@ -1008,7 +955,11 @@ function cropCorners(
 
 	// Make sure last point isn't same as first point
 	// Assume rest of code can deal with this
-	while (isLoop && points.length > 0 && pointsAreClose(points[0], points[maxIndex(points)])) {
+	while (
+		isLoop &&
+		points.length > 0 &&
+		pointsAreClose(points[0], points[maxIndex(points)])
+	) {
 		points.pop();
 	}
 
@@ -1130,11 +1081,7 @@ function cropCorners(
 
 		// Next point > start of crop interval: interpolate a point if needed
 		if (dc1 > dp1 + epsilon && dc1 < dp2 - epsilon) {
-			p1 = interpolatePoint(
-				p1,
-				p2,
-				(dc1 - dp1) / (dp2 - dp1),
-			);
+			p1 = interpolatePoint(p1, p2, (dc1 - dp1) / (dp2 - dp1));
 			dp1 = dc1;
 			pNew.push(p1);
 		}
@@ -1188,7 +1135,7 @@ function cropCorners(
 					pNew.push(p1);
 				}
 				pNew.push(...points.slice(i + 1));
-				break pointsLoop;
+				break;
 			}
 		}
 
@@ -2741,14 +2688,14 @@ function simplifyPoints(points, z0 = 0.1, r0 = 1) {
 		}
 	}
 
-	const zi = points[0].ele;
-	const dzf = ix(points, -1).ele - zi;
+	const zi = points[0].ele || 0;
+	const dzf = (ix(points, -1).ele || 0) - zi;
 	let iMax;
 	let scoreMax = 1; // Only accept points if score is at least 1
 
 	for (let i = 1; i < points.length - 1; i++) {
 		const [x, y] = latlng2dxdy(points[0], points[i]);
-		const dz = points[i].ele - zi;
+		const dz = (points[i].ele || 0) - zi;
 		// Find the nearest point on the curve
 		const [f, d] = xyPointOnLine([0, 0], [xf, yf], [x, y]); // Distance of the interpolated point
 		const ddz = dzf * f - dz; // Interpolated altitude difference
@@ -3951,6 +3898,11 @@ export function processGPX(trackFeature, options = {}) {
 				? -1
 				: 1;
 
+	// Segment variables (simplified for JavaScript - we don't implement full segment support)
+	const nSegment = 0;
+	const segmentDefined = {};
+	const segmentNames = {}; // names of each segment
+
 	// Auto-straighten
 	options.autoStraightenDeviation =
 		options.autoStraightenDeviation ?? options.autoStraighten?.[0] ?? 0;
@@ -4977,7 +4929,7 @@ export function processGPX(trackFeature, options = {}) {
 		note("checking for U-turn loops...");
 
 		// Get rid of duplicate point at end
-		const pointPopped = pointsAreClose(points[0], points[points.length - 1]);
+		const pointPopped = pointsAreClose(points[0], points[maxIndex(points)]);
 		if (pointPopped) {
 			points.pop();
 		}
@@ -5033,8 +4985,8 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[i]],
 						dir,
 						options.rUTurn,
-						loopSign || 1,
-						{}, // segmentNames - simplified for now
+						loopSign,
+						segmentNames,
 					);
 					pNew.push(...loop);
 					pNew.push({ ...points[i] }); // Put a copy of the turn-around point here
@@ -5059,15 +5011,16 @@ export function processGPX(trackFeature, options = {}) {
 						[points[i], points[j]],
 						dir,
 						options.rUTurn,
-						loopSign || 1,
-						{}, // segmentNames - simplified for now
+						loopSign,
+						segmentNames,
 					);
 					pNew.push(...loop);
 				}
 				i++;
 			}
 
-			while (i < maxIndex(points)) {
+			// Add remaining points that weren't processed in the main loop
+			while (i < points.length) {
 				pNew.push(points[i++]);
 			}
 
@@ -5377,12 +5330,12 @@ export function processGPX(trackFeature, options = {}) {
 		geometry: {
 			type: trackFeature.geometry.type,
 			coordinates: points.map((p) => {
-			const coord = [p.lon, p.lat];
-			if (p.ele !== undefined) {
-				coord.push(p.ele);
-			}
-			return coord;
-		}),
+				const coord = [p.lon, p.lat];
+				if (p.ele !== undefined) {
+					coord.push(p.ele);
+				}
+				return coord;
+			}),
 		},
 		properties: {
 			...trackFeature.properties,

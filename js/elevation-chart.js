@@ -79,7 +79,9 @@ export class ElevationChart {
 						backgroundColor: "rgba(52, 152, 219, 0.3)",
 						fill: "origin",
 						tension: 0.1,
-						pointRadius: 0,
+						pointRadius: (ctx) => {
+							return this.shouldShowPoints() ? 3 : 0;
+						},
 						pointHoverRadius: 4,
 						borderWidth: 2,
 					},
@@ -140,12 +142,36 @@ export class ElevationChart {
 						pan: {
 							enabled: true,
 							mode: "x",
+							onPan: () => {
+								// Update point visibility after pan with multiple delayed attempts
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 50);
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 150);
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 300);
+							},
 						},
 						zoom: {
 							wheel: {
 								enabled: true,
 							},
 							mode: "x",
+							onZoom: () => {
+								// Update point visibility after zoom with multiple delayed attempts
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 50);
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 150);
+								setTimeout(() => {
+									this.updatePointVisibility();
+								}, 300);
+							},
 						},
 					},
 				},
@@ -193,6 +219,57 @@ export class ElevationChart {
 			if (this.mapVisualization) {
 				this.mapVisualization.clearCrosshairs();
 			}
+		});
+
+		// Add mouse wheel event to detect zoom changes
+		ctx.addEventListener("wheel", () => {
+			setTimeout(() => {
+				this.updatePointVisibility();
+			}, 100);
+			setTimeout(() => {
+				this.updatePointVisibility();
+			}, 300);
+			setTimeout(() => {
+				this.updatePointVisibility();
+			}, 600);
+		});
+
+		// Add mouse move event to detect pan operations
+		let isMouseDown = false;
+		ctx.addEventListener("mousedown", () => {
+			isMouseDown = true;
+		});
+		
+		ctx.addEventListener("mouseup", () => {
+			if (isMouseDown) {
+				setTimeout(() => {
+					this.updatePointVisibility();
+				}, 100);
+				setTimeout(() => {
+					this.updatePointVisibility();
+				}, 300);
+			}
+			isMouseDown = false;
+		});
+
+		ctx.addEventListener("mousemove", () => {
+			if (isMouseDown) {
+				// Debounced update during pan
+				clearTimeout(this.panTimeout);
+				this.panTimeout = setTimeout(() => {
+					this.updatePointVisibility();
+				}, 200);
+			}
+		});
+
+		// Initialize point visibility
+		this.updatePointVisibility();
+
+		// Add window resize listener to update point visibility when viewport changes
+		window.addEventListener('resize', () => {
+			setTimeout(() => {
+				this.updatePointVisibility();
+			}, 100);
 		});
 	}
 
@@ -310,7 +387,9 @@ export class ElevationChart {
 			backgroundColor: "rgba(231, 76, 60, 0.3)",
 			fill: "origin",
 			tension: 0.1,
-			pointRadius: 0,
+			pointRadius: (ctx) => {
+				return this.shouldShowPoints() ? 3 : 0;
+			},
 			pointHoverRadius: 4,
 			borderWidth: 2,
 			order: 1,
@@ -324,13 +403,57 @@ export class ElevationChart {
 			backgroundColor: "rgba(52, 152, 219, 0.3)",
 			fill: "origin",
 			tension: 0.1,
-			pointRadius: 0,
+			pointRadius: (ctx) => {
+				return this.shouldShowPoints() ? 3 : 0;
+			},
 			pointHoverRadius: 4,
 			borderWidth: 2,
 			order: 2,
 		});
 
 		this.chart.update();
+	}
+
+	/**
+	 * Determine if individual track points should be shown based on zoom scale
+	 * @returns {boolean} True if points should be visible
+	 */
+	shouldShowPoints() {
+		if (!this.chart || !this.chart.scales || !this.chart.scales.x || !this.chart.chartArea) {
+			console.log('Chart not ready for point visibility check');
+			return false;
+		}
+
+		// Get the current x-axis scale
+		const xScale = this.chart.scales.x;
+		const chartArea = this.chart.chartArea;
+		const chartWidth = chartArea.right - chartArea.left;
+		const dataRange = xScale.max - xScale.min; // km
+		
+		// Calculate meters per pixel
+		const metersPerPixel = (dataRange * 1000) / chartWidth;
+		
+		// Show points when scale is roughly 50cm (0.5m) per pixel or less
+		const shouldShow = metersPerPixel <= 0.5;
+		console.log(`Chart dimensions: left=${chartArea.left}, right=${chartArea.right}, width=${chartWidth}`);
+		console.log(`Chart: dataRange=${dataRange}km, chartWidth=${chartWidth}px, metersPerPixel=${metersPerPixel}, shouldShow=${shouldShow}`);
+		
+		return shouldShow;
+	}
+
+	/**
+	 * Update point visibility on all datasets
+	 */
+	updatePointVisibility() {
+		if (!this.chart) return;
+
+		// Force chart to resize and render before checking dimensions
+		this.chart.resize();
+		this.chart.render();
+		
+		// The point radius callbacks will automatically be called during update
+		console.log(`Forcing chart update for point visibility`);
+		this.chart.update('none'); // Update without animation for better performance
 	}
 
 	/**

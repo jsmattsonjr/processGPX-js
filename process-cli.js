@@ -11,6 +11,67 @@ import { generateTabularOutput, processGPX } from "./js/process-gpx.js";
 import { formatXML } from "./js/xml-formatter.js";
 
 /**
+ * Set up Node.js-specific debug dumper for dumpPoints() function
+ */
+globalThis.debugDumper = (points, filename) => {
+	// Create debug directory if it doesn't exist
+	if (!fs.existsSync("debug")) {
+		fs.mkdirSync("debug");
+	}
+
+	// Change extension from .txt to .gpx
+	const gpxFilename = filename.replace(/\.txt$/, ".gpx");
+	const debugPath = `debug/${gpxFilename}`;
+
+	// Extract stage information for naming
+	let stageName = "debug";
+	if (filename.match(/^(\d+)-js-(.+)\.txt$/)) {
+		const [, stageNum, stageDesc] = filename.match(/^(\d+)-js-(.+)\.txt$/);
+		stageName = `stage-${stageNum}-${stageDesc}`;
+	}
+
+	// Generate GPX XML
+	let gpxContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+	gpxContent +=
+		'<gpx version="1.1" creator="processGPX-debug" xmlns="http://www.topografix.com/GPX/1/1">\n';
+	gpxContent += "<metadata>\n";
+	gpxContent += `<name>Debug: ${stageName}</name>\n`;
+	gpxContent += `<desc>ProcessGPX debug stage: ${points.length} points</desc>\n`;
+	gpxContent += `<time>${new Date().toISOString()}</time>\n`;
+	gpxContent += "</metadata>\n";
+	gpxContent += "<trk>\n";
+	gpxContent += `<name>Debug: ${stageName}</name>\n`;
+	gpxContent += `<desc>Processing stage debug output: ${points.length} points</desc>\n`;
+	gpxContent += "<trkseg>\n";
+
+	// Output track points
+	for (const point of points) {
+		const lat = point.lat;
+		const lon = point.lon;
+		const ele = point.ele;
+
+		gpxContent += `<trkpt lat="${lat}" lon="${lon}">`;
+		if (ele !== undefined && ele !== null && ele !== "") {
+			gpxContent += "\n";
+			gpxContent += `<ele>${ele}</ele>\n`;
+			gpxContent += "</trkpt>";
+		} else {
+			gpxContent += "</trkpt>";
+		}
+		gpxContent += "\n";
+	}
+
+	gpxContent += "</trkseg>\n";
+	gpxContent += "</trk>\n";
+	gpxContent += "</gpx>\n";
+
+	fs.writeFileSync(debugPath, gpxContent);
+
+	// Use console.log since note() is already imported in the main module
+	console.log(`Dumped ${points.length} points to ${debugPath}`);
+};
+
+/**
  * Configure yargs parser matching processGPX Perl script options
  */
 function setupYargsParser() {

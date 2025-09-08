@@ -4977,8 +4977,8 @@ for my $file ( @files ) {
       }
     }
     $points = \@pNew;
+    dumpPoints($points, "03-perl-repeated.txt");
   }
-  dumpPoints($points, "03-perl-repeated.txt");
 
   ## STAGE 4: Join files
   # if join was specified, join points from a second file
@@ -5066,7 +5066,7 @@ for my $file ( @files ) {
   dumpPoints($points, "05-perl-cropped.txt");
 
   #
-  # autoLoop: automatically determine if -loop should be invoked
+  # autoLoop: automatically detrmine if -loop should be invoked
   #
   $autoLoop //= $auto;
   if ( $autoLoop ) {
@@ -5076,15 +5076,9 @@ for my $file ( @files ) {
         (! defined $cropMax) &&
         (latlngDistance($points->[0], $points->[-1]) < 150) &&
         (@$points > 3) &&
-        (latlngDotProduct($points->[-2], $points->[-1], $points->[-1], $points->[0]) > -0.1) &&
-      (
-        (latlngDotProduct($points->[-2], $points->[-1], $points->[-1], $points->[0]) > -0.1) ||
-        (latlngDotProduct($points->[-2], $points->[-1], $points->[-1], $points->[1]) > -0.1) ||
-        (latlngDotProduct($points->[-2], $points->[0], $points->[0], $points->[1]) > -0.1) ||
-        (latlngDotProduct($points->[-1], $points->[0], $points->[0], $points->[1]) > -0.1)
-      )
+        (latlngDotProduct($points->[-2], $points->[-1], $points->[0], $points->[1]) > -0.1)
        ) {
-      $isLoop //= 1;
+      $isLoop = 1;
       $copyPoint = 0;
       note("setting -loop\n");
     }

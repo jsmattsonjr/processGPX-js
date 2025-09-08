@@ -136,4 +136,5 @@ export const defaultOptions = {
 
 	// shortcut options
 	auto: 1, // TODO: hardcoded for now
+	simplify: 1,
 };
