@@ -77,7 +77,7 @@ globalThis.debugDumper = (points, filename) => {
 function setupYargsParser() {
 	return yargs(hideBin(process.argv))
 		.usage("Usage: $0 [options] <input.gpx>")
-		.version("0.1.1")
+		.version("0.1.2")
 		.alias("v", "version")
 		.alias("h", "help")
 		.options({

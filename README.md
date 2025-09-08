@@ -25,6 +25,35 @@ The original processGPX (v0.53) was written in Perl by Daniel Connelly. It addre
 - Sharp corners that need rounding
 - Gradient anomalies between points
 
+## Recent Changes
+
+### Version 0.1.2
+
+**Major Algorithm Updates:**
+- **processGPX 0.53 Compatibility**: Complete synchronization with processGPX v0.53, including major algorithmic rewrites for improved spherical geometry calculations
+- **Enhanced Spline Processing**: Implemented proper Catmull-Rom splines for corner interpolation, replacing simple 4-point averaging
+- **Improved Distance Calculations**: Updated coordinate system to use proper spherical geometry instead of linear approximation
+- **Advanced Zig-zag Detection**: Enhanced `fixZigZags()` with multi-iteration logic and proper loop support
+
+**New Features:**
+- **CSV Output Support**: Added `--csv` option for tabular data export with automatic format detection from filename extensions
+- **Individual Point Visualization**: Web interface now shows individual track points on maps and elevation charts
+- **Point Simplification**: Added `--simplify` checkbox to web interface options panel with `simplifyPoints()` algorithm
+- **Coordinate Shifting**: Implemented `--shiftX` and `--shiftY` options for precise route positioning
+
+**Testing & Quality Improvements:**
+- **Comprehensive Fuzzing**: Added CLI option fuzzer with Jest integration for systematic testing of 70+ functions across 5200+ lines of code
+- **GPX Comparison Tool**: New `gpx-compare.js` utility for route validation and accuracy testing
+- **XML Formatting**: Improved GPX output with proper indentation and formatting for readability
+- **Enhanced Debug Tools**: Better debug output separation for Node.js vs browser environments
+
+**Bug Fixes:**
+- Fixed `cropCorners()` interpolation to handle loop routes correctly
+- Resolved `simplifyPoints()` handling of routes without elevation data  
+- Fixed race conditions in debug point dumping
+- Corrected multiple array indexing issues from Perl-to-JavaScript translation
+- Fixed elevation comparison sampling in testing utilities
+
 ## Project Structure
 
 ```
@@ -190,7 +219,7 @@ See `node process-cli.js --help` for the complete list of available options.
 
 ## Development Status
 
-**Current Status: Functional Beta (v0.1.1)**
+**Current Status: Functional Beta (v0.1.2)**
 
 This JavaScript port of processGPX is now functionally complete with the core processing pipeline implemented:
 
