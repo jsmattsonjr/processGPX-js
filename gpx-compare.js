@@ -149,7 +149,12 @@ function interpolateAltitudePoints(lineString, intervalMeters) {
 	return interpolatedPoints;
 }
 
-function compareRouteGeometry(lineString1, lineString2, bufferDistance, verbose = false) {
+function compareRouteGeometry(
+	lineString1,
+	lineString2,
+	bufferDistance,
+	verbose = false,
+) {
 	// Create buffered polygons from each route
 	const line1 = turf.lineString(lineString1.coordinates);
 	const line2 = turf.lineString(lineString2.coordinates);
@@ -165,8 +170,8 @@ function compareRouteGeometry(lineString1, lineString2, bufferDistance, verbose 
 	const line1InBuffer2 = turf.booleanWithin(line1, buffer2);
 	const line2InBuffer1 = turf.booleanWithin(line2, buffer1);
 
-	let divergentPoints1 = [];
-	let divergentPoints2 = [];
+	const divergentPoints1 = [];
+	const divergentPoints2 = [];
 
 	// If verbose mode is enabled, check each individual point
 	if (verbose) {
@@ -374,26 +379,47 @@ function main() {
 	// Verbose output
 	if (verbose) {
 		// Show divergent geometry points
-		if (geometryResult.divergentPoints1.length > 0 || geometryResult.divergentPoints2.length > 0) {
+		if (
+			geometryResult.divergentPoints1.length > 0 ||
+			geometryResult.divergentPoints2.length > 0
+		) {
 			console.log("\n🎯 Divergent Geometry Points:");
-			
+
 			if (geometryResult.divergentPoints1.length > 0) {
-				console.log(`\nRoute 1 points outside Route 2 buffer (${bufferDistance}m):`);
-				console.log(`Point indices (0-based): ${geometryResult.divergentPoints1.join(", ")}`);
-				console.log(`Total divergent points: ${geometryResult.divergentPoints1.length} of ${mainRoute1.coordinates.length}`);
+				console.log(
+					`\nRoute 1 points outside Route 2 buffer (${bufferDistance}m):`,
+				);
+				console.log(
+					`Point indices (0-based): ${geometryResult.divergentPoints1.join(", ")}`,
+				);
+				console.log(
+					`Total divergent points: ${geometryResult.divergentPoints1.length} of ${mainRoute1.coordinates.length}`,
+				);
 			} else {
-				console.log(`\nRoute 1: All ${mainRoute1.coordinates.length} points within Route 2 buffer ✅`);
+				console.log(
+					`\nRoute 1: All ${mainRoute1.coordinates.length} points within Route 2 buffer ✅`,
+				);
 			}
-			
+
 			if (geometryResult.divergentPoints2.length > 0) {
-				console.log(`\nRoute 2 points outside Route 1 buffer (${bufferDistance}m):`);
-				console.log(`Point indices (0-based): ${geometryResult.divergentPoints2.join(", ")}`);
-				console.log(`Total divergent points: ${geometryResult.divergentPoints2.length} of ${mainRoute2.coordinates.length}`);
+				console.log(
+					`\nRoute 2 points outside Route 1 buffer (${bufferDistance}m):`,
+				);
+				console.log(
+					`Point indices (0-based): ${geometryResult.divergentPoints2.join(", ")}`,
+				);
+				console.log(
+					`Total divergent points: ${geometryResult.divergentPoints2.length} of ${mainRoute2.coordinates.length}`,
+				);
 			} else {
-				console.log(`\nRoute 2: All ${mainRoute2.coordinates.length} points within Route 1 buffer ✅`);
+				console.log(
+					`\nRoute 2: All ${mainRoute2.coordinates.length} points within Route 1 buffer ✅`,
+				);
 			}
 		} else {
-			console.log("\n🎯 Divergent Geometry Points: None - all points within buffers ✅");
+			console.log(
+				"\n🎯 Divergent Geometry Points: None - all points within buffers ✅",
+			);
 		}
 
 		// Show altitude differences

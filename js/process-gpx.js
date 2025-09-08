@@ -153,7 +153,7 @@ function dumpPoints(points, filename) {
 	} else {
 		note(`Stage ${filename} complete: ${points.length} points`);
 	}
-	
+
 	// Call Node.js-specific dumper if available
 	if (typeof globalThis.debugDumper === "function") {
 		globalThis.debugDumper(points, filename);
@@ -955,7 +955,11 @@ function cropCorners(
 
 	// Make sure last point isn't same as first point
 	// Assume rest of code can deal with this
-	while (isLoop && points.length > 0 && pointsAreClose(points[0], points[maxIndex(points)])) {
+	while (
+		isLoop &&
+		points.length > 0 &&
+		pointsAreClose(points[0], points[maxIndex(points)])
+	) {
 		points.pop();
 	}
 
@@ -1077,11 +1081,7 @@ function cropCorners(
 
 		// Next point > start of crop interval: interpolate a point if needed
 		if (dc1 > dp1 + epsilon && dc1 < dp2 - epsilon) {
-			p1 = interpolatePoint(
-				p1,
-				p2,
-				(dc1 - dp1) / (dp2 - dp1),
-			);
+			p1 = interpolatePoint(p1, p2, (dc1 - dp1) / (dp2 - dp1));
 			dp1 = dc1;
 			pNew.push(p1);
 		}
@@ -1135,7 +1135,7 @@ function cropCorners(
 					pNew.push(p1);
 				}
 				pNew.push(...points.slice(i + 1));
-				break pointsLoop;
+				break;
 			}
 		}
 
@@ -3899,7 +3899,7 @@ export function processGPX(trackFeature, options = {}) {
 				: 1;
 
 	// Segment variables (simplified for JavaScript - we don't implement full segment support)
-	let nSegment = 0;
+	const nSegment = 0;
 	const segmentDefined = {};
 	const segmentNames = {}; // names of each segment
 
@@ -5330,12 +5330,12 @@ export function processGPX(trackFeature, options = {}) {
 		geometry: {
 			type: trackFeature.geometry.type,
 			coordinates: points.map((p) => {
-			const coord = [p.lon, p.lat];
-			if (p.ele !== undefined) {
-				coord.push(p.ele);
-			}
-			return coord;
-		}),
+				const coord = [p.lon, p.lat];
+				if (p.ele !== undefined) {
+					coord.push(p.ele);
+				}
+				return coord;
+			}),
 		},
 		properties: {
 			...trackFeature.properties,
