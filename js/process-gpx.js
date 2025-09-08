@@ -2688,14 +2688,14 @@ function simplifyPoints(points, z0 = 0.1, r0 = 1) {
 		}
 	}
 
-	const zi = points[0].ele;
-	const dzf = ix(points, -1).ele - zi;
+	const zi = points[0].ele || 0;
+	const dzf = (ix(points, -1).ele || 0) - zi;
 	let iMax;
 	let scoreMax = 1; // Only accept points if score is at least 1
 
 	for (let i = 1; i < points.length - 1; i++) {
 		const [x, y] = latlng2dxdy(points[0], points[i]);
-		const dz = points[i].ele - zi;
+		const dz = (points[i].ele || 0) - zi;
 		// Find the nearest point on the curve
 		const [f, d] = xyPointOnLine([0, 0], [xf, yf], [x, y]); // Distance of the interpolated point
 		const ddz = dzf * f - dz; // Interpolated altitude difference
