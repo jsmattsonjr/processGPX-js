@@ -126,7 +126,24 @@ The project provides both a web interface and command-line tool:
 
 ### Web Interface
 
-Open `index.html` in a browser to access the web interface:
+The web interface uses ES6 modules and requires serving through an HTTP server (not opening directly with `file://`).
+
+**Running the Web Interface:**
+
+```bash
+# Option 1: Using Python
+python3 -m http.server 8000
+
+# Option 2: Using Node.js
+npx serve .
+
+# Option 3: Using PHP
+php -S localhost:8000
+```
+
+Then open `http://localhost:8000` in your browser.
+
+**Features:**
 - Drag and drop GPX files for processing
 - Interactive map visualization with before/after comparison
 - Elevation profile charts

@@ -12,6 +12,9 @@ export class MapVisualization {
 		this.crosshairMarkers = [];
 		this.originalTrackFeature = null;
 		this.processedTrackFeature = null;
+		this.originalPointMarkers = [];
+		this.processedPointMarkers = [];
+		this.pointsVisible = false;
 	}
 
 	/**
@@ -54,6 +57,11 @@ export class MapVisualization {
 				collapsed: true,
 			})
 			.addTo(this.map);
+
+		// Add zoom event listener for track points visibility
+		this.map.on('zoomend', () => {
+			this.updatePointsVisibility();
+		});
 	}
 
 	/**
@@ -141,6 +149,14 @@ export class MapVisualization {
 
 		// Fit map to route bounds
 		this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
+
+		// Create track point markers and check initial visibility
+		this.createTrackPointMarkers(trackFeature, 'original');
+		
+		// Force initial visibility check after a short delay to ensure markers are ready
+		setTimeout(() => {
+			this.updatePointsVisibility();
+		}, 100);
 	}
 
 	/**
@@ -191,6 +207,16 @@ export class MapVisualization {
                 <em>Processed Route</em>
             </div>
         `);
+
+		// Create processed track point markers and update visibility
+		console.log('About to create processed track point markers');
+		this.createTrackPointMarkers(processedTrackFeature, 'processed');
+		
+		// Update visibility for both original and processed markers
+		setTimeout(() => {
+			console.log('Delayed visibility update for processed route');
+			this.updatePointsVisibility();
+		}, 100);
 	}
 
 	/**
@@ -214,6 +240,7 @@ export class MapVisualization {
 			this.endMarker = null;
 		}
 		this.clearCrosshairs();
+		this.clearTrackPoints();
 		this.originalTrackFeature = null;
 		this.processedTrackFeature = null;
 	}
@@ -341,6 +368,160 @@ export class MapVisualization {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Create individual track point markers for a route
+	 * @param {Object} trackFeature - LineString feature object
+	 * @param {string} routeType - 'original' or 'processed'
+	 */
+	createTrackPointMarkers(trackFeature, routeType) {
+		if (!this.map) {
+			console.log('No map available for createTrackPointMarkers');
+			return;
+		}
+
+		if (!trackFeature || !trackFeature.geometry || !trackFeature.geometry.coordinates) {
+			console.log('No valid track feature provided to createTrackPointMarkers');
+			return;
+		}
+
+		const coordinates = trackFeature.geometry.coordinates;
+		console.log(`Creating ${coordinates.length} markers for ${routeType} route`);
+		
+		const color = routeType === 'original' ? '#3498db' : '#e74c3c';
+
+		// Clear existing markers for this route type FIRST
+		if (routeType === 'original') {
+			this.clearOriginalTrackPoints();
+		} else {
+			this.clearProcessedTrackPoints();
+		}
+
+		// Get the now-empty marker array reference
+		const markers = routeType === 'original' ? this.originalPointMarkers : this.processedPointMarkers;
+
+		// Create a marker for each track point
+		coordinates.forEach((coord, index) => {
+			if (!coord || coord.length < 2) {
+				console.log(`Invalid coordinate at index ${index}:`, coord);
+				return;
+			}
+
+			const marker = L.circleMarker([coord[1], coord[0]], {
+				radius: routeType === 'original' ? 4 : 5, // Processed points slightly larger
+				fillColor: color,
+				color: 'white',
+				weight: 2,
+				opacity: 1,
+				fillOpacity: 0.9,
+			});
+
+			// Add popup with point information
+			marker.bindPopup(`
+				<div class="route-popup">
+					<strong>${routeType === 'original' ? 'Original' : 'Processed'} Point ${index + 1}</strong><br>
+					Lat: ${coord[1].toFixed(6)}<br>
+					Lon: ${coord[0].toFixed(6)}<br>
+					Elevation: ${Math.round(coord[2] || 0)}m
+				</div>
+			`);
+
+			markers.push(marker);
+			
+			// Debug: Log every 50th marker
+			if (index % 50 === 0 || index === coordinates.length - 1) {
+				console.log(`Added marker ${index + 1}/${coordinates.length}, array now has ${markers.length} markers`);
+			}
+		});
+
+		console.log(`Created ${markers.length} markers for ${routeType} route`);
+		// Note: Don't call updatePointsVisibility here as it's handled by the caller
+	}
+
+	/**
+	 * Update visibility of track point markers based on zoom level
+	 */
+	updatePointsVisibility() {
+		if (!this.map) return;
+
+		const currentZoom = this.map.getZoom();
+		const shouldShowPoints = currentZoom >= 16;
+		
+		const timestamp = new Date().toLocaleTimeString();
+		console.log(`[${timestamp}] Current zoom: ${currentZoom}, Should show points: ${shouldShowPoints}, Points visible: ${this.pointsVisible}`);
+		console.log(`[${timestamp}] Original markers: ${this.originalPointMarkers.length}, Processed markers: ${this.processedPointMarkers.length}`);
+
+		if (shouldShowPoints) {
+			if (!this.pointsVisible) {
+				console.log('Showing track points');
+				this.pointsVisible = true;
+			}
+			
+			// Always ensure all available markers are visible when points should be shown
+			this.originalPointMarkers.forEach(marker => {
+				if (!this.map.hasLayer(marker)) {
+					marker.addTo(this.map);
+				}
+			});
+			this.processedPointMarkers.forEach(marker => {
+				if (!this.map.hasLayer(marker)) {
+					marker.addTo(this.map);
+				}
+			});
+			
+		} else if (this.pointsVisible) {
+			// Hide points
+			console.log('Hiding track points');
+			this.originalPointMarkers.forEach(marker => {
+				if (this.map.hasLayer(marker)) {
+					this.map.removeLayer(marker);
+				}
+			});
+			this.processedPointMarkers.forEach(marker => {
+				if (this.map.hasLayer(marker)) {
+					this.map.removeLayer(marker);
+				}
+			});
+			this.pointsVisible = false;
+		}
+	}
+
+	/**
+	 * Clear original track point markers
+	 */
+	clearOriginalTrackPoints() {
+		console.log(`Clearing ${this.originalPointMarkers.length} original markers`);
+		this.originalPointMarkers.forEach(marker => {
+			if (this.map.hasLayer(marker)) {
+				this.map.removeLayer(marker);
+			}
+		});
+		this.originalPointMarkers = [];
+		console.log(`Original markers array cleared, length: ${this.originalPointMarkers.length}`);
+	}
+
+	/**
+	 * Clear processed track point markers
+	 */
+	clearProcessedTrackPoints() {
+		console.log(`Clearing ${this.processedPointMarkers.length} processed markers`);
+		this.processedPointMarkers.forEach(marker => {
+			if (this.map.hasLayer(marker)) {
+				this.map.removeLayer(marker);
+			}
+		});
+		this.processedPointMarkers = [];
+		console.log(`Processed markers array cleared, length: ${this.processedPointMarkers.length}`);
+	}
+
+	/**
+	 * Clear all track point markers
+	 */
+	clearTrackPoints() {
+		this.clearOriginalTrackPoints();
+		this.clearProcessedTrackPoints();
+		this.pointsVisible = false;
 	}
 
 	/**
