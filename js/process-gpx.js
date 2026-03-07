@@ -901,7 +901,7 @@ function removeDuplicatePoints(points, isLoop = 0) {
 
 		if (i1 === i) {
 			// No duplicates, keep the point
-			pNew.push({ ...p });
+			pNew.push(p);
 		} else {
 			// Found duplicates - average them together
 			if (removedCount === 0) {
