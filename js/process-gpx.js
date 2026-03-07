@@ -1732,9 +1732,10 @@ function roadTest(points, j, k, l, m, i, d) {
  * @param {boolean} isLoop - Whether route is a loop (default: false)
  * @returns {Array} Fixed points array
  */
-function fixZigZags(points, isLoop = false) {
+function fixZigZags(points, isLoop = false, verbose = 1) {
 	for (let zigZagIter = 1; zigZagIter <= 10; zigZagIter++) {
-		note(`checking for zig-zags iteration ${zigZagIter}...`);
+		if (verbose)
+			note(`checking for zig-zags iteration ${zigZagIter}...`);
 		const dzigZag = 100;
 		const UTurns = [];
 		const iStart = isLoop ? 0 : 1;
@@ -1765,12 +1766,13 @@ function fixZigZags(points, isLoop = false) {
 				const p2 = points[U2];
 
 				if (p2.distance - p1.distance < dzigZag) {
-					warn(
-						`WARNING: zig-zag found on points : ${U1} and ${U2} : ` +
-							`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
-							`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
-							`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
-					);
+					if (verbose)
+						warn(
+							`WARNING: zig-zag found on points : ${U1} and ${U2} : ` +
+								`${(0.001 * p1.distance).toFixed(4)} km: (${p1.lon}, ${p1.lat}) to ` +
+								`${(0.001 * p2.distance).toFixed(4)} km: (${p2.lon}, ${p2.lat}) : ` +
+								`separation = ${(p2.distance - p1.distance).toFixed(4)} meters`,
+						);
 
 					// Repairing zig-zags...
 					// zig-zags are two U-turns within a specified distance
