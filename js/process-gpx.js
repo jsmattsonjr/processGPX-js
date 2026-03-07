@@ -227,6 +227,32 @@ function deltaAngle(d1, d2) {
 }
 
 /**
+ * Longitude difference in radians, handling wraparound
+ * 179 to -179: -358 -> 2 deg (in radians)
+ * -179 to 179: 358 -> -2 deg (in radians)
+ * @param {number} lng1 - First longitude in radians
+ * @param {number} lng2 - Second longitude in radians
+ * @returns {number} Longitude difference in radians
+ */
+function deltalngRadians(lng1, lng2) {
+	let dlng = lng2 - lng1;
+	dlng -= TWOPI * Math.floor(0.5 + dlng / TWOPI);
+	return dlng;
+}
+
+/**
+ * Longitude difference in degrees, handling wraparound
+ * @param {number} lng1 - First longitude in degrees
+ * @param {number} lng2 - Second longitude in degrees
+ * @returns {number} Longitude difference in degrees
+ */
+function deltalng(lng1, lng2) {
+	let dlng = lng2 - lng1;
+	dlng -= 360 * Math.floor(0.5 + dlng / 360);
+	return dlng;
+}
+
+/**
  * find distance between lat, lng points
  * @param {Object} p1 - First point with {lat, lon} properties
  * @param {Object} p2 - Second point with {lat, lon} properties
@@ -455,7 +481,7 @@ function latlng2dxdy(p1, p2) {
 	const lat2 = DEG2RAD * p2.lat;
 	const lng1 = DEG2RAD * p1.lon;
 	const lng2 = DEG2RAD * p2.lon;
-	const dlng = lng2 - lng1;
+	const dlng = deltalngRadians(lng1, lng2);
 
 	const u =
 		Math.cos(lat1) * Math.sin(lat2) -
