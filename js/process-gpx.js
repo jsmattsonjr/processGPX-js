@@ -2055,6 +2055,22 @@ function smoothing(
 		return points;
 	}
 
+	// if lon is one of the fields, calculate a dlon field
+	const smoothedFields = [];
+	for (const f of fields) {
+		if (f === "lon") {
+			points[0].dlon = 0;
+			for (let i = 1; i < points.length; i++) {
+				points[i].dlon =
+					points[i - 1].dlon +
+					deltalng(points[i - 1].lon, points[i].lon);
+			}
+			smoothedFields.push("dlon");
+		} else {
+			smoothedFields.push(f);
+		}
+	}
+
 	const pNew = [];
 
 	if (cornerEffect && points[0].curvature === undefined) {
@@ -2173,17 +2189,27 @@ function smoothing(
 				const w = Math.exp(-(u ** 2) / 2) * du;
 				sum0 += w;
 
-				for (const field of fields) {
+				for (const field of smoothedFields) {
 					sum1[field] = (sum1[field] || 0) + w * point[field];
 				}
 			}
-			for (const field of fields) {
+			for (const field of smoothedFields) {
 				if (sum0 !== 0) {
 					newPoint[field] = sum1[field] / sum0;
 				}
 			}
 		}
 		pNew.push(newPoint);
+	}
+
+	// handle dlon if longitude smoothing was done
+	if (pNew[0].dlon !== undefined) {
+		for (const p of pNew) {
+			let lon = points[0].lon + p.dlon;
+			lon -= 360 * Math.floor(lon / 360 + 0.5);
+			p.lon = lon;
+			delete p.dlon;
+		}
 	}
 
 	// delete curvature field if we modified position
