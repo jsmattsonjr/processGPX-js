@@ -553,14 +553,19 @@ function interpolateFields(...points) {
  * @param {number} f - Fraction (0 = p1, 1 = p2)
  * @returns {Object} Interpolated point
  */
-function interpolatePoint(p1, p2, f) {
+function interpolatePoint(p1, p2, f, courseDistance = 0, isLoop = 0) {
 	// Interpolate lat and lng using distances, not angles
 	const [dx, dy] = latlng2dxdy(p1, p2);
 	const p = addVectorToPoint(p1, [dx * f, dy * f]);
 
+	// remove links, if any
+	delete p.next;
+	delete p.prev;
+
 	// Interpolate other random values
 	for (const k in p1) {
-		if (k === "lat" || k === "lon") continue;
+		// skip lat lon (handled separately) or point references
+		if (k === "lat" || k === "lon" || typeof p1[k] === "object") continue;
 
 		if (p1[k] !== undefined && p2[k] !== undefined) {
 			if (k === "segment") {
@@ -569,6 +574,13 @@ function interpolatePoint(p1, p2, f) {
 				} else {
 					p[k] = 0;
 				}
+			} else if (k === "distance" && courseDistance > 0) {
+				// distance must be treated specially on courses
+				let d =
+					p1.distance +
+					distanceDifference(p1, p2, courseDistance, isLoop) * f;
+				d -= courseDistance * Math.floor(d / courseDistance);
+				p[k] = d;
 			} else if (isNumeric(p1[k]) && isNumeric(p2[k])) {
 				p[k] = parseFloat(p1[k]) * (1 - f) + parseFloat(p2[k]) * f;
 			} else {
@@ -595,13 +607,29 @@ function interpolatePoint(p1, p2, f) {
  * @param {number} f - Fraction between p2 and p3 (0 to 1)
  * @returns {Object} Interpolated corner point
  */
-function interpolateCorner(p1, p2, p3, p4, f1, f4, f) {
-	const a1 = interpolatePoint(p1, p2, 1 + f / f1);
-	const a2 = interpolatePoint(p2, p3, f);
-	const a3 = interpolatePoint(p3, p4, (f - 1) / f4);
-	const b1 = interpolatePoint(a1, a2, (f1 + f) / (f1 + 1));
-	const b2 = interpolatePoint(a2, a3, f / (f4 + 1));
-	const px = interpolatePoint(b1, b2, f);
+function interpolateCorner(
+	p1,
+	p2,
+	p3,
+	p4,
+	f1,
+	f4,
+	f,
+	courseDistance = 0,
+	isLoop = 0,
+) {
+	const a1 = interpolatePoint(p1, p2, 1 + f / f1, courseDistance, isLoop);
+	const a2 = interpolatePoint(p2, p3, f, courseDistance, isLoop);
+	const a3 = interpolatePoint(p3, p4, (f - 1) / f4, courseDistance, isLoop);
+	const b1 = interpolatePoint(
+		a1,
+		a2,
+		(f1 + f) / (f1 + 1),
+		courseDistance,
+		isLoop,
+	);
+	const b2 = interpolatePoint(a2, a3, f / (f4 + 1), courseDistance, isLoop);
+	const px = interpolatePoint(b1, b2, f, courseDistance, isLoop);
 	return px;
 }
 
@@ -703,7 +731,15 @@ function addVectorToPoint(point, vector) {
  * @param {number} dd - Minimum angle for spline (default PI/16)
  * @returns {Array} Array of interpolated points between p2 and p3
  */
-function splineInterpolation(p1, p2, p3, p4, dd = PI / 16) {
+function splineInterpolation(
+	p1,
+	p2,
+	p3,
+	p4,
+	courseDistance = 0,
+	isLoop = 0,
+	dd = PI / 16,
+) {
 	// Calculate number of points based on the angles
 	const angle =
 		Math.abs(latlngAngle(p1, p2, p3)) + Math.abs(latlngAngle(p2, p3, p4));
@@ -718,7 +754,17 @@ function splineInterpolation(p1, p2, p3, p4, dd = PI / 16) {
 
 	for (let i = 1; i <= NPoints; i++) {
 		const f = i / (NPoints + 1);
-		const p = interpolateCorner(p1, p2, p3, p4, f1, f4, f);
+		const p = interpolateCorner(
+			p1,
+			p2,
+			p3,
+			p4,
+			f1,
+			f4,
+			f,
+			courseDistance,
+			isLoop,
+		);
 		points.push(p);
 	}
 
@@ -739,7 +785,15 @@ function splineInterpolation(p1, p2, p3, p4, dd = PI / 16) {
  * @param {number} dd - Interpolation angle (default π/16)
  * @returns {Array} Array of interpolated points
  */
-function arcFitInterpolation(p1, p2, p3, p4, dd = Math.PI / 16) {
+function arcFitInterpolation(
+	p1,
+	p2,
+	p3,
+	p4,
+	courseDistance = 0,
+	isLoop = 0,
+	dd = Math.PI / 16,
+) {
 	const xy1 = latlng2dxdy(p2, p1);
 	const xy2 = [0, 0];
 	const xy3 = latlng2dxdy(p2, p3);
@@ -1382,6 +1436,7 @@ function addSplines(
 	end,
 	isLoop = 0,
 	splineType = "spline",
+	maxRatio = 0,
 ) {
 	note(`starting ${splineType} processing...`);
 
@@ -1392,6 +1447,8 @@ function addSplines(
 	if (!points[0].distance && (start !== undefined || end !== undefined)) {
 		addDistanceField(points);
 	}
+
+	const courseDistance = calcCourseDistance(points, isLoop);
 
 	// find corners which meet spline criteria
 	// two turns in the same direction, both less than max
@@ -1447,9 +1504,37 @@ function addSplines(
 				}
 			}
 			if (isLoop) {
-				if (l <= j && l >= k) continue;
+				if (l <= j && l >= k) continue iLoop;
 			} else {
-				if (l <= j) continue;
+				if (l <= j) continue iLoop;
+			}
+
+			// points are in order: k i j l
+
+			// check distance if there's a max ratio
+			if (maxRatio > 0) {
+				const d1 = distanceDifference(
+					points[k],
+					points[i],
+					courseDistance,
+					isLoop,
+				);
+				const d2 = distanceDifference(
+					points[i],
+					points[j],
+					courseDistance,
+					isLoop,
+				);
+				const d3 = distanceDifference(
+					points[j],
+					points[l],
+					courseDistance,
+					isLoop,
+				);
+				let r = d2 > d1 ? d2 / d1 : d1 / d2;
+				if (r > maxRatio) continue iLoop;
+				r = d3 > d2 ? d3 / d2 : d2 / d3;
+				if (r > maxRatio) continue iLoop;
 			}
 
 			// turn angles
@@ -1466,6 +1551,8 @@ function addSplines(
 						points[i],
 						points[j],
 						points[l],
+						courseDistance,
+						isLoop,
 						minRadians,
 					);
 				} else {
@@ -1474,6 +1561,8 @@ function addSplines(
 						points[i],
 						points[j],
 						points[l],
+						courseDistance,
+						isLoop,
 						minRadians,
 					);
 				}
