@@ -1908,6 +1908,11 @@ function findLoops(points, isLoop) {
 function applyLaneShift(points, isLoop) {
 	if (!points.length) return points;
 
+	// use curvature to limit lane shifts
+	addCurvatureField(points, isLoop);
+	addDistanceFieldIfNeeded(points);
+	const courseDistance = calcCourseDistance(points, isLoop);
+
 	const pNew = [];
 
 	// create list of (x, y) coordinates
@@ -1947,6 +1952,43 @@ function applyLaneShift(points, isLoop) {
 			dir2 = dirs[i];
 		}
 
+		// check for excessive shift: R = 1/curvature, shift > R, shift x curvature > 1
+		const t = points[i].curvature * points[i].shift;
+		if (t < -0.75) {
+			points[i].shift = -0.75 / points[i].curvature;
+			// check to make sure lane shift isn't changing too rapidly to nearby points
+			for (const dir of [-1, 1]) {
+				let j = i + dir;
+				while (true) {
+					const d = pointSeparation(
+						points[((j % points.length) + points.length) % points.length],
+						points[i],
+						courseDistance,
+						isLoop,
+					);
+					const dShift =
+						points[
+							((j % points.length) + points.length) % points.length
+						].shift - points[i].shift;
+					if (2 * Math.abs(dShift) < d) break;
+					points[
+						((j % points.length) + points.length) % points.length
+					].shift =
+						points[i].shift + spaceship(dShift, 0) * (d / 2);
+					if (
+						!isLoop &&
+						(((j % points.length) + points.length) % points.length ===
+							0 ||
+							((j % points.length) + points.length) %
+								points.length ===
+								maxIndex(points))
+					)
+						break;
+					j = (j + dir + points.length) % points.length;
+				}
+			}
+		}
+
 		// for sharp turns repeat a point: there's no way to decide if it's an "inside" or "outside" sharp turn
 		if (
 			(isLoop || (i > 0 && i < maxIndex(points))) &&
@@ -1970,7 +2012,7 @@ function applyLaneShift(points, isLoop) {
 		pNew.push(shiftVertex(points[i], [dir1, dir2], points[i].shift || 0));
 	}
 
-	deleteDerivedFields(pNew);
+	deleteDerivedFields(points);
 	return pNew;
 }
 
