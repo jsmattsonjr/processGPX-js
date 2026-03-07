@@ -655,34 +655,43 @@ function segmentIntercept(s12, s34) {
 }
 
 /**
- * add a vector to a point
- * a single iteration will use the average cosine for the path rather than
- * a starting cosine, just for maximal accuracy
- * note there will be no elevation field for this point:
- * that will need to be added somewhere else
- * @param {Object} point - Point with lat, lon properties
- * @param {Array} vector - [dx, dy] vector in meters
- * @returns {Object} New point with lat, lon properties
+ * Add a vector to a lat/lng pair
+ * Just focuses on lat and lon
+ * @param {Array} latlng - [lat, lon] in degrees
+ * @param {Array} v - [dx, dy] vector in meters
+ * @returns {Array} [lat, lon] new position
  */
-function addVectorToPoint(point, vector) {
-	const [dx, dy] = vector;
-	const lon0 = point.lon;
-	const lat0 = point.lat;
+function addVectorToLatLng(latlng, v) {
+	const [dx, dy] = v;
 	const dlat = dy / LAT2Y; // this is independent of latitude
-	let lat = lat0 + dlat;
-	lat -= 360 * Math.floor(0.5 + lat / 360);
+	const lat = latlng[0] + dlat;
 
 	if (Math.abs(lat) > 90) {
 		/* istanbul ignore next */
 		die("ERROR -- attempted to cross beyond pole!");
 	}
 
-	const c = Math.cos(DEG2RAD * (lat0 + dlat / 2));
-	const dlon = dx / c / LAT2Y;
-	let lon = lon0 + dlon;
+	const c = Math.cos(DEG2RAD * (latlng[0] + dlat / 2));
+	const dlng = dx / c / LAT2Y;
+	let lon = latlng[1] + dlng;
 	lon -= 360 * Math.floor(0.5 + lon / 360);
+	return [lat, lon];
+}
 
-	return { lat: lat, lon: lon };
+/**
+ * Add a vector to a point, copying all fields
+ * @param {Object} point - Point with lat, lon, ele properties
+ * @param {Array} vector - [dx, dy, dz] vector in meters (dz optional)
+ * @returns {Object} New point with updated lat, lon, ele properties
+ */
+function addVectorToPoint(point, vector) {
+	const dz = vector[2] ?? 0;
+	const p2 = { ...point };
+	const latlng = addVectorToLatLng([point.lat, point.lon], vector);
+	p2.lat = latlng[0];
+	p2.lon = latlng[1];
+	p2.ele = point.ele + dz;
+	return p2;
 }
 
 /**
