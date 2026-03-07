@@ -3094,6 +3094,21 @@ function addDistanceField(points) {
 }
 
 /**
+ * Add distance field only if not already present
+ * @param {Array} points - Array of points
+ */
+function addDistanceFieldIfNeeded(points) {
+	if (points.length) {
+		if (
+			points[0].distance === undefined ||
+			points[points.length - 1].distance === undefined
+		) {
+			addDistanceField(points);
+		}
+	}
+}
+
+/**
  * Add gradient field to points based on elevation changes
  * @param {Array} points - Array of points
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
