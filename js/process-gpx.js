@@ -3862,6 +3862,11 @@ export function processGPX(trackFeature, options = {}) {
 		die("Invalid track feature provided to processGPX");
 	}
 
+	// Normalize option aliases
+	if (options.simplify !== undefined && options.simplifyPoints === undefined) {
+		options.simplifyPoints = options.simplify;
+	}
+
 	// Make sure repeat is in range
 	if ((options.repeat || 0) > 99) {
 		/* istanbul ignore next */
