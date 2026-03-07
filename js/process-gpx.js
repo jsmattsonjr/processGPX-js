@@ -2237,6 +2237,8 @@ function smoothing(
 function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 	const smoothRadians = smoothAngle * DEG2RAD;
 
+	const courseDistance = calcCourseDistance(points, isLoop);
+
 	// iterate a few times
 	for (
 		let autoSpacingIteration = 0;
@@ -2340,6 +2342,8 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 									pNew[maxIndex(pNew)],
 									pStack[maxIndex(pStack)],
 									f,
+									courseDistance,
+									isLoop,
 								),
 							);
 							// adjust spacing to next point to account for interpolated point
@@ -2357,7 +2361,15 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
 							if (N > 0) {
 								ds[maxIndex(pNew)] = dsTot / N;
 								for (let n = 1; n <= N - 1; n++) {
-									pNew.push(interpolatePoint(p1, p2, n / N));
+									pNew.push(
+									interpolatePoint(
+										p1,
+										p2,
+										n / N,
+										courseDistance,
+										isLoop,
+									),
+								);
 									ds[maxIndex(pNew)] = dsTot / N;
 								}
 							} else {
@@ -2383,6 +2395,8 @@ function doAutoSpacing(points, isLoop, lSmooth, smoothAngle, minRadius) {
  * @returns {Array} Array with interpolated points added
  */
 function doPointInterpolation(points, isLoop, spacing) {
+	const courseDistance = calcCourseDistance(points, isLoop);
+
 	note("interpolation..");
 	const pNew = [];
 	const iMax = maxIndex(points) - (isLoop ? 0 : 1);
@@ -2397,7 +2411,9 @@ function doPointInterpolation(points, isLoop, spacing) {
 
 		// interpolate points...
 		for (let n = 1; n <= npoints - 1; n++) {
-			pNew.push(interpolatePoint(p1, p2, n / npoints));
+			pNew.push(
+				interpolatePoint(p1, p2, n / npoints, courseDistance, isLoop),
+			);
 		}
 	}
 
