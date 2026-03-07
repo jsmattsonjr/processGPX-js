@@ -959,6 +959,43 @@ function removeDuplicatePoints(points, isLoop = 0) {
 }
 
 /**
+ * Check if a route should be treated as a loop
+ * Checks that the start and finish are close together and the route through
+ * the S/F is not a U-turn
+ * @param {Array} points - Array of track points
+ * @returns {boolean} True if the route should be treated as a loop
+ */
+function checkAutoLoop(points) {
+	// check that the route thru the S/F is not a U-turn
+	let i1 = -1;
+	const i2 = 0;
+	let i3 = 1;
+	while (
+		latlngDistance(ix(points, i1), points[i2]) < 10 &&
+		i1 > i2 - points.length
+	) {
+		i1--;
+	}
+	while (
+		latlngDistance(points[i2], points[i3]) < 10 &&
+		i3 < maxIndex(points)
+	) {
+		i3++;
+	}
+	const isLoop =
+		points.length > 2 &&
+		latlngDistance(points[0], points[points.length - 1]) < 150 &&
+		latlngDotProduct(
+			ix(points, i1),
+			points[i2],
+			points[i2],
+			points[i3],
+		) > -0.1;
+	note(`autoLoop detection: ${isLoop ? "true" : "false"}\n`);
+	return isLoop;
+}
+
+/**
  * Crop corners by removing points within a specified distance of sharp turns
  * @param {Object} options - Options object with points, cornerCrop, minRadians, maxRadians, start, end, isLoop
  * @returns {Array} New array with cropped corners
