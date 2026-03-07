@@ -1844,12 +1844,13 @@ function findLoops(points, isLoop) {
 	note("checking for loops...");
 	const loopDistance = 100;
 
-	// Add direction field: distance field was just calculated by zig-zag check
+	addDistanceFieldIfNeeded(points);
+	// note: direction has no discontinuities for unit circle compliance
 	addDirectionField(points, isLoop);
 
 	let u = 0;
 	let v = 0;
-	const loopAngle = 0.7 * TWOPI;
+	const loopAngle = 0.85 * TWOPI;
 
 	while (v < points.length - 1) {
 		const p = points[u];
@@ -1862,13 +1863,22 @@ function findLoops(points, isLoop) {
 			v++;
 		}
 
-		if (Math.abs(p.heading - points[v].heading) > loopAngle) {
+		if (Math.abs(p.direction - points[v].direction) > loopAngle) {
 			// Find starting point of loop
 			while (
 				u + 1 < v &&
-				Math.abs(points[u + 1].heading - points[v].heading) > loopAngle
+				Math.abs(points[u + 1].direction - points[v].direction) >
+					loopAngle
 			) {
 				u++;
+			}
+			// Find ending point of loop
+			while (
+				v - 1 > u &&
+				Math.abs(points[v - 1].direction - points[u].direction) >
+					loopAngle
+			) {
+				v--;
 			}
 
 			warn(
@@ -1882,8 +1892,11 @@ function findLoops(points, isLoop) {
 		u++;
 	}
 
-	// Clean up heading field
-	deleteField(points, "heading");
+	// Clean up
+	deleteField(points, "direction");
+	if (points[0].heading !== undefined) {
+		deleteField(points, "heading");
+	}
 }
 
 /**
