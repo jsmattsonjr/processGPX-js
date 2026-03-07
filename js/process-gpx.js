@@ -1005,6 +1005,7 @@ function cropCorners(
 	cornerCrop = 0,
 	minRadians = PI / 3,
 	maxRadians,
+	cornerCropArcFit = 1,
 	start,
 	end,
 	isLoop = 0,
@@ -1056,11 +1057,8 @@ function cropCorners(
 	if (cropCorners.length === 0) return points;
 
 	// Add a distance field if needed
-	if (
-		points[0].distance === undefined &&
-		(start !== undefined || end !== undefined)
-	) {
-		addDistanceField(points);
+	if (start !== undefined || end !== undefined) {
+		addDistanceFieldIfNeeded(points);
 	}
 
 	// Corners which are too close get pruned
@@ -1164,7 +1162,19 @@ function cropCorners(
 			// Note for laps we can wrap around
 			if (isLoop) {
 				if (i + 1 > maxIndex(points)) {
-					// Corner wraps around: for now just break
+					// corner wraps around: interpolate points
+					const newPoints = arcFit(
+						pNew[pNew.length - 2],
+						pNew[pNew.length - 1],
+						pNew[0],
+						pNew[1],
+						cornerCrop,
+					);
+					if (newPoints && newPoints.length > 0) {
+						const iMid = int(newPoints.length / 2);
+						pNew.push(...newPoints.slice(0, iMid));
+						pNew.unshift(...newPoints.slice(iMid));
+					}
 					break pointsLoop;
 				}
 			} else if (i > maxIndex(points)) {
@@ -1195,6 +1205,27 @@ function cropCorners(
 			dp1 = dc2;
 		}
 
+		// arc fits
+		if (pNew.length > 0) {
+			const arcPoint1 =
+				pNew.length > 1
+					? pNew[pNew.length - 2]
+					: points[points.length - 1];
+			const arcPoint2 = pNew[pNew.length - 1];
+			const arcPoint3 = p1;
+			const arcPoint4 = p2;
+			const newPoints = arcFit(
+				arcPoint1,
+				arcPoint2,
+				arcPoint3,
+				arcPoint4,
+				cornerCrop,
+			);
+			if (newPoints) {
+				pNew.push(...newPoints);
+			}
+		}
+
 		// Skip to next corner point
 		ic++;
 
@@ -1220,6 +1251,115 @@ function cropCorners(
 
 	deleteDerivedFields(pNew);
 	return pNew;
+}
+
+/**
+ * Fit a circular arc between p1 and p2, assuming straight from p0->p1 and p2->p3.
+ * @param {Object} p0 - Point before start of arc
+ * @param {Object} p1 - Start of arc
+ * @param {Object} p2 - End of arc
+ * @param {Object} p3 - Point after end of arc
+ * @param {number} RMax - Maximum radius of arc
+ * @param {number} dd - Minimum angle per point (default PI/16)
+ * @returns {Array} Array of interpolated arc points between p1 and p2
+ */
+function arcFit(p0, p1, p2, p3, RMax, dd = PI / 16) {
+	if (RMax === 0) return [];
+
+	// calculate the intersection point: p1 -> d1
+	const d01 = latlngDistance(p0, p1);
+	const d23 = latlngDistance(p2, p3);
+	let xy01 = latlng2dxdy(p0, p1);
+	let xy12 = latlng2dxdy(p1, p2);
+	let xy23 = latlng2dxdy(p2, p3);
+
+	const c1 = xy01[0] / d01;
+	const s1 = xy01[1] / d01;
+	const c2 = xy23[0] / d23;
+	const s2 = xy23[1] / d23;
+	const cross = c1 * s2 - c2 * s1;
+
+	if (Math.abs(cross) < 1e-6) return [];
+	// sign positive: right turn, sign negative: left turn
+	const sign = -spaceship(cross, 0);
+
+	const points = [];
+	let px; // extra point to add at end (if any)
+
+	const dot = c1 * c2 + s1 * s2;
+	// angle subtended by the corner: 0 => 180 degree turn, 180 => straight
+	const theta = reduceAngle(Math.atan2(-cross, -dot));
+	// multiplication factor for translating radius to position
+	const fR = Math.abs(1 / Math.tan(theta / 2));
+
+	// distance to intercept from p1, p2
+	const di1 = (s2 * xy12[0] - c2 * xy12[1]) / cross;
+	const di2 = (c1 * xy12[1] - s1 * xy12[0]) / cross;
+
+	// if there's a negative value, bail
+	if (di1 < 0 || di2 < 0) return [];
+
+	// figure out radii from distance
+	let R = (di1 > di2 ? di2 : di1) / fR;
+	if (RMax !== undefined && RMax > 0 && R > RMax) R = RMax;
+
+	const a = di1 - R * fR;
+	const b = di2 - R * fR;
+
+	// distance from p1 to new corner point
+	if (Math.abs(a) > 0.01) {
+		const f = a / (2 * R + a);
+		const dz = (p2.ele - p1.ele) * f;
+		let d1 = p1.distance;
+		p1 = addVectorToPoint(p1, [a * c1, a * s1, dz]);
+		d1 += a;
+		p1.distance = d1;
+		points.push(p1);
+		xy01 = latlng2dxdy(p0, p1);
+		xy12 = latlng2dxdy(p1, p2);
+	}
+
+	if (Math.abs(b) > 0.01) {
+		// distance from p2 to new corner point
+		const f = b / (2 * R + b);
+		const dz = (p1.ele - p2.ele) * f;
+		let d2 = p2.distance;
+		px = addVectorToPoint(p2, [-b * c2, -b * s2, dz]);
+		d2 -= b;
+		px.distance = d2;
+		p2 = px;
+		xy12 = latlng2dxdy(p1, p2);
+		xy23 = latlng2dxdy(p2, p3);
+	}
+
+	const cx = sign * s1 * R;
+	const cy = -sign * c1 * R;
+
+	const theta1 = Math.atan2(-cy, -cx);
+	const theta2 = Math.atan2(xy12[1] - cy, xy12[0] - cx);
+
+	const dTheta = reduceAngle(theta2 - theta1);
+	const nPoints = int(Math.abs(dTheta / dd));
+
+	const z1 = p1.ele;
+	const z2 = p2.ele;
+	const deltaZ =
+		z1 !== undefined && z2 !== undefined ? z2 - z1 : 0;
+	for (let n = 1; n <= nPoints; n++) {
+		const f = n / (nPoints + 1);
+		const thetaN = theta1 + dTheta * f;
+		const dxN = cx + R * Math.cos(thetaN);
+		const dyN = cy + R * Math.sin(thetaN);
+		const dzN = f * deltaZ;
+		points.push(addVectorToPoint(p1, [dxN, dyN, dzN]));
+	}
+
+	// if we need to add the extra point, do it here
+	if (px !== undefined) points.push(px);
+
+	interpolateFields(p1, ...points, p2);
+
+	return points;
 }
 
 /**
