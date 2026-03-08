@@ -15,10 +15,16 @@ This is a JavaScript port of the original Perl processGPX tool (v0.53) designed 
 - Use biome format --write before git commit
 
 ### Testing and Development Commands
-- Use biome check --fix before git commit, and fix any remaining issues 
+- Use biome check --fix before git commit, and fix any remaining issues
 - Use `node process-cli.js <filename>` to test the processGPX pipeline
 - Sample input file: `gpx/Twin_Bridges_Scenic_Bikeway.gpx`
 - Feel free to modify the local copy (`./processGPX`) of the Perl reference script for debugging
+
+### Comparing JS and Perl Output
+To verify the JavaScript port matches the Perl reference:
+1. `./test-all.sh [options...]` — runs all `gpx/*.gpx` files through both JS (`process-cli.js`) and Perl (`./processGPX`) with the same options, placing output in `gpx/js/` and `gpx/perl/`
+2. `node compare-all-processed.js` — compares each Perl/JS output pair using `gpx-compare.js`, checking geometry (route buffer) and altitude tolerance
+- Example: `./test-all.sh --auto` then `node compare-all-processed.js`
 
 ## Architecture
 
