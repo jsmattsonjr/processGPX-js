@@ -3142,11 +3142,27 @@ function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.52, v0 = 9.5) {
  * @returns {number} Distance difference
  */
 function distanceDifference(p1, p2, courseDistance, isLoop) {
-	if (!Object.hasOwn(p1, "distance") || !Object.hasOwn(p2, "distance")) {
-		/* istanbul ignore next */
-		die("distanceDifference called w/o distance field");
+	let d1;
+	if (typeof p1 === "number") {
+		d1 = p1;
+	} else {
+		if (p1.distance === undefined)
+			die(
+				`distanceDifference called w/o distance field: ${Object.keys(p1).join(", ")}`,
+			);
+		d1 = p1.distance;
 	}
-	let d = p2.distance - p1.distance;
+	let d2;
+	if (typeof p2 === "number") {
+		d2 = p2;
+	} else {
+		if (p2.distance === undefined)
+			die(
+				`distanceDifference called w/o distance field: ${Object.keys(p2).join(", ")}`,
+			);
+		d2 = p2.distance;
+	}
+	let d = d2 - d1;
 	if (isLoop && courseDistance > 0) {
 		d -= courseDistance * Math.floor(d / courseDistance);
 	}
