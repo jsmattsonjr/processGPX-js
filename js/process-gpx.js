@@ -1836,6 +1836,110 @@ function fixZigZags(points, isLoop = false, verbose = 1) {
 }
 
 /**
+ * Fix altitude steps, likely due to Strava route editor missing data.
+ * Removes flat segments by applying a uniform gradient to merge with
+ * the steeper adjacent side.
+ * @param {Array} points - Array of points
+ * @param {number} isLoop - Whether route is a loop
+ * @returns {Array} Points with fixed altitude steps
+ */
+function fixSteps(points, isLoop = 0) {
+	const courseDistance = calcCourseDistance(points, isLoop);
+	let stepCount = 0;
+	note("checking for altitude steps ...\n");
+	let i = 0;
+	while (i < maxIndex(points)) {
+		if (!isLoop && (i === 0 || i >= maxIndex(points) - 1)) {
+			i++;
+			continue;
+		}
+		let j = (i + 1) % points.length;
+
+		// special case: check for repeated points in step
+		let interpolatedPoints = 0;
+		while (
+			points[(j + 1) % points.length].ele === points[i].ele
+		) {
+			interpolatedPoints++;
+			j = (j + 1) % points.length;
+			if (
+				j === i ||
+				(!isLoop && (j < i || j === maxIndex(points)))
+			) {
+				return points;
+			}
+		}
+
+		const p1 = points[((i - 1) + points.length) % points.length];
+		const p2 = points[i];
+		const p3 = points[j];
+		const p4 = points[(j + 1) % points.length];
+
+		const ds1 = pointSeparation(p1, p2, courseDistance, isLoop);
+		const g1 = ds1 === 0 ? 0 : (p2.ele - p1.ele) / ds1;
+		const ds2 = pointSeparation(p3, p4, courseDistance, isLoop);
+		const g2 = ds2 === 0 ? 0 : (p4.ele - p3.ele) / ds2;
+		if (
+			p2.ele === p3.ele &&
+			pointSeparation(p2, p3, courseDistance, isLoop) < 100 &&
+			spaceship(p1.ele, p2.ele) === spaceship(p3.ele, p4.ele) &&
+			Math.abs(g1) > 0.001 &&
+			Math.abs(g2) > 0.001
+		) {
+			stepCount++;
+			if (Math.abs(g1) > Math.abs(g2)) {
+				// interpolate p2 altitude
+				for (let n = 0; n <= interpolatedPoints; n++) {
+					const px = points[(i + n) % points.length];
+					px.ele =
+						(p1.ele *
+							pointSeparation(
+								px,
+								p3,
+								courseDistance,
+								isLoop,
+							) +
+							p3.ele *
+								pointSeparation(
+									p1,
+									px,
+									courseDistance,
+									isLoop,
+								)) /
+						pointSeparation(p1, p3, courseDistance, isLoop);
+				}
+			} else {
+				// interpolate p3 altitude
+				for (let n = 0; n <= interpolatedPoints; n++) {
+					const px = points[(i + 1 + n) % points.length];
+					px.ele =
+						(p2.ele *
+							pointSeparation(
+								px,
+								p4,
+								courseDistance,
+								isLoop,
+							) +
+							p4.ele *
+								pointSeparation(
+									p2,
+									px,
+									courseDistance,
+									isLoop,
+								)) /
+						pointSeparation(p2, p4, courseDistance, isLoop);
+				}
+			}
+		}
+		i += 1 + interpolatedPoints;
+	}
+	if (stepCount > 0) {
+		note(`fixed ${stepCount} altitude steps.\n`);
+	}
+	return points;
+}
+
+/**
  * look for loops
  * @param {Array} points - Array of points
  * @param {number} isLoop - Whether route is a loop
