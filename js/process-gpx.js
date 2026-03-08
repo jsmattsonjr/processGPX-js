@@ -5901,16 +5901,11 @@ export function processGPX(trackFeature, options = {}) {
 		deleteField2(points, "distance");
 	}
 
-	// Add direction field if requested
+	// Add heading field if requested
 	if (options.addDirection) {
-		addDirectionField(points, options.isLoop);
-		// Convert heading from radians to degrees
-		for (const p of points) {
-			if (p.heading !== undefined) {
-				p.heading /= DEG2RAD;
-			}
-		}
+		addHeadingField(points, options.isLoop);
 	} else {
+		deleteField2(points, "direction");
 		deleteField2(points, "heading");
 	}
 
