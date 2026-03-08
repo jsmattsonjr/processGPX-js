@@ -3545,7 +3545,7 @@ function addGradientField(points, isLoop = 0) {
 function integrateGradientField(points, isLoop = 0) {
 	note("integrating gradient to update altitude...");
 	if (!points.length || points[0].gradient === undefined) return;
-	addDistanceField(points);
+	addDistanceFieldIfNeeded(points);
 	const courseDistance = calcCourseDistance(points, isLoop);
 	let i = 0;
 	const iMax = maxIndex(points);
@@ -3623,7 +3623,7 @@ function addDirectionField(points, isLoop = 0) {
 			d = dPrev + reduceAngle(d - dPrev);
 		}
 		dPrev = d;
-		points[v].heading = d;
+		points[v].direction = d;
 		v++;
 	}
 }
@@ -3642,7 +3642,7 @@ function addCurvatureField(points, isLoop = 0) {
 		points[vMax--].curvature = 0;
 	}
 	let v = vMin;
-	let dPrev;
+	let dirPrev;
 	while (v <= vMax) {
 		let u = (v - 1 + points.length) % points.length;
 		let w = (v + 1) % points.length;
@@ -3667,13 +3667,15 @@ function addCurvatureField(points, isLoop = 0) {
 			v++;
 			continue;
 		}
-		dPrev = dPrev ?? latlngDirection(points[u], points[v]);
-		const d = latlngDirection(points[v], points[w]);
+		dirPrev = dirPrev ?? latlngDirection(points[u], points[v]);
+		const dir = latlngDirection(points[v], points[w]);
+		let d1 = latlngDistance(points[u], points[v]);
+		let d2 = latlngDistance(points[v], points[w]);
+		if (d1 > 10) d1 = 10;
+		if (d2 > 10) d2 = 10;
 		points[v].curvature =
-			(2 * deltaAngle(dPrev, d)) /
-			(latlngDistance(points[u], points[v]) +
-				latlngDistance(points[v], points[w]));
-		dPrev = d;
+			(2 * deltaAngle(dirPrev, dir)) / (d1 + d2);
+		dirPrev = dir;
 		v++;
 	}
 }
@@ -3687,9 +3689,7 @@ function addCurvatureField(points, isLoop = 0) {
  */
 function calcCourseDistance(points, isLoop) {
 	if (!points.length) return 0;
-	if (points[maxIndex(points)].distance === undefined) {
-		addDistanceField(points);
-	}
+	addDistanceFieldIfNeeded(points);
 	let distance = points[maxIndex(points)].distance;
 	if (isLoop && points.length > 1) {
 		distance += latlngDistance(points[maxIndex(points)], points[0]);
@@ -3746,7 +3746,7 @@ function deleteField2(points, field) {
  */
 function deleteDerivedFields(
 	points,
-	fields = ["curvature", "distance", "gradient", "heading"],
+	fields = ["curvature", "distance", "gradient", "direction", "heading"],
 ) {
 	for (const field of fields) {
 		deleteField2(points, field);
@@ -3763,18 +3763,25 @@ function reversePoints(points) {
 
 	// Adjust distance field if it exists
 	if (points[0].distance !== undefined) {
-		const dLast = points[maxIndex(points)].distance;
+		const dMax = points[0].distance;
 		for (const p of points) {
-			p.distance = dLast - p.distance;
+			p.distance = dMax - p.distance;
 		}
 	}
 
-	// Negate heading, curvature, and laneShift fields
-	for (const field of ["heading", "curvature", "laneShift"]) {
+	// Negate direction, heading, curvature, and laneShift fields
+	for (const field of ["direction", "heading", "curvature", "laneShift"]) {
 		if (points[0][field] !== undefined) {
 			for (const p of points) {
 				p[field] = -p[field];
 			}
+		}
+	}
+
+	// Normalize heading to [0, 360)
+	if (points[0].heading !== undefined) {
+		for (const p of points) {
+			p.heading -= 360 * Math.floor(p.heading / 360);
 		}
 	}
 }
@@ -3792,6 +3799,16 @@ function cropPoints(points, isLoop = 0, deleteRange = [], cropMin, cropMax) {
 	const ranges = [];
 
 	const courseDistance = calcCourseDistance(points, isLoop);
+
+	// reference negative numbers to end of course
+	if (cropMin !== undefined) {
+		cropMin -=
+			courseDistance * Math.floor(cropMin / courseDistance);
+	}
+	if (cropMax !== undefined) {
+		cropMax -=
+			courseDistance * Math.floor(cropMax / courseDistance);
+	}
 
 	// If cropMin and cropMax are reversed, treat them as a delete range
 	if (cropMin !== undefined && cropMax !== undefined && cropMax < cropMin) {
@@ -3905,7 +3922,15 @@ function cropPoints(points, isLoop = 0, deleteRange = [], cropMin, cropMax) {
 				const d1 = f * ds;
 				const d2 = (1 - f) * ds;
 				if (d1 > 0.01 && d2 > 0.01) {
-					pNew.push(interpolatePoint(points[i - 1], p, f));
+					pNew.push(
+						interpolatePoint(
+							points[i - 1],
+							p,
+							f,
+							courseDistance,
+							isLoop,
+						),
+					);
 				}
 			}
 		}
@@ -4232,11 +4257,12 @@ function calcQualityScore(points, isLoop) {
 		if (!isLoop && i === maxIndex(points)) break;
 
 		// Distance and altitude change to next point
-		const ds = latlngDistance(points[i], points[(i + 1) % points.length]);
+		const j = (i + 1) % points.length;
+		const ds = latlngDistance(points[i], points[j]);
 		if (ds < 0.01) continue;
 		courseDistance += ds;
 
-		const dz = points[(i + 1) % points.length].ele - points[i].ele;
+		const dz = points[j].ele - points[i].ele;
 		if (Math.abs(ds) < 0.1 && Math.abs(dz) < 0.01) continue; // Skip duplicate points
 
 		// Sine of inclination angle to next point
