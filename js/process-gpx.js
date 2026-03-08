@@ -1620,7 +1620,7 @@ function xyPointOnLine(p1, p2, p3) {
  * @param {number} dmax - Maximum distance threshold (default 1m)
  * @returns {boolean} True if point is on the road segment
  */
-function isPointOnRoad(p1, p2, px, dmax = 1) {
+function isPointOnLine(p1, p2, px, dmax = 1) {
 	// If point is "on" an endpoint (within 10 cm) then true
 	if (pointsAreClose(p1, px) || pointsAreClose(p2, px)) {
 		return true;
@@ -1649,7 +1649,7 @@ function isPointOnRoad(p1, p2, px, dmax = 1) {
  * @param {Object} px - Test point
  * @returns {boolean} True if point is on the road corner
  */
-function isPointOnRoadCorner(p1, p2, p3, p4, px) {
+function isPointOnCorner(p1, p2, p3, p4, px) {
 	if (!px || !p2 || !p3) return false;
 
 	if (pointsAreClose(px, p2) || pointsAreClose(px, p3)) {
@@ -1706,7 +1706,7 @@ function roadTest(points, j, k, l, m, i, d) {
 		return false;
 	}
 
-	if (isPointOnRoad(points[k], points[l], points[i], d)) {
+	if (isPointOnLine(points[k], points[l], points[i], d)) {
 		return true;
 	}
 
@@ -1714,7 +1714,7 @@ function roadTest(points, j, k, l, m, i, d) {
 		return false;
 	}
 
-	const cornerResult = isPointOnRoadCorner(
+	const cornerResult = isPointOnCorner(
 		points[j],
 		points[k],
 		points[l],
@@ -3025,7 +3025,7 @@ function isPointPrunable(points, _distance = 2, X = 0.001, dg = 0.001) {
 		return false;
 	}
 
-	if (isPointOnRoad(p1, p2, p3, 1)) {
+	if (isPointOnLine(p1, p2, p3, 1)) {
 		const d13 = Math.sqrt((y3 - y1) ** 2 + (x3 - x1) ** 2);
 		const d23 = Math.sqrt((y3 - y2) ** 2 + (x3 - x2) ** 2);
 
