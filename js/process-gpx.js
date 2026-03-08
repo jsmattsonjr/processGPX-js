@@ -3733,6 +3733,24 @@ function addDirectionField(points, isLoop = 0) {
 }
 
 /**
+ * Add a heading field using the direction field
+ * Heading is 0=North, 90=East, 180=South, 270=West
+ * @param {Array} points - Array of points
+ * @param {number} isLoop - Whether the track is a loop (0 or 1)
+ */
+function addHeadingField(points, isLoop = 0) {
+	if (!points.length) return;
+	if (points[0].direction === undefined) {
+		addDirectionField(points, isLoop);
+	}
+	for (const p of points) {
+		let heading = 90 - p.direction / DEG2RAD;
+		heading -= 360 * Math.floor(heading / 360);
+		p.heading = heading;
+	}
+}
+
+/**
  * Add curvature field to points
  * @param {Array} points - Array of points
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
@@ -4561,29 +4579,21 @@ export function processGPX(trackFeature, options = {}) {
 	dumpPoints(points, "05-js-cropped.txt");
 
 	// AutoLoop: automatically determine if -loop should be invoked
-	options.isLoop = options.isLoop || 0;
 	options.copyPoint = options.copyPoint || 0;
 	options.autoLoop = options.autoLoop || options.auto;
 
-	if (options.autoLoop) {
+	if (options.autoLoop && options.isLoop === undefined) {
 		if (
-			!options.isLoop &&
-			options.cropMin === undefined &&
-			options.cropMax === undefined &&
-			latlngDistance(points[0], points[maxIndex(points)]) < 150 &&
-			points.length > 3 &&
-			latlngDotProduct(
-				points[maxIndex(points) - 1],
-				points[maxIndex(points)],
-				points[0],
-				points[1],
-			) > -0.1
+			options.cropMin !== undefined ||
+			options.cropMax !== undefined
 		) {
-			options.isLoop = 1;
-			options.copyPoint = 0;
-			note("setting -loop");
+			options.isLoop = 0;
+		} else {
+			options.isLoop = checkAutoLoop(points) ? 1 : 0;
 		}
 	}
+
+	options.isLoop = options.isLoop ?? 0;
 
 	// Auto: auto option will turn on options based on the course
 	if (options.auto) {
