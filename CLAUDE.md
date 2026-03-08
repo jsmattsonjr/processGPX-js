@@ -182,36 +182,39 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Check if dependencies are already translated
 - Find the correct placement for new translations
 
-#### Function Translation Status (71/81 Complete)
+#### Function Translation Status (81/110 Complete)
 
-**✅ Translated Functions** (71):
-- Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`
+**✅ Translated Functions** (81):
+- Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`, `deltalngRadians`, `deltalng`
 - Distance/geometry: `latlngDistance`, `pointsAreClose`, `latlngDotProduct`, `crossProduct`, `latlngCrossProduct`, `turnDirection`, `latlngAngle`, `latlngDirection`, `pointDirection`, `latlng2dxdy`
-- Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToPoint`, `interpolateFields`
+- Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToLatLng`, `addVectorToPoint`, `interpolateFields`
 - Geometric algorithms: `segmentIntercept`, `splineInterpolation`, `arcFitInterpolation`, `circle3PointFit`
-- Point processing: `removeDuplicatePoints`, `cropCorners`, `addSplines`, `fixZigZags`, `findLoops`
+- Point processing: `removeDuplicatePoints`, `checkAutoLoop`, `cropCorners`, `arcFit`, `addSplines`, `fixZigZags`, `fixSteps`, `findLoops`
 - Lane operations: `applyLaneShift`
 - Smoothing: `smoothing`, `calcSmoothingSigma`
 - Spacing/interpolation: `doAutoSpacing`, `doPointInterpolation`
-- Road detection: `xyPointOnLine`, `isPointOnRoad`, `isPointOnRoadCorner`, `roadTest`, `snapPoints`
+- Road detection: `xyPointOnLine`, `isPointOnLine`, `isPointOnCorner`, `roadTest`, `snapPoints`
 - Point filtering: `isPointPrunable`, `simplifyPoints`
 - Speed modeling: `bikeSpeedModel`, `distanceDifference`, `pointSeparation`
 - Straightening: `straightenPoints`, `calcDeviationStats`, `autoStraighten`
-- Field operations: `addDistanceField`, `addGradientField`, `integrateGradientField`, `addDirectionField`, `addCurvatureField`, `calcCourseDistance`
+- Field operations: `addDistanceField`, `addDistanceFieldIfNeeded`, `addGradientField`, `integrateGradientField`, `addDirectionField`, `addHeadingField`, `addCurvatureField`, `calcCourseDistance`
 - Data management: `deleteField`, `deleteExtensionField`, `deleteField2`, `deleteDerivedFields`
 - Route operations: `reversePoints`, `cropPoints`, `UTurnCheck`, `makeLoop`
 - Quality: `calcQualityScore`
 - Utilities: `note`
 
-**❌ Not Yet Translated** (18):
-- File operations: `setFileNameSuffix`
-- Geometry: `pointAtPosition`, `fitCircle`, `processCircle`
-- Climbing analysis: `climbRating`, `findClimbs`, `placeGradientSigns`
+**❌ Not Yet Translated** (29):
+- File operations: `setFileNameSuffix`, `loadURL`, `loadGPX`, `loadBTRoute`
+- Point utilities: `points2String`, `checkForUndefinedPoints`, `copyPoint`, `copyField`, `createLinks`, `linkedListToPoints`, `isPointInInterval`
+- Geometry: `splicePoints`, `pointAtPosition`, `bracketPosition`, `fieldAtPosition`, `fitCircle`, `processCircle`
+- Climbing analysis: `climbRating`, `findClimbs`, `placeGradientSigns`, `findCorners`, `addCornerWaypoints`
 - Auto segments: `addAutoSegments`
-- Straightening: `processStraight`
-- Circuit operations: `circuitFromPosition`, `shiftCircuit`
+- Straightening: `processStraight`, `checkRange`, `findArcs`, `fitArc`, `fitArcs`, `findAndFitArcs`
+- Circuit operations: `circuitFromPosition`, `shiftCircuit`, `calcSeparation`
+- Spacing: `applySelectiveSpacing`, `applyUniformGradient`
+- Time: `addDuration`, `distanceAtDuration`, `addTime`
 - Profile operations: `simplifyProfile`, `simplifyMonotonicProfile`
-- Route operations: `splitPoints`
+- Route operations: `splitPoints`, `fixMissingElevation`
 - Extensions: `addPointExtensions`, `flattenPointExtensions`, `getExtensions`, `addExtensions`
 
 #### Finding Function Placement
