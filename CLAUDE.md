@@ -184,7 +184,7 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 
 #### Function Translation Status (81/110 Complete)
 
-**✅ Translated Functions** (81):
+**✅ Translated Functions** (86):
 - Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`, `deltalngRadians`, `deltalng`
 - Distance/geometry: `latlngDistance`, `pointsAreClose`, `latlngDotProduct`, `crossProduct`, `latlngCrossProduct`, `turnDirection`, `latlngAngle`, `latlngDirection`, `pointDirection`, `latlng2dxdy`
 - Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToLatLng`, `addVectorToPoint`, `interpolateFields`
@@ -197,19 +197,20 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Point filtering: `isPointPrunable`, `simplifyPoints`
 - Speed modeling: `bikeSpeedModel`, `distanceDifference`, `pointSeparation`
 - Straightening: `straightenPoints`, `calcDeviationStats`, `autoStraighten`
+- Arc fitting: `checkRange`, `findArcs`, `fitArc`, `fitArcs`, `findAndFitArcs`
 - Field operations: `addDistanceField`, `addDistanceFieldIfNeeded`, `addGradientField`, `integrateGradientField`, `addDirectionField`, `addHeadingField`, `addCurvatureField`, `calcCourseDistance`
 - Data management: `deleteField`, `deleteExtensionField`, `deleteField2`, `deleteDerivedFields`
 - Route operations: `reversePoints`, `cropPoints`, `UTurnCheck`, `makeLoop`
 - Quality: `calcQualityScore`
 - Utilities: `note`
 
-**❌ Not Yet Translated** (29):
+**❌ Not Yet Translated** (24):
 - File operations: `setFileNameSuffix`, `loadURL`, `loadGPX`, `loadBTRoute`
 - Point utilities: `points2String`, `checkForUndefinedPoints`, `copyPoint`, `copyField`, `createLinks`, `linkedListToPoints`, `isPointInInterval`
 - Geometry: `splicePoints`, `pointAtPosition`, `bracketPosition`, `fieldAtPosition`, `fitCircle`, `processCircle`
 - Climbing analysis: `climbRating`, `findClimbs`, `placeGradientSigns`, `findCorners`, `addCornerWaypoints`
 - Auto segments: `addAutoSegments`
-- Straightening: `processStraight`, `checkRange`, `findArcs`, `fitArc`, `fitArcs`, `findAndFitArcs`
+- Straightening: `processStraight`
 - Circuit operations: `circuitFromPosition`, `shiftCircuit`, `calcSeparation`
 - Spacing: `applySelectiveSpacing`, `applyUniformGradient`
 - Time: `addDuration`, `distanceAtDuration`, `addTime`

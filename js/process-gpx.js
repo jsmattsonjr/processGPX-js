@@ -2120,6 +2120,397 @@ function applyLaneShift(points, isLoop) {
 	return pNew;
 }
 
+// checkRange: check if point i is within the specified distance range
+function checkRange(points, start, end, i) {
+	addDistanceFieldIfNeeded(points);
+
+	if (start !== undefined && end !== undefined && end < start) {
+		return points[i].distance >= start || points[i].distance <= end;
+	}
+	return (
+		(start === undefined || points[i].distance >= start) &&
+		(end === undefined || points[i].distance <= end)
+	);
+}
+
+// findArcs: look for sections of the route which can be replaced with circular arcs
+function findArcs(
+	points,
+	isLoop = 0,
+	minAngle = PI / 4,
+	minRadius = 10,
+	maxRadius = 100,
+	courseDistance,
+	start,
+	end,
+) {
+	const dMax = 10 + maxRadius * 2;
+	note("findArcs called...");
+
+	if (!isLoop && start !== undefined && end !== undefined && end <= start) {
+		return [];
+	}
+
+	if (isLoop && courseDistance === undefined) {
+		courseDistance = calcCourseDistance(points, isLoop);
+	}
+
+	// if it's a loop and last point matches first point, then remove it for now
+	let pLast;
+	if (isLoop && pointsAreClose(points[0], ix(points, -1))) {
+		pLast = points.pop();
+	}
+
+	// check that curvature is available
+	if (points[0].curvature === undefined) {
+		addCurvatureField(points, isLoop);
+	}
+	addDistanceFieldIfNeeded(points);
+
+	// netStats: calculate stats of curvature across range of points
+	function netStats(pts, iStart, iEnd) {
+		let cSum = 0;
+		let c2Sum = 0;
+		let cdSum = 0;
+		let dSum = 0;
+		let d2Sum = 0;
+		let dTot = 0;
+		let i = iStart;
+		let N = 0;
+		while (i !== iEnd) {
+			const j = (i + 1) % pts.length;
+			const d = distanceDifference(pts[i], pts[j], courseDistance, isLoop);
+			cSum += ((pts[i].curvature + pts[j].curvature) * d) / 2;
+			c2Sum +=
+				((pts[i].curvature ** 2 + pts[j].curvature ** 2) * d) / 2;
+			cdSum +=
+				((dTot * pts[i].curvature + (dTot + d) * pts[j].curvature) *
+					d) /
+				2;
+			dSum += (dSum + d / 2) * d;
+			dTot += d;
+			d2Sum += ((dTot ** 2 + (dTot + d) ** 2) * d) / 2;
+			N++;
+			i = j;
+		}
+		if (dTot <= 0) {
+			return {
+				distance: dTot,
+				angle: cSum,
+				mean: 0,
+				slope: 0,
+				var: 0,
+				sigma: 0,
+			};
+		}
+		let variance = c2Sum / dTot - (cSum / dTot) ** 2;
+		if (N > 1) variance /= 1 - 1 / N;
+		const mean = cSum / dTot;
+		const sigma = variance < 0 ? 0 : Math.sqrt(variance);
+		const slope =
+			(dTot * cdSum - dSum * cSum) / (dTot * d2Sum - dSum ** 2);
+		return {
+			distance: dTot,
+			angle: cSum,
+			mean: mean,
+			slope: slope,
+			var: variance,
+			sigma: sigma,
+		};
+	}
+
+	// find regions of continuous, relatively constant radius
+	const cMin = 0.5 / maxRadius;
+	let j = 0;
+	const arcs = [];
+
+	while (j <= maxIndex(points)) {
+		let i = j;
+
+		// first point in possible arc
+		while (Math.abs(points[i].curvature) < cMin && i < maxIndex(points)) {
+			i++;
+		}
+		// last point in possible arc
+		j = i + 1;
+
+		// make sure points are in range
+		if (
+			!checkRange(points, start, end, i) ||
+			!checkRange(points, start, end, j)
+		) {
+			j++;
+			continue;
+		}
+
+		// increment j to the first failed point
+		while (
+			j <= maxIndex(points) &&
+			Math.abs(points[j].curvature) > cMin &&
+			Math.sign(points[i].curvature) === Math.sign(points[j].curvature) &&
+			distanceDifference(
+				points[j - 1],
+				points[j],
+				isLoop,
+				courseDistance,
+			) < dMax &&
+			checkRange(points, start, end, j)
+		) {
+			j++;
+		}
+
+		j = ((j - 1) % points.length + points.length) % points.length;
+
+		// if i = j, then we want to jump two points ahead
+		if (i === j) {
+			i += 2;
+			j += 2;
+			continue;
+		}
+
+		let stats = netStats(points, i, j);
+		const i0 = i;
+		const j0 = j;
+
+		// prune points at beginning and end at sufficiently more or less than mean
+		const mean0 = stats.mean;
+		while (
+			(i + 1) % points.length !== j &&
+			Math.abs(points[i].curvature - mean0) > Math.abs(0.5 * mean0)
+		) {
+			i = (i + 1) % points.length;
+		}
+		while (
+			((j - 1) % points.length + points.length) % points.length !== i &&
+			Math.abs(points[j].curvature - mean0) > Math.abs(0.5 * mean0)
+		) {
+			j = ((j - 1) % points.length + points.length) % points.length;
+		}
+
+		if (j === i) {
+			j = i + 2;
+			continue;
+		}
+
+		// update stats
+		if (i !== i0 || j !== j0) {
+			stats = netStats(points, i, j);
+		}
+
+		// check if angle is sufficient
+		const angle = stats.angle;
+		if (Math.abs(angle) < minAngle) {
+			j = j + 2;
+			continue;
+		}
+
+		// check if curvature is sufficiently uniform
+		const sigma = stats.sigma;
+		const mean = stats.mean;
+		const slope = stats.slope;
+		const distance = stats.distance;
+
+		if (
+			!(
+				Math.abs(slope * distance) > Math.abs(mean) / 3 ||
+				sigma > Math.abs(mean) / 3
+			)
+		) {
+			note(`arc found from points ${i} to ${j}`);
+			let d = j - i;
+			d -= Math.floor(d / points.length);
+			if (d > 1) {
+				arcs.push([i, j]);
+			}
+		}
+		j = j + 2;
+	}
+
+	if (pLast !== undefined) {
+		points.push(pLast);
+	}
+	note(`number of arcs found = ${arcs.length}`);
+	return arcs;
+}
+
+// fitArc: replace points with circular arc
+function fitArc(points, dTheta = 15 * DEG2RAD, dMax = 2, uniformGradient = 0) {
+	// we need at least 3 points to fit an arc
+	if (points.length <= 2) return undefined;
+
+	const N = points.length;
+	const ia = 0;
+	let ib = Math.round(N / 3);
+	if (ib === ia) ib = 1;
+	let ic = Math.round((2 * N) / 3);
+	if (ic === ib) ic = ib + 1;
+	const id = N - 1;
+	let i0 = ia;
+	let i1 = ib;
+	let i2 = ic;
+
+	const xys = [[0, 0]];
+	// convert points to (x, y)
+	for (let i = 1; i < points.length; i++) {
+		xys.push(latlng2dxdy(points[0], points[i]));
+	}
+
+	const xy0s = [];
+	const rs = [];
+	while (i0 !== ib && i1 !== ic && i2 !== id) {
+		const xy1 = xys[i0];
+		const xy2 = xys[i1];
+		const xy3 = xys[i2];
+		const [xy0, r] = circle3PointFit(xy1, xy2, xy3);
+		if (r !== undefined && xy0 !== undefined) {
+			rs.push(r);
+			xy0s.push(xy0);
+		}
+		i0++;
+		i1++;
+		i2++;
+	}
+	if (rs.length === 0) return undefined;
+
+	// check for outliers
+	let rSum = 0;
+	for (const r of rs) {
+		rSum += r;
+	}
+	const rMean = rSum / rs.length;
+	let xSum = 0;
+	let ySum = 0;
+	let nSum = 0;
+	for (let i = 0; i < rs.length; i++) {
+		if (rs[i] < 2 * rMean) {
+			xSum += xy0s[i][0];
+			ySum += xy0s[i][1];
+			nSum++;
+		}
+	}
+	const xyC = [xSum / nSum, ySum / nSum];
+
+	// check radii
+	const rPoints = [];
+	for (const xy of xys) {
+		const rPoint = Math.sqrt(
+			(xy[0] - xyC[0]) ** 2 + (xy[1] - xyC[1]) ** 2,
+		);
+		if (Math.abs(rPoint - rMean) > dMax) return undefined;
+		rPoints.push(rPoint);
+	}
+	const rStart = rPoints[0];
+	const rEnd = rPoints[rPoints.length - 1];
+
+	// convert the points using same theta, interpolating if needed
+	const theta0 = Math.atan2(xys[0][1] - xyC[1], xys[0][0] - xyC[0]);
+	const thetas = [theta0];
+
+	const pFits = [];
+	for (let i = 1; i < xys.length; i++) {
+		const theta = Math.atan2(xys[i][1] - xyC[1], xys[i][0] - xyC[0]);
+		const dTheta2 = deltaAngle(thetas[thetas.length - 1], theta, theta);
+		thetas.push(thetas[thetas.length - 1] + dTheta2);
+	}
+
+	const z0 = points[0].ele;
+	const zf = points[points.length - 1].ele;
+	for (let i = 1; i < xys.length; i++) {
+		const deltaTheta2 = thetas[i] - thetas[i - 1];
+		const NPoints = 1 + Math.round(Math.abs(deltaTheta2 / dTheta));
+		const j0 = pFits.length === 0 ? 0 : 1;
+		const lat0 = points[0].lat;
+		const lng0 = points[0].lon;
+		const latlng0 = [lat0, lng0];
+		for (let jj = j0; jj <= NPoints; jj++) {
+			const theta =
+				(thetas[i - 1] * (NPoints - jj) + thetas[i] * jj) / NPoints;
+			const f = jj / NPoints;
+			const fTheta =
+				(theta - thetas[0]) / (thetas[thetas.length - 1] - thetas[0]);
+			const r = rStart * (1 - fTheta) + rEnd * fTheta;
+			const x = xyC[0] + r * Math.cos(theta);
+			const y = xyC[1] + r * Math.sin(theta);
+			const latlng = addVectorToLatLng(latlng0, [x, y]);
+			const p = interpolatePoint(points[i - 1], points[i], f);
+			p.lat = latlng[0];
+			p.lon = latlng[1];
+			if (uniformGradient) {
+				p.ele = z0 * (1 - fTheta) + zf * fTheta;
+			}
+			pFits.push(p);
+		}
+	}
+	return pFits;
+}
+
+// fitArcs: replace ranges of points with circular arcs
+function fitArcs(points, arcs = [], isLoop = 0, dTheta, dMax, uniformGradient) {
+	if (!points.length || !arcs.length) return points;
+
+	const pNew = [];
+	let i0 = 0;
+
+	for (const arc of arcs) {
+		const i1 = arc[0];
+		const i2 = arc[1];
+		let arcPoints;
+		if (i2 >= i1) {
+			arcPoints = points.slice(i1, i2 + 1);
+		} else {
+			arcPoints = [...points.slice(i1), ...points.slice(0, i2 + 1)];
+		}
+		const fitPoints = fitArc(arcPoints, dTheta, dMax, uniformGradient);
+		if (fitPoints !== undefined && fitPoints.length > 0) {
+			pNew.push(...points.slice(i0, i1));
+			pNew.push(...fitPoints);
+			i0 = i2 + 1;
+
+			// wrap around special case
+			if (isLoop && arc[1] < arc[0]) {
+				const pStart = pNew.pop();
+				// remove points at start of loop
+				for (let i = 1; i <= arc[1]; i++) {
+					pNew.shift();
+				}
+				// shift points while they get closer to original start point
+				while (
+					latlngDistance(ix(pNew, -1), pStart) <
+					latlngDistance(pNew[0], pStart)
+				) {
+					pNew.unshift(pNew.pop());
+				}
+			}
+		}
+
+		deleteDerivedFields(pNew);
+	}
+	pNew.push(...points.slice(i0));
+	return pNew;
+}
+
+// findAndFitArcs: find arcs and fit them
+function findAndFitArcs(
+	points,
+	isLoop = 0,
+	fitArcsRadians,
+	fitArcsDMax,
+	fitArcsUniformGradient,
+	start,
+	end,
+) {
+	const arcs = findArcs(points, isLoop, undefined, undefined, undefined, undefined, start, end);
+	const pNew = fitArcs(
+		points,
+		arcs,
+		isLoop,
+		fitArcsRadians,
+		fitArcsDMax,
+		fitArcsUniformGradient,
+	);
+	return pNew;
+}
+
 /**
  * Smoothing function that applies Gaussian smoothing to specified fields
  * @param {Array} points - Array of points to smooth
@@ -4665,6 +5056,16 @@ export function processGPX(trackFeature, options = {}) {
 			options.cornerCrop = 6;
 			note(`setting -cornerCrop ${options.cornerCrop} meters...`);
 		}
+
+		if (options.fitArcs === undefined) {
+			note("setting -fitArcs ...");
+			options.fitArcs = 1;
+		}
+
+		if (options.splineInterpolation === undefined) {
+			note("setting -splineInterpolation ...");
+			options.splineInterpolation = 1;
+		}
 	}
 
 	// Set default values for options that are still undefined
@@ -4701,13 +5102,28 @@ export function processGPX(trackFeature, options = {}) {
 	}
 
 	// Convert angle options to radians
-	options.splineDegs = options.splineDegs ?? 0;
+	options.splineInterpolation =
+		options.splineInterpolation ??
+		(options.splineStart !== undefined || options.splineEnd !== undefined
+			? 1
+			: 0);
+	options.splineDegs =
+		options.splineDegs ?? (options.splineInterpolation ? 5 : 0);
 	const _splineRadians = options.splineDegs * DEG2RAD;
 	const _splineMaxRadians = options.splineMaxDegs * DEG2RAD;
 
 	options.arcFitDegs = options.arcFitDegs ?? 0;
 	const arcFitRadians = options.arcFitDegs * DEG2RAD;
 	const arcFitMaxRadians = options.arcFitMaxDegs * DEG2RAD;
+
+	const fitArcsRadians = options.fitArcsDegs
+		? options.fitArcsDegs * DEG2RAD
+		: undefined;
+	options.fitArcs =
+		options.fitArcs ??
+		(options.fitArcsStart !== undefined || options.fitArcsEnd !== undefined
+			? 1
+			: 0);
 
 	// Check if loop specified for apparent point-to-point
 	if (options.isLoop) {
@@ -4853,6 +5269,21 @@ export function processGPX(trackFeature, options = {}) {
 			options.spacing || 0,
 		);
 		dumpPoints(points, "14-js-snapped-pass-1.txt");
+	}
+
+	// fitArcs in corners (this is different than "arcFit")
+	if (options.fitArcs) {
+		note("fitting arcs in corners...");
+		points = findAndFitArcs(
+			points,
+			options.isLoop || 0,
+			fitArcsRadians,
+			options.fitArcsDMax,
+			options.fitArcsUniformGradient,
+			options.fitArcsStart,
+			options.fitArcsEnd,
+		);
+		dumpPoints(points, "14b-js-fit-arcs.txt");
 	}
 
 	// spline of corners
