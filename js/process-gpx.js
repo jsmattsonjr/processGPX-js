@@ -2444,6 +2444,7 @@ function snapPoints(
 	snapAltitude = 1,
 	snapTransition = 0,
 	spacing = 0,
+	isLoop = 0,
 ) {
 	if (!points.length) return points;
 
@@ -2460,8 +2461,8 @@ function snapPoints(
 	}
 
 	// On large courses, since initial search is O(N-squared), step thru multiple points, then refine
-	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2
-	const snapStep = 2 + int(points.length / 200);
+	// Snap step 1 has a potential bug (infinite loop) so lower bound is 2. /1000 works better in tests
+	const snapStep = 2 + int(points.length / 1000);
 
 	// Maximum range at which we check for snapping...
 	// so if colinear points are spaced more than twice this, we may miss snapping onto that interval
