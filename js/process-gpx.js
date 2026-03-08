@@ -3228,7 +3228,7 @@ function simplifyPoints(points, z0 = 0.1, r0 = 1) {
  * @param {number} v0 - Base speed (m/s), default 9.5
  * @returns {number} Speed in m/s
  */
-function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.52, v0 = 9.5) {
+function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.53, v0 = 9.5) {
 	// convert g to sine
 	g /= Math.sqrt(1 + g ** 2);
 	const a = vMax / VAMMax;
