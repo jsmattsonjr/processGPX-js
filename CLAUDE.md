@@ -188,9 +188,9 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Check if dependencies are already translated
 - Find the correct placement for new translations
 
-#### Function Translation Status (81/110 Complete)
+#### Function Translation Status (77/117 Complete)
 
-**✅ Translated Functions** (86):
+**✅ Translated Functions** (77):
 - Basic math: `transition`, `reduceAngle`, `averageAngles`, `deltaAngle`, `deltaxy`, `deltalngRadians`, `deltalng`
 - Distance/geometry: `latlngDistance`, `pointsAreClose`, `latlngDotProduct`, `crossProduct`, `latlngCrossProduct`, `turnDirection`, `latlngAngle`, `latlngDirection`, `pointDirection`, `latlng2dxdy`
 - Point operations: `shiftPoint`, `shiftVertex`, `interpolatePoint`, `interpolateCorner`, `addVectorToLatLng`, `addVectorToPoint`, `interpolateFields`
@@ -210,7 +210,7 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Quality: `calcQualityScore`
 - Utilities: `note`
 
-**❌ Not Yet Translated** (24):
+**❌ Not Yet Translated** (40):
 - File operations: `setFileNameSuffix`, `loadURL`, `loadGPX`, `loadBTRoute`
 - Point utilities: `points2String`, `checkForUndefinedPoints`, `copyPoint`, `copyField`, `createLinks`, `linkedListToPoints`, `isPointInInterval`
 - Geometry: `splicePoints`, `pointAtPosition`, `bracketPosition`, `fieldAtPosition`, `fitCircle`, `processCircle`

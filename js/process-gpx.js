@@ -185,6 +185,24 @@ function isNumeric(value) {
 // MAIN FUNCTIONS IN PERL ORDER
 // ============================================================================
 
+// TODO: Translate loadURL() from Perl
+
+// TODO: Translate loadGPX() from Perl
+
+// TODO: Translate loadBTRoute() from Perl
+
+// TODO: Translate points2String() from Perl
+
+// TODO: Translate checkForUndefinedPoints() from Perl
+
+// TODO: Translate copyPoint() from Perl
+
+// TODO: Translate copyField() from Perl
+
+// TODO: Translate createLinks() from Perl
+
+// TODO: Translate linkedListToPoints() from Perl
+
 /**
  * Transition function: 1 (x = -1) to 1/2 (x = 0) to 0 (x = 1)
  * @param {number} x - Input value
@@ -193,6 +211,8 @@ function isNumeric(value) {
 function transition(x) {
 	return x < -1 ? 1 : x > 1 ? 0 : (1 - Math.sin(x * PI2)) / 2;
 }
+
+// TODO: Translate isPointInInterval() from Perl
 
 // TODO: Translate setFileNameSuffix() from Perl
 
@@ -503,6 +523,8 @@ function latlng2dxdy(p1, p2) {
 	return [dx, dy];
 }
 
+// TODO: Translate splicePoints() from Perl
+
 /**
  * For a range of points, interpolate the fields based on distance between
  * the first and last point.
@@ -592,6 +614,10 @@ function interpolatePoint(p1, p2, f, courseDistance = 0, isLoop = 0) {
 }
 
 // TODO: Translate pointAtPosition() from Perl
+
+// TODO: Translate bracketPosition() from Perl
+
+// TODO: Translate fieldAtPosition() from Perl
 
 /**
  * Catmull-Rom spline interpolation for corners.
@@ -1843,6 +1869,8 @@ function fixZigZags(points, isLoop = false, verbose = 1) {
  * @param {number} isLoop - Whether route is a loop
  * @returns {Array} Points with fixed altitude steps
  */
+// TODO: Translate fixMissingElevation() from Perl
+
 function fixSteps(points, isLoop = 0) {
 	const courseDistance = calcCourseDistance(points, isLoop);
 	let stepCount = 0;
@@ -3619,6 +3647,10 @@ function simplifyPoints(points, z0 = 0.1, r0 = 1) {
  * @param {number} v0 - Base speed (m/s), default 9.5
  * @returns {number} Speed in m/s
  */
+// TODO: Translate applySelectiveSpacing() from Perl
+
+// TODO: Translate applyUniformGradient() from Perl
+
 function bikeSpeedModel(g = 0, vMax = 17, VAMMax = 0.53, v0 = 9.5) {
 	// convert g to sine
 	g /= Math.sqrt(1 + g ** 2);
@@ -3680,6 +3712,12 @@ function pointSeparation(p1, p2, courseDistance, isLoop) {
 	return Math.abs(d);
 }
 
+// TODO: Translate addDuration() from Perl
+
+// TODO: Translate distanceAtDuration() from Perl
+
+// TODO: Translate addTime() from Perl
+
 // TODO: Translate climbRating() from Perl
 
 // TODO: Translate addAutoSegments() from Perl
@@ -3687,6 +3725,10 @@ function pointSeparation(p1, p2, courseDistance, isLoop) {
 // TODO: Translate findClimbs() from Perl
 
 // TODO: Translate placeGradientSigns() from Perl
+
+// TODO: Translate findCorners() from Perl
+
+// TODO: Translate addCornerWaypoints() from Perl
 
 /**
  * Fit a circle through three points
@@ -3967,6 +4009,8 @@ function autoStraighten(
 // TODO: Translate circuitFromPosition() from Perl
 
 // TODO: Translate shiftCircuit() from Perl
+
+// TODO: Translate calcSeparation() from Perl
 
 // TODO: Translate simplifyProfile() from Perl
 
