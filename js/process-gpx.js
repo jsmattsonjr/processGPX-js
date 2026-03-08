@@ -3240,16 +3240,17 @@ function circle3PointFit(p1, p2, p3) {
  */
 function straightenPoints(points, _isLoop, startIndex, endIndex) {
 	// Ensure distance field exists
-	if (points[0].distance === undefined) {
-		addDistanceField(points);
-	}
+	addDistanceFieldIfNeeded(points);
 
 	// If we wrap around, then use a negative number for the start index
 	if (startIndex > endIndex) {
 		startIndex -= points.length;
 	}
 
-	const [rx, ry] = latlng2dxdy(points[startIndex], points[endIndex]);
+	const [rx, ry] = latlng2dxdy(
+		points[startIndex],
+		points[endIndex % points.length],
+	);
 
 	// If neither rx nor ry is nonzero, do nothing
 	if (rx === 0 && ry === 0) {
@@ -3260,13 +3261,14 @@ function straightenPoints(points, _isLoop, startIndex, endIndex) {
 
 	// For each point, find the projection of the point on the segment
 	for (let i = startIndex + 1; i <= endIndex - 1; i++) {
-		const [dx, dy] = latlng2dxdy(points[startIndex], points[i]);
+		const j = i % points.length;
+		const [dx, dy] = latlng2dxdy(points[startIndex], points[j]);
 		// Find the projection onto the line
 		// projection: r dot rLine / r
 		const f = (dx * rx + dy * ry) / r2;
 		const pNew = addVectorToPoint(points[startIndex], [rx * f, ry * f]);
-		points[i].lat = pNew.lat;
-		points[i].lon = pNew.lon;
+		points[j].lat = pNew.lat;
+		points[j].lon = pNew.lon;
 	}
 }
 
@@ -3329,7 +3331,12 @@ function calcDeviationStats(points, startIndex, endIndex) {
  * @param {number} minLength - Minimum length for straightening
  * @param {number} maxDeviation - Maximum deviation for straightening
  */
-function autoStraighten(points, isLoop, minLength, maxDeviation) {
+function autoStraighten(
+	points,
+	isLoop,
+	minLength = 100,
+	maxDeviation = 3,
+) {
 	const courseDistance =
 		points[0].distance !== undefined
 			? calcCourseDistance(points, isLoop)
@@ -3354,7 +3361,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 		// Keep point j ahead of i at min distance
 		while (
 			j < i + 2 ||
-			points[j].distance +
+			points[j % points.length].distance +
 				int(j / points.length) * courseDistance -
 				points[i].distance <
 				minLength
@@ -3425,7 +3432,7 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 			if (L3 > minLength) {
 				const [avg3, max3, rms3] = calcDeviationStats(points, k, j);
 				if (rms3 * L < rms * L3) {
-					j = k;
+					i = k;
 					L = L3;
 					_avg = avg3;
 					_max = max3;
@@ -3450,6 +3457,12 @@ function autoStraighten(points, isLoop, minLength, maxDeviation) {
 	if (pointCount > 0) {
 		note(`autoStraighten: total straightened points = ${pointCount}`);
 		deleteField(points, "distance");
+		if (points[0].curvature !== undefined) {
+			deleteField(points, "curvature");
+		}
+		if (points[0].direction !== undefined) {
+			deleteField(points, "direction");
+		}
 		if (points[0].heading !== undefined) {
 			deleteField(points, "heading");
 		}
