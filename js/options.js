@@ -37,11 +37,6 @@ export const defaultOptions = {
 
 	// Output settings
 	csv: 0,
-	disableElevationFixes: 1,
-	disableAdvancedSmoothing: 1,
-	enableElevationFixes: 0,
-	enableAdvancedSmoothing: 0,
-
 	// Circuit settings
 	finishCircuits: 0,
 	finishCircuitDistance: -1,

@@ -224,6 +224,33 @@ The JavaScript functions in `js/process-gpx.js` are organized to exactly match t
 - Route operations: `splitPoints`, `fixMissingElevation`
 - Extensions: `addPointExtensions`, `flattenPointExtensions`, `getExtensions`, `addExtensions`
 
+#### Missing CLI Options (Perl options not yet in JS)
+
+These Perl command-line options have no equivalent in the JavaScript CLI (`process-cli.js`):
+
+**Missing functionality** (require untranslated functions or unimplemented pipeline steps):
+- `addCornerWaypoints` (boolean) - Add waypoints at detected corners; depends on untranslated `addCornerWaypoints()`
+- `addGradientWaypoints` (boolean) - Add waypoints at gradient changes; depends on untranslated `placeGradientSigns()`
+- `arcInterpolation` (boolean) - Enable arc interpolation via `addSplines()` with splineType "arcFit"
+- `arcInterpolationMaxRatio` (number) - Max ratio of element lengths for arc interpolation
+- `cornerCropArcFit` (boolean) - Arc fitting variant for corner cropping
+- `curvatureSmoothing` (number) - Curvature-based smoothing radius
+- `curvatureThreshold` (number) - Curvature threshold for smoothing
+- `fixSteps` (boolean) - Fix elevation step artifacts; function is translated but CLI option is missing
+- `repeatedLaps` (number) - Number of repeated laps
+- `RGT2BT` (boolean) - RGT to BikeTerra format conversion
+- `selectiveSpacing` (array) - Selective spacing; depends on untranslated `applySelectiveSpacing()`
+- `splice` (array) - Track splicing paths; depends on untranslated `splicePoints()`
+- `spliceDistance` (number) - Track splice distance tolerance
+- `timeSplits` (number) - Time-based split markers
+- `uniformGradient` (array) - Apply uniform gradient to ranges; depends on untranslated `applyUniformGradient()`
+
+**Missing aliases** (functionality exists under a different name):
+- `addHeading` → JS has `addDirection` (alias exists)
+- `align`/`alignAltitude`/`alignDistance`/`alignTransition`/`alignZ` → JS has `snap`/`snapAltitude`/`snapDistance`/`snapTransition`
+- `maxCornerCropAngle`/`minCornerCropAngle` → JS has `maxCornerCropDegs`/`minCornerCropDegs`
+- `splineAngle`/`splineMaxAngle` → JS has `splineDegs`/`splineMaxDegs`
+
 #### Finding Function Placement
 
 When translating a new Perl function:
