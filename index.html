@@ -4,14 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>processGPX - GPX Route Processing</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="uploadScreen" class="upload-screen">
     <div class="upload-content">
       <h1 class="app-title">processGPX</h1>
-      <p class="app-subtitle">Upload, inspect, process and export GPX routes</p>
+      <p class="app-subtitle">
+        Upload, inspect, process and export GPX routes
+      </p>
 
       <div id="dropZone" class="file-upload-area drop-zone">
         <input type="file" id="gpxFile" accept=".gpx" hidden />
@@ -24,8 +30,13 @@
         <div class="drop-zone-hint">Drag &amp; drop supported</div>
 
         <div id="selectedFileInfo" class="selected-file-info hidden">
-          <div><strong>Selected file:</strong> <span id="selectedFileName">-</span></div>
-          <button id="replaceFileBtn" type="button" class="secondary-button">Replace file</button>
+          <div>
+            <strong>Selected file:</strong>
+            <span id="selectedFileName">-</span>
+          </div>
+          <button id="replaceFileBtn" type="button" class="secondary-button">
+            Replace file
+          </button>
         </div>
       </div>
     </div>
@@ -36,12 +47,16 @@
       <div class="left-panel">
         <div class="split-container">
           <section class="map-pane panel-card">
-            <div class="panel-header"><h2>Route Map</h2></div>
+            <div class="panel-header">
+              <h2>Route Map</h2>
+            </div>
             <div id="map"></div>
           </section>
 
           <section class="elevation-pane panel-card">
-            <div class="panel-header"><h2>Elevation Profile</h2></div>
+            <div class="panel-header">
+              <h2>Elevation Profile</h2>
+            </div>
             <div class="elevation-content">
               <div id="elevationProfile" class="elevation-chart"></div>
             </div>
@@ -53,95 +68,307 @@
         <div class="sidebar-content">
           <section class="sidebar-section track-summary-card">
             <h2 id="trackName" class="track-name">Unnamed Track</h2>
+
             <div class="track-summary">
-              <div class="summary-row"><span class="summary-label">Distance</span><span id="trackDistance" class="summary-value">-</span></div>
-              <div class="summary-row"><span class="summary-label">Elevation gain</span><span id="trackElevation" class="summary-value">-</span></div>
-              <div class="summary-row"><span class="summary-label">Points</span><span id="trackPoints" class="summary-value">-</span></div>
-              <div class="summary-row"><span class="summary-label">Loop</span><span id="trackIsLoop" class="summary-value">-</span></div>
-              <div class="summary-row"><span class="summary-label">Segments</span><span id="trackSegments" class="summary-value">-</span></div>
-              <div class="summary-row"><span class="summary-label">Climbs</span><span id="trackClimbs" class="summary-value">-</span></div>
+              <div class="summary-row">
+                <span class="summary-label">Distance</span>
+                <span id="trackDistance" class="summary-value">-</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="summary-label">Elevation gain</span>
+                <span id="trackElevation" class="summary-value">-</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="summary-label">Points</span>
+                <span id="trackPoints" class="summary-value">-</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="summary-label">Loop</span>
+                <span id="trackIsLoop" class="summary-value">-</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="summary-label">Segments</span>
+                <span id="trackSegments" class="summary-value">-</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="summary-label">Climbs</span>
+                <span id="trackClimbs" class="summary-value">-</span>
+              </div>
             </div>
           </section>
 
           <section class="sidebar-section">
-            <h3 class="section-title">File</h3>
-            <div class="button-row">
-              <button id="loadAnotherFileBtn" type="button" class="secondary-button">Load another GPX</button>
-            </div>
-          </section>
-
-          <section class="sidebar-section options-section">
-            <h3 class="section-title">Processing</h3>
-            <div class="option-item"><input type="checkbox" id="flattenExtensionsOption" /><label for="flattenExtensionsOption">Flatten point extensions</label></div>
-            <div class="option-item"><input type="checkbox" id="addPointExtensionsOption" /><label for="addPointExtensionsOption">Write computed fields to GPX extensions</label></div>
-            <div class="option-item"><input type="checkbox" id="simplifyProfileOption" /><label for="simplifyProfileOption">Simplify profile</label></div>
-            <div class="option-grid">
-              <div class="field-group"><label for="gradientPowerInput">Gradient power</label><input type="number" id="gradientPowerInput" min="1" step="0.1" value="2" /></div>
-              <div class="field-group"><label for="thresholdInput">Threshold</label><input type="number" id="thresholdInput" min="0" step="1" value="100" /></div>
-            </div>
-          </section>
-
-          <section class="sidebar-section options-section">
-            <h3 class="section-title">Climbs &amp; Signs</h3>
-            <div class="option-item"><input type="checkbox" id="autoSegmentsOption" /><label for="autoSegmentsOption">Add auto climb segments</label></div>
-            <div class="option-item"><input type="checkbox" id="gradientSignsOption" /><label for="gradientSignsOption">Place gradient signs</label></div>
-            <div class="option-grid">
-              <div class="field-group"><label for="marginInput">Segment margin (m)</label><input type="number" id="marginInput" min="0" step="1" value="400" /></div>
-              <div class="field-group"><label for="stretchInput">Stretch</label><input type="number" id="stretchInput" min="0" step="0.01" value="0.15" /></div>
-              <div class="field-group"><label for="startMarginInput">Start margin (m)</label><input type="number" id="startMarginInput" min="0" step="1" value="0" /></div>
-              <div class="field-group"><label for="finishMarginInput">Finish margin (m)</label><input type="number" id="finishMarginInput" min="0" step="1" value="0" /></div>
-            </div>
-          </section>
-
-          <section class="sidebar-section options-section">
-            <h3 class="section-title">Route Editing</h3>
-            <div class="option-item"><input type="checkbox" id="straightOption" /><label for="straightOption">Apply straight sections</label></div>
-            <div class="option-grid">
-              <div class="field-group"><label for="straightStartInput">Straight start (m)</label><input type="number" id="straightStartInput" min="0" step="1" placeholder="e.g. 1000" /></div>
-              <div class="field-group"><label for="straightEndInput">Straight end (m)</label><input type="number" id="straightEndInput" min="0" step="1" placeholder="e.g. 1400" /></div>
+            <div class="section-head">
+              <h3 class="section-title">File</h3>
+              <p class="section-subtitle">
+                Load a new route or compare against the original file.
+              </p>
             </div>
 
-            <div class="option-item option-divider"><input type="checkbox" id="circleOption" /><label for="circleOption">Fit circular section</label></div>
-            <div class="option-grid">
-              <div class="field-group"><label for="circleStartInput">Circle start (m)</label><input type="number" id="circleStartInput" min="0" step="1" placeholder="e.g. 2200" /></div>
-              <div class="field-group"><label for="circleEndInput">Circle end (m)</label><input type="number" id="circleEndInput" min="0" step="1" placeholder="e.g. 2600" /></div>
-            </div>
-          </section>
-
-          <section class="sidebar-section options-section">
-            <h3 class="section-title">Circuits &amp; Splits</h3>
-            <div class="option-item"><input type="checkbox" id="circuitFromPositionOption" /><label for="circuitFromPositionOption">Create circuit from position</label></div>
-            <div class="option-grid">
-              <div class="field-group"><label for="circuitPositionInput">Position (m)</label><input type="number" id="circuitPositionInput" min="0" step="1" value="0" /></div>
-              <div class="field-group"><label for="circuitRepeatsInput">Repeats</label><input type="number" id="circuitRepeatsInput" min="1" step="1" value="1" /></div>
-              <div class="field-group"><label for="circuitsInput">Circuits</label><input type="number" id="circuitsInput" min="0" step="1" value="1" /></div>
-            </div>
-
-            <div class="option-item option-divider"><input type="checkbox" id="splitRouteOption" /><label for="splitRouteOption">Create splits</label></div>
-            <div class="option-grid">
-              <div class="field-group field-group-full"><label for="splitDistanceInput">Split distances (comma separated, m)</label><input type="text" id="splitDistanceInput" placeholder="e.g. 5000,10000,15000" /></div>
-              <div class="field-group"><label for="startZoneInput">Start zone (m)</label><input type="number" id="startZoneInput" min="0" step="1" value="0" /></div>
-              <div class="field-group"><label for="finishZoneInput">Finish zone (m)</label><input type="number" id="finishZoneInput" min="0" step="1" value="0" /></div>
-              <div class="field-group"><label for="minSplitLengthInput">Min split length (m)</label><input type="number" id="minSplitLengthInput" min="0" step="1" value="10" /></div>
-              <div class="field-group"><label for="splitNumberInput">Split number</label><input type="number" id="splitNumberInput" min="0" step="1" value="0" /></div>
-            </div>
-          </section>
-
-          <section class="sidebar-section options-section">
-            <h3 class="section-title">Export</h3>
-            <div class="option-item"><input type="checkbox" id="includeSegmentExtensionsOption" checked /><label for="includeSegmentExtensionsOption">Include segment extensions</label></div>
-            <div class="option-item"><input type="checkbox" id="includePointExtensionsOption" checked /><label for="includePointExtensionsOption">Include point extensions</label></div>
             <div class="button-column">
-              <button id="processGpxBtn" class="process-button">Process GPX</button>
-              <button id="exportGpxBtn" class="process-button disabled" disabled>Export processed GPX</button>
+              <button id="loadAnotherFileBtn" type="button" class="secondary-button">
+                Load another GPX
+              </button>
+
+              <button id="downloadOriginalGpxBtn" type="button" class="secondary-button">
+                Download original GPX
+              </button>
             </div>
           </section>
 
           <section class="sidebar-section options-section">
-            <h3 class="section-title">Developer</h3>
-            <div class="option-item"><input type="checkbox" id="debugLogsOption" /><label for="debugLogsOption">Enable debug logging</label></div>
-            <div class="option-item"><input type="checkbox" id="showWaypointsOption" /><label for="showWaypointsOption">Show generated waypoints</label></div>
-            <div class="option-item"><input type="checkbox" id="showSegmentsOption" /><label for="showSegmentsOption">Highlight segments on map</label></div>
+            <div class="section-head">
+              <h3 class="section-title">Processing</h3>
+              <p class="section-subtitle">
+                Core processing and profile preparation options.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="flattenExtensionsOption" />
+              <label for="flattenExtensionsOption">Flatten point extensions</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="addPointExtensionsOption" />
+              <label for="addPointExtensionsOption">Write computed fields to GPX extensions</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="simplifyProfileOption" />
+              <label for="simplifyProfileOption">Simplify profile</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="gradientPowerInput">Gradient power</label>
+                <input type="number" id="gradientPowerInput" min="1" step="0.1" value="2" />
+              </div>
+
+              <div class="field-group">
+                <label for="thresholdInput">Threshold</label>
+                <input type="number" id="thresholdInput" min="0" step="1" value="100" />
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <div class="section-head">
+              <h3 class="section-title">Climbs &amp; Signs</h3>
+              <p class="section-subtitle">
+                Automatic climb analysis, segment placement and gradient signs.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="autoSegmentsOption" />
+              <label for="autoSegmentsOption">Add auto climb segments</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="gradientSignsOption" />
+              <label for="gradientSignsOption">Place gradient signs</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="marginInput">Segment margin (m)</label>
+                <input type="number" id="marginInput" min="0" step="1" value="400" />
+              </div>
+
+              <div class="field-group">
+                <label for="stretchInput">Stretch</label>
+                <input type="number" id="stretchInput" min="0" step="0.01" value="0.15" />
+              </div>
+
+              <div class="field-group">
+                <label for="startMarginInput">Start margin (m)</label>
+                <input type="number" id="startMarginInput" min="0" step="1" value="0" />
+              </div>
+
+              <div class="field-group">
+                <label for="finishMarginInput">Finish margin (m)</label>
+                <input type="number" id="finishMarginInput" min="0" step="1" value="0" />
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <div class="section-head">
+              <h3 class="section-title">Route Editing</h3>
+              <p class="section-subtitle">
+                Straighten or circular-fit selected sections of the route.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="straightOption" />
+              <label for="straightOption">Apply straight sections</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="straightStartInput">Straight start (m)</label>
+                <input type="number" id="straightStartInput" min="0" step="1" placeholder="e.g. 1000" />
+              </div>
+
+              <div class="field-group">
+                <label for="straightEndInput">Straight end (m)</label>
+                <input type="number" id="straightEndInput" min="0" step="1" placeholder="e.g. 1400" />
+              </div>
+            </div>
+
+            <div class="option-item option-divider">
+              <input type="checkbox" id="circleOption" />
+              <label for="circleOption">Fit circular section</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="circleStartInput">Circle start (m)</label>
+                <input type="number" id="circleStartInput" min="0" step="1" placeholder="e.g. 2200" />
+              </div>
+
+              <div class="field-group">
+                <label for="circleEndInput">Circle end (m)</label>
+                <input type="number" id="circleEndInput" min="0" step="1" placeholder="e.g. 2600" />
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <div class="section-head">
+              <h3 class="section-title">Circuits &amp; Splits</h3>
+              <p class="section-subtitle">
+                Build circuits from a position or split the route into parts.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="circuitFromPositionOption" />
+              <label for="circuitFromPositionOption">Create circuit from position</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="circuitPositionInput">Position (m)</label>
+                <input type="number" id="circuitPositionInput" min="0" step="1" value="0" />
+              </div>
+
+              <div class="field-group">
+                <label for="circuitRepeatsInput">Repeats</label>
+                <input type="number" id="circuitRepeatsInput" min="1" step="1" value="1" />
+              </div>
+
+              <div class="field-group">
+                <label for="circuitsInput">Circuits</label>
+                <input type="number" id="circuitsInput" min="0" step="1" value="1" />
+              </div>
+            </div>
+
+            <div class="option-item option-divider">
+              <input type="checkbox" id="splitRouteOption" />
+              <label for="splitRouteOption">Create splits</label>
+            </div>
+
+            <div class="option-grid">
+              <div class="field-group">
+                <label for="splitDistanceInput">Split distances (comma separated, m)</label>
+                <input
+                  type="text"
+                  id="splitDistanceInput"
+                  placeholder="e.g. 5000,10000,15000"
+                />
+              </div>
+
+              <div class="field-group">
+                <label for="startZoneInput">Start zone (m)</label>
+                <input type="number" id="startZoneInput" min="0" step="1" value="0" />
+              </div>
+
+              <div class="field-group">
+                <label for="finishZoneInput">Finish zone (m)</label>
+                <input type="number" id="finishZoneInput" min="0" step="1" value="0" />
+              </div>
+
+              <div class="field-group">
+                <label for="minSplitLengthInput">Min split length (m)</label>
+                <input type="number" id="minSplitLengthInput" min="0" step="1" value="10" />
+              </div>
+
+              <div class="field-group">
+                <label for="splitNumberInput">Split number</label>
+                <input type="number" id="splitNumberInput" min="0" step="1" value="0" />
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <div class="section-head">
+              <h3 class="section-title">Export</h3>
+              <p class="section-subtitle">
+                Control how processed GPX data is written back out.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="includeSegmentExtensionsOption" checked />
+              <label for="includeSegmentExtensionsOption">Include segment extensions</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="includePointExtensionsOption" checked />
+              <label for="includePointExtensionsOption">Include point extensions</label>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <div class="section-head">
+              <h3 class="section-title">Developer</h3>
+              <p class="section-subtitle">
+                Visual debugging and map overlays for testers.
+              </p>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="debugLogsOption" />
+              <label for="debugLogsOption">Enable debug logging</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="showWaypointsOption" />
+              <label for="showWaypointsOption">Show generated waypoints</label>
+            </div>
+
+            <div class="option-item">
+              <input type="checkbox" id="showSegmentsOption" />
+              <label for="showSegmentsOption">Highlight segments on map</label>
+            </div>
+            
+            <div class="button-column" style="margin-top: 14px;">
+              <button id="openDebugWindowBtn" type="button" class="secondary-button">
+                Open Debug Panel
+              </button>
+            </div>
+          </section>
+
+          <section class="sticky-actions">
+            <div class="sidebar-section">
+              <div class="button-column">
+                <button id="processGpxBtn" class="process-button">
+                  Process GPX
+                </button>
+
+                <button id="exportGpxBtn" class="process-button disabled" disabled>
+                  Export processed GPX
+                </button>
+              </div>
+            </div>
           </section>
         </div>
       </aside>
@@ -159,7 +386,9 @@
     <div class="error-content">
       <h3>Error</h3>
       <p id="errorMessage"></p>
-      <div class="button-row"><button id="errorBackBtn" type="button">Back to Upload</button></div>
+      <div class="button-row">
+        <button id="errorBackBtn" type="button">Back to Upload</button>
+      </div>
     </div>
   </div>
 
