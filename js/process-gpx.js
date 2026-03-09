@@ -4068,8 +4068,232 @@ function addAutoSegments({
 
 // TODO: Translate findClimbs() from Perl
 
+/**
+ * Find route portions which qualify as climbs according to the climb rating algorithm.
+ *
+ * Depending on the sign parameter, this can detect:
+ * - climbs only (sign = 1)
+ * - descents only (sign = -1)
+ * - both by absolute rating (sign = 0)
+ *
+ * The function may simplify the profile first, optionally shift looped routes
+ * to start at the altitude minimum, then recursively find the highest-rated
+ * climb/descent segments above the threshold.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} params.points - Array of route points
+ * @param {number[]} [params.indices] - Optional subset of point indices to analyze
+ * @param {number} [params.simplifyPoints=1] - Whether to simplify the profile first
+ * @param {number} [params.shiftCircuit=1] - Whether to shift looped routes to altitude minimum
+ * @param {number} params.courseDistance - Total course distance
+ * @param {number} [params.gradientPower=2] - Exponent used in climb rating
+ * @param {number} [params.threshold=100] - Minimum rating threshold
+ * @param {boolean} [params.isLoop=false] - Whether the route is a loop
+ * @param {number} [params.sign=1] - 1 for climbs, -1 for descents, 0 for both
+ * @returns {number[][]} Array of climb ranges as [startIndex, endIndex]
+ */
+function findClimbs({
+  points,
+  indices,
+  simplifyPoints = 1,
+  shiftCircuit = 1,
+  courseDistance,
+  gradientPower = 2,
+  threshold = 100,
+  isLoop = false,
+  sign = 1
+}) {
+  // minimum rating... units are meters (@ 10% gradient)
+  const rating0 = threshold;
+
+  if (indices === undefined) {
+    if (simplifyPoints) {
+      indices = simplifyProfile(points, gradientPower, courseDistance, isLoop);
+    } else {
+      indices = Array.from({ length: points.length }, (_, i) => i);
+    }
+  }
+
+  // for circuits, shift the points to the altitude minimum
+  // no gradient signs will cross the altitude minimum on a loop
+  if (shiftCircuit) {
+    let zMin = points[indices[0]].ele;
+    let izMin = 0;
+
+    for (let i = 1; i < indices.length; i++) {
+      if (points[indices[i]].ele < zMin) {
+        zMin = points[indices[i]].ele;
+        izMin = i;
+      }
+    }
+
+    if (izMin > 0) {
+      const shifted = [
+        ...indices.slice(izMin),
+        ...indices.slice(0, izMin + 1) // repeat the first point
+      ];
+      indices = shifted;
+    }
+  }
+
+  // find the segment of maximum Fiets
+  let rating = rating0;
+  let range = [];
+
+  for (let j = 1; j < indices.length; j++) {
+    for (let i = 0; i < j; i++) {
+      let r = climbRating({
+        points: [points[indices[i]], points[indices[j]]],
+        gradientPower,
+        courseDistance,
+        isLoop
+      });
+
+      if (sign === 0) {
+        r = Math.abs(r);
+      } else {
+        r *= sign;
+      }
+
+      if (r > rating) {
+        range = [i, j];
+        rating = r;
+      }
+    }
+  }
+
+  const climbs = [];
+
+  if (range.length > 0) {
+    if (range[0] > 0) {
+      climbs.push(
+        ...findClimbs({
+          points,
+          simplifyPoints: 0,
+          courseDistance,
+          shiftCircuit: 0,
+          gradientPower,
+          threshold,
+          isLoop,
+          sign,
+          indices: indices.slice(0, range[0] + 1)
+        })
+      );
+    }
+
+    const climb = range.map(idx => indices[idx]);
+    climbs.push(climb);
+
+    if (range[1] < indices.length - 1) {
+      climbs.push(
+        ...findClimbs({
+          points,
+          courseDistance,
+          simplifyPoints: 0,
+          shiftCircuit: 0,
+          gradientPower,
+          threshold,
+          isLoop,
+          sign,
+          indices: indices.slice(range[1])
+        })
+      );
+    }
+  }
+
+  return climbs;
+}
 // TODO: Translate placeGradientSigns() from Perl
 
+/**
+ * Place gradient sign waypoints along the route.
+ *
+ * The profile is optionally simplified, climbs/descents are detected using the
+ * climb rating algorithm, and a waypoint is created at the start of each detected
+ * segment containing gradient and distance information.
+ *
+ * This detects both climbs and descents by using absolute climb rating.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} params.points - Array of route points
+ * @param {number} [params.simplifyPoints=1] - Whether to simplify the profile first
+ * @param {number} [params.shiftCircuit=1] - Whether to shift looped routes to altitude minimum
+ * @param {number} [params.courseDistance] - Total course distance
+ * @param {number} [params.gradientPower=2] - Exponent used in climb rating
+ * @param {number} [params.threshold=100] - Minimum rating threshold
+ * @param {boolean} [params.isLoop=false] - Whether the route is a loop
+ * @returns {Object[]} Array of waypoint objects for gradient signs
+ */
+function placeGradientSigns({
+  points,
+  simplifyPoints = 1,
+  shiftCircuit = 1,
+  courseDistance,
+  gradientPower = 2,
+  threshold = 100,
+  isLoop = false
+}) {
+  if (courseDistance == null) {
+    courseDistance = calcCourseDistance({ isLoop, points });
+  }
+
+  note("placing gradient signs...\n");
+
+  const waypoints = [];
+
+  const climbs = findClimbs({
+    points,
+    courseDistance,
+    simplifyPoints,
+    shiftCircuit,
+    gradientPower,
+    threshold,
+    isLoop,
+    sign: 0
+  });
+
+  note(`placeGradientSigns: number of climbs = ${climbs.length}\n`);
+
+  let nClimb = 0;
+
+  for (const climb of climbs) {
+    nClimb++;
+
+    const ds = distanceDifference(
+      points[climb[0]],
+      points[climb[1]],
+      courseDistance,
+      isLoop
+    );
+
+    const dz = points[climb[1]].ele - points[climb[0]].ele;
+    const g = dz / ds;
+
+    const text =
+      `${(100 * g).toFixed(2)}% for ` +
+      `${ds > 1000 ? `${(ds / 1000).toFixed(2)} km` : `${Math.round(ds)} meters`}` +
+      ` (${dz.toFixed(1)} m altitude)`;
+
+    note(
+      `gradient sign @ ${(points[climb[0]].distance / 1000).toFixed(2)}km to ${(points[climb[1]].distance / 1000).toFixed(2)} km: ${text}\n`
+    );
+
+    waypoints.push({
+      lat: points[climb[0]].lat,
+      lon: points[climb[0]].lon,
+      ele: points[climb[0]].ele,
+      name: text,
+      cmt: text,
+      desc: text,
+      src: "processGPX",
+      sym: "sign",
+      type: "sign",
+      fix: "dgps"
+    });
+  }
+
+  return waypoints;
+}
 /**
  * Fit a circle through three points
  * @param {Array} p1 - [x, y] first point
@@ -4106,8 +4330,200 @@ function circle3PointFit(p1, p2, p3) {
 
 // TODO: Translate fitCircle() from Perl
 
+/**
+ * Fit a circle to a set of points.
+ *
+ * This performs a 3-point circle fit using:
+ * - the first point
+ * - the last point
+ * - the first interior point whose s value is greater than the midpoint s
+ *
+ * Each point is expected to be an array in the form:
+ *   [x, y, s]
+ *
+ * @param {Object} params - Function parameters
+ * @param {number[][]} params.points - Array of points as [x, y, s]
+ * @returns {[number[], number]|undefined} Tuple [circleCenterXY, radius], or undefined if insufficient points
+ */
+function fitCircle({ points }) {
+  // points are [x, y, s]
+  const p0 = points[0];
+  const pf = points[points.length - 1];
+  const s0 = p0[2];
+  const sf = pf[2];
+  const sMid = (s0 + sf) / 2;
+
+  let p1;
+
+  for (let i = 1; i < points.length - 1; i++) {
+    p1 = points[i];
+    if (points[i][2] > sMid) {
+      break;
+    }
+    p1 = undefined;
+  }
+
+  if (p1 === undefined) {
+    warn("insufficient points to fit circle!\n");
+    return undefined;
+  }
+
+  // fit analytic circle through points
+  return circle3PointFit(p0, p1, pf);
+}
+
 // TODO: Translate processCircle() from Perl
 
+/**
+ * Replace selected route sections with fitted circular arcs.
+ *
+ * Circle ranges can be supplied either as:
+ * - `circle`: a flat array interpreted as [start1, end1, start2, end2, ...]
+ * - or via separate `circleStart` / `circleEnd` arrays
+ *
+ * Each selected point in the range is projected radially onto the fitted circle.
+ *
+ * This function mutates the input `points` array in place.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} params.points - Array of route points
+ * @param {number[]} [params.circle] - Flat list of circle start/end distances
+ * @param {number[]} [params.circleStart] - Start distances for circle replacement ranges
+ * @param {number[]} [params.circleEnd] - End distances for circle replacement ranges
+ * @param {boolean} [params.isLoop=false] - Whether the route is a loop
+ * @returns {void}
+ * for loops with wrapAround could be that we need:
+ *function wrapIndex(i, n) {
+ * return ((i % n) + n) % n;
+ *}
+ */
+function processCircle({
+  points,
+  circle,
+  circleStart,
+  circleEnd,
+  isLoop = false
+}) {
+  const circles = circle !== undefined ? [...circle] : [];
+
+  const circleStarts = [];
+  const circleEnds = [];
+
+  for (let i = 0; i < circles.length;) {
+    circleStarts.push(circles[i]);
+    i++;
+    circleEnds.push(i < circles.length ? circles[i] : undefined);
+    i++;
+  }
+
+  const a = circleStart !== undefined ? [...circleStart] : [];
+  const b = circleEnd !== undefined ? [...circleEnd] : [];
+
+  while (a.length || b.length) {
+    circleStarts.push(a.shift());
+    circleEnds.push(b.shift());
+  }
+
+  for (let iCircle = 0; iCircle < circleStarts.length; iCircle++) {
+    if (!("distance" in points[0])) {
+      addDistanceField({ points });
+    }
+
+    note(`fitting circle ${iCircle + 1} of ${circleStarts.length}\n`);
+
+    const cStart = circleStarts[iCircle];
+    const cEnd = circleEnds[iCircle];
+
+    if (
+      (!((cStart !== undefined) || (cEnd !== undefined))) ||
+      (!isLoop && cStart >= cEnd)
+    ) {
+      continue;
+    }
+
+    // get points to be replaced by circle
+    let iStart;
+    if (cStart !== undefined) {
+      let i = 0;
+      while (points[i].distance < cStart) {
+        i++;
+        if (i > points.length - 1) {
+          return;
+        }
+      }
+      iStart = i;
+    } else {
+      iStart = 0;
+    }
+
+    let iEnd;
+    if (cEnd !== undefined) {
+      let i = 0;
+      while (points[i + 1].distance < cEnd) {
+        i++;
+        if (i > points.length - 1) {
+          return;
+        }
+      }
+      iEnd = i;
+    } else {
+      iEnd = points.length - 1;
+    }
+
+    // if we wrap around, then use a negative number for the start index
+    if (iStart > iEnd) {
+      iStart -= points.length;
+    }
+
+    // reference coordinates to first point
+    const xys = [[0, 0, 0]];
+
+    // offset distance
+    let d0 = points[iStart].distance;
+
+    for (let i = iStart + 1; i <= iEnd; i++) {
+      // if we wrap around, adjust the distance offset
+      if (i === 0) {
+        d0 -= points[points.length - 1].distance;
+      }
+
+      const [x, y] = latlng2dxdy(points[iStart], points[i]);
+      xys.push([x, y, points[i].distance - d0]);
+    }
+
+    // now we have a list of points and distances... create the circle
+    const fitResult = fitCircle({ points: xys });
+    const xyfit = fitResult?.[0];
+    const rCircle = fitResult?.[1];
+
+    // check if we weren't able to fit circle (colinear points)
+    if (xyfit === undefined || rCircle === undefined) {
+      throw new Error("ERROR fitting circle to points (check for colinearity)\n");
+    }
+
+    // center is relative to first point
+    const pCenter = addVectorToPoint(points[iStart], xyfit);
+
+    // for each point, adjust the radius to the center point to the fitted radius
+    for (let i = iStart; i <= iEnd; i++) {
+      const d = latlngDistance(points[i], pCenter);
+      const f = rCircle / d;
+      const [dx, dy] = latlng2dxdy(pCenter, points[i]);
+      const pNew = addVectorToPoint(pCenter, [dx * f, dy * f]);
+
+      points[i].lat = pNew.lat;
+      points[i].lon = pNew.lon;
+
+      note(`updating point ${i} ...\n`);
+    }
+
+    // these fields are now invalid
+    deleteField({ points, field: "distance" });
+    if ("heading" in points[0]) {
+      deleteField({ points, field: "heading" });
+    }
+  }
+}
 /**
  * straighten points between indices
  * @param {Array} points - Array of points
@@ -4150,6 +4566,113 @@ function straightenPoints(points, _isLoop, startIndex, endIndex) {
 }
 
 // TODO: Translate processStraight() from Perl
+
+/**
+ * Handle the straighten option, which is based on distances.
+ *
+ * Straight ranges can be supplied either as:
+ * - `straight`: a flat array interpreted as [start1, end1, start2, end2, ...]
+ * - or via separate `straightStart` / `straightEnd` arrays
+ *
+ * For each selected range, the corresponding points are straightened in place.
+ *
+ * This function mutates the input `points` array in place.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} params.points - Array of route points
+ * @param {number[]} [params.straight] - Flat list of straight start/end distances
+ * @param {number[]} [params.straightStart] - Start distances for straightened ranges
+ * @param {number[]} [params.straightEnd] - End distances for straightened ranges
+ * @param {boolean} [params.isLoop=false] - Whether the route is a loop
+ * @returns {void}
+ */
+function processStraight({
+  points,
+  straight,
+  straightStart,
+  straightEnd,
+  isLoop = false
+}) {
+  const straights = straight !== undefined ? [...straight] : [];
+
+  const straightStarts = [];
+  const straightEnds = [];
+
+  for (let i = 0; i < straights.length;) {
+    straightStarts.push(straights[i]);
+    i++;
+    straightEnds.push(i < straights.length ? straights[i] : undefined);
+    i++;
+  }
+
+  const a = straightStart !== undefined ? [...straightStart] : [];
+  const b = straightEnd !== undefined ? [...straightEnd] : [];
+
+  while (a.length || b.length) {
+    straightStarts.push(a.shift());
+    straightEnds.push(b.shift());
+  }
+
+  for (let iStraight = 0; iStraight < straightStarts.length; iStraight++) {
+    if (!("distance" in points[0])) {
+      addDistanceField({ points });
+    }
+
+    note(`fitting straight ${iStraight + 1} of ${straightStarts.length}\n`);
+
+    const sStart = straightStarts[iStraight];
+    const sEnd = straightEnds[iStraight];
+
+    if (
+      (!((sStart !== undefined) || (sEnd !== undefined))) ||
+      (!isLoop && sStart >= sEnd)
+    ) {
+      continue;
+    }
+
+    // get points to be replaced by straight
+    let iStart;
+    if (sStart !== undefined) {
+      let i = 0;
+      while (points[i].distance < sStart) {
+        i++;
+        if (i > points.length - 1) {
+          return;
+        }
+      }
+      iStart = i;
+    } else {
+      iStart = 0;
+    }
+
+    let iEnd;
+    if (sEnd !== undefined) {
+      let i = 0;
+      while (points[i + 1].distance < sEnd) {
+        i++;
+        if (i > points.length - 1) {
+          return;
+        }
+      }
+      iEnd = i;
+    } else {
+      iEnd = points.length - 1;
+    }
+
+    straightenPoints({
+      points,
+      isLoop,
+      startIndex: iStart,
+      endIndex: iEnd
+    });
+  }
+
+  // these fields are now invalid
+  deleteField({ points, field: "distance" });
+  if ("heading" in points[0]) {
+    deleteField({ points, field: "heading" });
+  }
+}
 
 /**
  * calculate deviation statistics for a range of points relative to connection of endpoints
@@ -4348,9 +4871,218 @@ function autoStraighten(
 
 // TODO: Translate circuitFromPosition() from Perl
 
+/**
+ * Create one or more circuit repetitions starting from a given route position.
+ *
+ * The function finds the point at the requested position, searches forward until
+ * the route crosses that point again, and then repeats the identified circuit
+ * section the requested number of times.
+ *
+ * This function may insert an interpolated start point via pointAtPosition().
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} [params.points=[]] - Array of route points
+ * @param {number} [params.position=0] - Distance from route start
+ * @param {boolean} [params.isLoop=false] - Whether the route is already a loop
+ * @param {number} [params.circuits=0] - Number of circuit copies to include
+ * @param {number} [params.repeats=1] - Number of crossings required before identifying the circuit
+ * @returns {Object[]} New point array, or original points if no circuit was found
+ */
+function circuitFromPosition({
+  points = [],
+  position = 0,
+  isLoop = false,
+  circuits = 0,
+  repeats = 1
+}) {
+  circuits = Math.trunc(circuits);
+  repeats = Math.trunc(repeats);
+
+  if (repeats <= 0) {
+    warn("CircuitFromPosition called with non-positive repeats -- ignoring option.\n");
+    return points;
+  }
+
+  let startIndex;
+  [points, startIndex] = pointAtPosition(position, points, isLoop);
+
+  if (startIndex === undefined) {
+    return points;
+  }
+
+  // search ahead for next point close to this point
+  // search on intervals
+  const stopIndex = isLoop ? startIndex : points.length - 1;
+  warn(`startIndex = ${startIndex}; stopIndex = ${stopIndex}\n`);
+
+  const p0 = points[startIndex];
+
+  let flag = 0;
+  let count = 0;
+
+  for (let i = (startIndex + 1) % points.length; i !== stopIndex;) {
+    const p1 = points[i];
+    const index = i;
+
+    i = (i + 1) % points.length;
+
+    // for a circuit, we need to get at least a nominal distance from the first point
+    if (!flag) {
+      if (pointsAreClose(points[startIndex], points[index], 25)) {
+        continue;
+      }
+      flag = 1;
+    }
+
+    const p2 = points[i];
+
+    if (pointsAreClose(p1, p2)) {
+      continue;
+    }
+
+    if (isPointOnRoad(p1, p2, p0)) {
+      // the start point falls on the segment from p1 to p2, so the circuit ends at p1
+      count++;
+
+      if (count >= repeats) {
+        // circuit identified with the required number of counts
+        // circuit goes from startIndex to endIndex inclusive
+        const endIndex = index;
+        const pNew = [];
+
+        // add points at start if not part of circuit
+        if (endIndex > startIndex) {
+          pNew.push(...points.slice(0, startIndex));
+        }
+
+        for (let c = 1; c <= circuits; c++) {
+          for (let j = startIndex; j !== endIndex; j = (j + 1) % points.length) {
+            let p;
+            if (c === 1) {
+              p = points[j];
+            } else {
+              p = { ...points[j] };
+            }
+            pNew.push(p);
+          }
+        }
+
+        // add points at end if not part of circuit
+        if (endIndex > startIndex) {
+          pNew.push(...points.slice(endIndex + 1));
+        }
+
+        deleteDerivedFields(pNew);
+        return pNew;
+      }
+    }
+  }
+
+  // nothing found: return original points
+  warn(
+    `warning: no circuit found at position ${position} with ${repeats} point crossing${repeats > 1 ? "s" : ""}.\n`
+  );
+  return points;
+}
+
 // TODO: Translate shiftCircuit() from Perl
 
+/**
+ * Shift a circuit so that it starts at a particular point index.
+ *
+ * If the route ends with a duplicate of the first point and both points belong
+ * to the same segment, the duplicated closing point is preserved after shifting.
+ *
+ * @param {Object[]} points - Array of route points
+ * @param {number} startIndex - Index that should become the new first point
+ * @returns {Object[]} Shifted point array
+ */
+function shiftCircuit(points, startIndex) {
+  const copyPoint =
+    pointsAreClose(points[points.length - 1], points[0]) &&
+    points[points.length - 1].segment === points[0].segment;
+
+  const lastPoint = copyPoint ? points.length - 2 : points.length - 1;
+
+  const newPoints = [
+    ...points.slice(startIndex, lastPoint + 1),
+    ...points.slice(0, startIndex)
+  ];
+
+  if (copyPoint) {
+    newPoints.push({ ...newPoints[0] });
+  }
+
+  return newPoints;
+}
+
 // TODO: Translate simplifyProfile() from Perl
+
+/**
+ * Simplify a profile for placing gradient signs.
+ *
+ * Ensures that maxima, minima, and first/last points are included.
+ * Works on a list of points plus an optional list of point indices.
+ *
+ * @param {Object[]} points - Array of route points
+ * @param {number} gradientPower - Exponent used in climb rating
+ * @param {number} courseDistance - Total course distance
+ * @param {boolean} isLoop - Whether the route is a loop
+ * @param {string} [file="-"] - Optional output file name, currently unused
+ * @param {number[]} [indices] - Optional list of indices to simplify
+ * @returns {number[]} Simplified list of indices
+ */
+function simplifyProfile(
+  points,
+  gradientPower,
+  courseDistance,
+  isLoop,
+  file = "-",
+  indices = Array.from({ length: points.length }, (_, i) => i)
+) {
+  const indicesNew = [indices[0]];
+  const keypoints = [0];
+
+  for (let i = 1; i < indices.length - 1; i++) {
+    const cmp1 = Math.sign(points[indices[i - 1]].ele - points[indices[i]].ele);
+    const cmp2 = Math.sign(points[indices[i]].ele - points[indices[i + 1]].ele);
+
+    if (cmp1 !== cmp2) {
+      keypoints.push(i);
+
+      // simplifying the monotonic profile: guaranteed to return the last point,
+      // but may add intermediate points
+      indicesNew.push(
+        ...simplifyMonotonicProfile(
+          points,
+          courseDistance,
+          gradientPower,
+          isLoop,
+          indices.slice(keypoints[keypoints.length - 2], keypoints[keypoints.length - 1] + 1)
+        )
+      );
+    }
+  }
+
+  indicesNew.push(
+    ...simplifyMonotonicProfile(
+      points,
+      courseDistance,
+      gradientPower,
+      isLoop,
+      indices.slice(keypoints[keypoints.length - 1])
+    )
+  );
+
+  const saveSimplifiedProfile = 0;
+
+  if (saveSimplifiedProfile) {
+    // Optional debug output from the Perl version was omitted here.
+    // Could be implemented with Node.js fs if needed.
+  }
+
+  return indicesNew;
+}
 
 /**
  * add distance field to points
@@ -5049,6 +5781,128 @@ function makeLoop(
 // TODO: Translate splitPoints() from Perl
 
 /**
+ * Split a route into parts separated by split distances.
+ *
+ * Each split allocates space for a start and finish zone. Only points within
+ * the course distance are counted. Splits that are too close to each other
+ * are filtered out.
+ *
+ * For looped routes, wrap-around and multi-lap logic is supported.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} [params.points=[]] - Array of route points
+ * @param {boolean} [params.isLoop=false] - Whether the route is a loop
+ * @param {number} [params.courseDistance] - Total course distance
+ * @param {number} [params.startZone=0] - Distance reserved before split
+ * @param {number} [params.finishZone=0] - Distance reserved after split
+ * @param {number[]} [params.splitDistance=[]] - Distances where splits occur
+ * @param {number} [params.minSplitLength=10] - Minimum length between splits
+ * @param {number} [params.splitNumber=0] - Optional specific split to return
+ * @returns {Object[][]} Array of splits, each containing a list of points
+ */
+function splitPoints({
+  points = [],
+  isLoop = false,
+  courseDistance,
+  startZone = 0,
+  finishZone = 0,
+  splitDistance = [],
+  minSplitLength = 10,
+  splitNumber = 0
+}) {
+  if (courseDistance == null) {
+    courseDistance = calcCourseDistance({ points, isLoop });
+  }
+
+  // filter out split pairs which are too close to each other
+  // we start with the first point in the loop, but allow wrap-around on loops
+  const sp = [0];
+
+  const sortedSplits = splitDistance
+    .filter(s => (s > minSplitLength) && (isLoop || s < courseDistance - minSplitLength))
+    .sort((a, b) => a - b);
+
+  for (const s of sortedSplits) {
+    if (s > sp[sp.length - 1] + startZone + finishZone + minSplitLength) {
+      sp.push(s);
+    }
+  }
+
+  // last point is end of GPX on point-to-point, or completes the loop
+  sp.push(courseDistance + (isLoop ? startZone + finishZone : 0));
+
+  // multi-lap support
+  if (isLoop && sp.length > 1 && sp[sp.length - 1] < sp[sp.length - 2]) {
+    sp[sp.length - 1] +=
+      courseDistance *
+      Math.ceil((sp[sp.length - 2] - sp[sp.length - 1]) / courseDistance);
+  }
+
+  addDistanceField({ points, isLoop });
+
+  const splits = [];
+
+  for (let i = 0; i < sp.length - 1;) {
+    const s1 = sp[i] - startZone;
+    i++;
+
+    if (splitNumber !== undefined && splitNumber > 0 && i !== splitNumber) {
+      continue;
+    }
+
+    const s2 = sp[i] + finishZone;
+
+    let i1;
+    let i2;
+
+    if (s1 <= points[0].distance) {
+      i1 = 0;
+    } else {
+      const nLap = Math.floor(s1 / courseDistance);
+      [points, i1] = pointAtPosition(s1 - courseDistance * nLap, points, isLoop);
+
+      if (i1 === undefined) {
+        throw new Error(`ERROR: unable to interpolate point at position ${s1}`);
+      }
+    }
+
+    if (s2 >= points[points.length - 1].distance) {
+      if (isLoop) {
+        const nLap = Math.floor(s2 / courseDistance);
+        [points, i2] = pointAtPosition(s2 - courseDistance * nLap, points, isLoop);
+        i2 += points.length * nLap;
+      } else {
+        i2 = points.length - 1;
+      }
+    } else {
+      [points, i2] = pointAtPosition(s2, points, isLoop);
+
+      if (i2 === undefined) {
+        throw new Error(`ERROR: unable to interpolate point at position ${s1}`);
+      }
+    }
+
+    // accumulate points (may wrap around)
+    const ps = [];
+
+    for (let j = i1; j <= i2; j++) {
+      const p = { ...points[j % points.length] };
+      delete p.distance;
+      ps.push(p);
+    }
+
+    splits.push(ps);
+  }
+
+  // distance field is invalid now (curvature etc remain valid)
+  for (const s of splits) {
+    deleteField2({ field: "distance", points: s });
+  }
+
+  return splits;
+}
+
+/**
  * Calculate smoothing sigma based on gradient variance
  * @param {Array} points - Array of points
  * @param {number} sigmaFactor - Factor to scale the sigma values (default: 1)
@@ -5136,6 +5990,164 @@ function calcSmoothingSigma(points, sigmaFactor = 1, isLoop = 0) {
 // TODO: Translate simplifyMonotonicProfile() from Perl
 
 /**
+ * Simplify a monotonic profile based only on altitude and distance.
+ *
+ * The only preferred point is the final point. The function recursively keeps
+ * the highest-rated subsegment and simplifies the remaining parts before and after it.
+ *
+ * @param {Object[]} points - Array of route points
+ * @param {number} [courseDistance] - Total course distance
+ * @param {number} [gradientPower=2] - Exponent used in climb rating
+ * @param {boolean} [isLoop=false] - Whether the route is a loop
+ * @param {number[]} [indices] - Optional list of indices to simplify
+ * @returns {number[]} Simplified list of indices
+ */
+function simplifyMonotonicProfile(
+  points,
+  courseDistance,
+  gradientPower = 2,
+  isLoop = false,
+  indices = Array.from({ length: points.length }, (_, i) => i)
+) {
+  if (!("distance" in points[0])) {
+    addDistanceField({ points });
+  }
+
+  if (courseDistance == null) {
+    courseDistance = calcCourseDistance({ points, isLoop });
+  }
+
+  // create a distance field of the index list
+  const distance = [0];
+  for (let i = 1; i < indices.length; i++) {
+    distance.push(
+      distance[distance.length - 1] +
+        distanceDifference(
+          points[indices[i - 1]],
+          points[indices[i]],
+          courseDistance,
+          isLoop
+        )
+    );
+  }
+
+  const dz = points[indices[indices.length - 1]].ele - points[indices[0]].ele;
+  const sign = Math.sign(dz);
+  const ds = distance[distance.length - 1] - distance[0];
+
+  if (indices.length <= 2 || Math.abs(dz) < 1 || ds < 50) {
+    return [indices[indices.length - 1]];
+  }
+
+  // find maximum grade
+  const gAvg = dz / ds;
+  let gMax = 1.1 * gAvg;
+  let igMax;
+
+  for (let i = 0; i < indices.length - 1; i++) {
+    const dsLocal = distance[i + 1] - distance[i];
+
+    if (dsLocal > 0) {
+      const dzLocal = points[indices[i + 1]].ele - points[indices[i]].ele;
+      const gAvgLocal = dzLocal / dsLocal;
+
+      // look for maximum gradient within the interval, but if the interval is mostly constant,
+      // just live with endpoints
+      const g = (points[indices[i + 1]].ele - points[indices[i]].ele) / dsLocal;
+
+      if (g * sign > gMax * sign) {
+        gMax = g;
+        igMax = i;
+      }
+    }
+  }
+
+  const newIndices = [];
+
+  if (igMax !== undefined) {
+    let i1 = igMax;
+    let i2 = i1 + 1;
+
+    // extend segment around the point
+    // the segment of maximum rating within this profile will be included in the simplified profile
+    while (i1 > 0 || i2 < indices.length - 1) {
+      const rating =
+        sign *
+        climbRating({
+          points: [points[indices[i1]], points[indices[i2]]],
+          gradientPower,
+          courseDistance,
+          isLoop
+        });
+
+      const r1 =
+        i1 > 0
+          ? sign *
+            climbRating({
+              points: [points[indices[i1 - 1]], points[indices[i2]]],
+              gradientPower,
+              courseDistance,
+              isLoop
+            })
+          : 0;
+
+      const r2 =
+        i2 < indices.length - 1
+          ? sign *
+            climbRating({
+              points: [points[indices[i1]], points[indices[i2 + 1]]],
+              gradientPower,
+              courseDistance,
+              isLoop
+            })
+          : 0;
+
+      if (r1 > rating && r1 > r2) {
+        i1--;
+      } else if (r2 > rating && r2 > r1) {
+        i2++;
+      } else {
+        break;
+      }
+    }
+
+    // the segment between i1 and i2 has maximal rating, so we don't need to simplify that further.
+    // there may be interesting segments before and after
+    // this will add point i1, plus perhaps more
+    if (i1 > 0) {
+      newIndices.push(
+        ...simplifyMonotonicProfile(
+          points,
+          courseDistance,
+          gradientPower,
+          isLoop,
+          indices.slice(0, i1 + 1)
+        )
+      );
+    }
+
+    newIndices.push(indices[i2]);
+
+    // this will add the final point, plus perhaps more
+    if (i2 < points.length - 1) {
+      newIndices.push(
+        ...simplifyMonotonicProfile(
+          points,
+          courseDistance,
+          gradientPower,
+          isLoop,
+          indices.slice(i2)
+        )
+      );
+    }
+  } else {
+    newIndices.push(indices[indices.length - 1]);
+  }
+
+  return newIndices;
+}
+
+/**
  * calculate a quality metric for the route
  * @param {Array} points - Array of points to analyze
  * @param {number} isLoop - Whether the track is a loop (0 or 1)
@@ -5207,11 +6219,250 @@ function calcQualityScore(points, isLoop) {
 
 // TODO: Translate addPointExtensions() from Perl
 
+/**
+ * Move selected point fields into the GPX extensions object.
+ *
+ * Fields used internally by the processing code are converted into
+ * point.extensions so they can be exported legally in GPX.
+ *
+ * This function mutates the input points in place.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} [params.points=[]] - Array of route points
+ * @returns {Object[]} The same points array
+ */
+function addPointExtensions({ points = [] }) {
+  const extensionFields = [
+    "heading",
+    "curvature",
+    "distance",
+    "gradient",
+    "shift",
+    "sigma"
+  ];
+
+  for (const p of points) {
+    for (const e of extensionFields) {
+      if (e in p) {
+        if (typeof p.extensions !== "object" || p.extensions === null || Array.isArray(p.extensions)) {
+          p.extensions = {};
+        }
+        p.extensions[e] = p[e];
+        delete p[e];
+      }
+    }
+
+    // get rid of extensions if there are none defined
+    if (
+      typeof p.extensions !== "object" ||
+      p.extensions === null ||
+      Array.isArray(p.extensions) ||
+      Object.keys(p.extensions).length === 0
+    ) {
+      delete p.extensions;
+    }
+  }
+
+  return points;
+}
+
 // TODO: Translate flattenPointExtensions() from Perl
+
+/**
+ * Promote selected fields from point extensions into primary point fields.
+ *
+ * This function mutates the input points in place.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} [params.points=[]] - Array of route points
+ * @returns {Object[]} The same points array
+ */
+function flattenPointExtensions({ points = [] }) {
+  const extensionFields = [
+    "curvature",
+    "direction",
+    "distance",
+    "gradient",
+    "shift",
+    "sigma"
+  ];
+
+  for (const p of points) {
+    if (
+      "extensions" in p &&
+      typeof p.extensions === "object" &&
+      p.extensions !== null &&
+      !Array.isArray(p.extensions)
+    ) {
+      for (const e of extensionFields) {
+        if (e in p.extensions) {
+          p[e] = p.extensions[e];
+          delete p.extensions[e];
+        }
+      }
+
+      if (
+        "extensions" in p &&
+        typeof p.extensions === "object" &&
+        p.extensions !== null &&
+        !Array.isArray(p.extensions) &&
+        Object.keys(p.extensions).length === 0
+      ) {
+        delete p.extensions;
+      }
+    }
+  }
+
+  return points;
+}
 
 // TODO: Translate getExtensions() from Perl
 
+/**
+ * Extract parser and segment-related extensions from a GPX XML string.
+ *
+ * This reads:
+ * - gpx/extensions/rgt:parserOptions/*
+ * - gpx/trk/trkseg/extensions/rgt:namedSegment
+ *
+ * Expected return structure:
+ * {
+ *   someOption: "value",
+ *   someFlag: 1,
+ *   segmentName: {
+ *     [trackNumber]: {
+ *       [segmentNumber]: "name"
+ *     }
+ *   }
+ * }
+ *
+ * @param {string} xml - GPX XML string
+ * @returns {Object} Extracted extensions
+ */
+function getExtensions(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, "application/xml");
+
+  const extensions = {};
+
+  const getLocalName = node => node.localName || node.nodeName;
+  const getText = node => (node?.textContent ?? "").trim();
+
+  const gpx = doc.documentElement;
+  if (!gpx || getLocalName(gpx) !== "gpx") {
+    return extensions;
+  }
+
+  // gpx/extensions/rgt:parserOptions/*
+  const gpxChildren = Array.from(gpx.children);
+
+  for (const child of gpxChildren) {
+    if (getLocalName(child) === "extensions") {
+      for (const extChild of Array.from(child.children)) {
+        if (extChild.nodeName === "rgt:parserOptions" || getLocalName(extChild) === "parserOptions") {
+          for (const optionNode of Array.from(extChild.children)) {
+            const key = optionNode.nodeName;
+            const t = getText(optionNode);
+            extensions[key] = t === "" ? 1 : t;
+          }
+        }
+      }
+    }
+  }
+
+  // gpx/trk/trkseg/extensions/rgt:namedSegment
+  let nTrack = 0;
+
+  for (const trk of gpxChildren.filter(node => getLocalName(node) === "trk")) {
+    nTrack++;
+    let nSegment = 0;
+
+    for (const trkseg of Array.from(trk.children).filter(node => getLocalName(node) === "trkseg")) {
+      nSegment++;
+
+      for (const segChild of Array.from(trkseg.children)) {
+        if (getLocalName(segChild) === "extensions") {
+          for (const extNode of Array.from(segChild.children)) {
+            if (extNode.nodeName === "rgt:namedSegment" || getLocalName(extNode) === "namedSegment") {
+              const t = getText(extNode);
+              if (!extensions.segmentName) {
+                extensions.segmentName = {};
+              }
+              if (!extensions.segmentName[nTrack]) {
+                extensions.segmentName[nTrack] = {};
+              }
+              extensions.segmentName[nTrack][nSegment] = t;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return extensions;
+}
+
 // TODO: Translate addExtensions() from Perl
+
+/**
+ * Insert segment extension tags into a GPX XML string.
+ *
+ * If segment names are defined in the extensions object, they are inserted
+ * before the closing </trkseg> tag of the corresponding segment.
+ *
+ * This function operates on the XML text line-by-line, matching the behavior
+ * of the original Perl implementation.
+ *
+ * @param {string} xml - GPX XML string
+ * @param {Object} extensions - Extensions object (e.g. from getExtensions())
+ * @returns {string} Updated XML string
+ */
+function addExtensions(xml, extensions) {
+  if (!extensions || Object.keys(extensions).length === 0) {
+    return xml;
+  }
+
+  const lines = xml.split("\n");
+  const output = [];
+
+  let nTrack = 0;
+  let nSegment = 0;
+
+  for (const l of lines) {
+
+    if (/<\/trkseg.*>/.test(l)) {
+      let name =
+        extensions?.segmentName?.[nTrack]?.[nSegment] ?? "";
+
+      // escape critical characters
+      name = name
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+      if (name !== "") {
+        output.push(
+          `<extensions><rgt:namedSegment>${name}</rgt:namedSegment></extensions>`
+        );
+      }
+    }
+
+    output.push(l);
+
+    if (/<trkseg>/.test(l) || /<trkseg\s/.test(l)) {
+      nSegment++;
+    }
+
+    if (/<trk>/.test(l) || /<trk\s/.test(l)) {
+      nTrack++;
+      nSegment = 0;
+    }
+  }
+
+  const xml2 = output.join("\n");
+  return xml2;
+}
 
 // ============================================================================
 // MAIN EXPORT FUNCTION
