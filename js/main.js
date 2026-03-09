@@ -13,7 +13,9 @@ class ProcessGPXApp {
 		this.currentFile = null;
 		this.currentRoute = null;
 		this.processedRoute = null;
+		this.lastProcessingTimeMs = null;
 		this.currentOptions = { ...defaultOptions };
+		this.debugWindow = null;
 
 		this.cacheDom();
 		this.initializeEventListeners();
@@ -37,13 +39,15 @@ class ProcessGPXApp {
 			errorBackBtn: document.getElementById("errorBackBtn"),
 			processGpxBtn: document.getElementById("processGpxBtn"),
 			exportGpxBtn: document.getElementById("exportGpxBtn"),
+			downloadOriginalGpxBtn: document.getElementById("downloadOriginalGpxBtn"),
+			openDebugWindowBtn: document.getElementById("openDebugWindowBtn"),
 			trackName: document.getElementById("trackName"),
 			trackDistance: document.getElementById("trackDistance"),
 			trackElevation: document.getElementById("trackElevation"),
 			trackPoints: document.getElementById("trackPoints"),
 			trackIsLoop: document.getElementById("trackIsLoop"),
 			trackSegments: document.getElementById("trackSegments"),
-			trackClimbs: document.getElementById("trackClimbs"),
+			trackClimbs: document.getElementById("trackClimbs")
 		};
 	}
 
@@ -56,8 +60,10 @@ class ProcessGPXApp {
 		this.ui.errorBackBtn?.addEventListener("click", () => this.showUploadScreen());
 		this.ui.processGpxBtn?.addEventListener("click", () => this.handleProcessGPX());
 		this.ui.exportGpxBtn?.addEventListener("click", () => this.handleExportGPX());
+		this.ui.downloadOriginalGpxBtn?.addEventListener("click", () => this.handleDownloadOriginalGPX());
 		this.ui.replaceFileBtn?.addEventListener("click", () => this.ui.gpxFile?.click());
 		this.ui.loadAnotherFileBtn?.addEventListener("click", () => this.showUploadScreen());
+		this.ui.openDebugWindowBtn?.addEventListener("click", () => this.openDebugWindow());
 
 		this.initializeDragAndDrop();
 	}
@@ -86,33 +92,16 @@ class ProcessGPXApp {
 	}
 
 	initializeOptionsUI() {
-		this.setCheckbox("flattenExtensionsOption", false);
-		this.setCheckbox("addPointExtensionsOption", false);
 		this.setCheckbox("simplifyProfileOption", defaultOptions.simplify === 1);
 		this.setCheckbox("autoSegmentsOption", defaultOptions.auto === 1);
 		this.setCheckbox("gradientSignsOption", defaultOptions.addGradientSigns === 1);
-		this.setCheckbox("includeSegmentExtensionsOption", true);
-		this.setCheckbox("includePointExtensionsOption", true);
 		this.setCheckbox("debugLogsOption", !defaultOptions.quiet);
-		this.setCheckbox("showWaypointsOption", false);
-		this.setCheckbox("showSegmentsOption", false);
-		this.setCheckbox("straightOption", false);
-		this.setCheckbox("circleOption", false);
-		this.setCheckbox("circuitFromPositionOption", false);
-		this.setCheckbox("splitRouteOption", false);
 		this.setNumber("gradientPowerInput", defaultOptions.gradientPower ?? 2);
 		this.setNumber("thresholdInput", defaultOptions.gradientThreshold ?? 100);
 		this.setNumber("marginInput", defaultOptions.autoSegmentMargin ?? 400);
 		this.setNumber("stretchInput", defaultOptions.autoSegmentStretch ?? 0.05);
 		this.setNumber("startMarginInput", defaultOptions.autoSegmentStartMargin ?? 0);
 		this.setNumber("finishMarginInput", defaultOptions.autoSegmentFinishMargin ?? 0);
-		this.setNumber("straightStartInput", "");
-		this.setNumber("straightEndInput", "");
-		this.setNumber("circleStartInput", "");
-		this.setNumber("circleEndInput", "");
-		this.setNumber("circuitPositionInput", 0);
-		this.setNumber("circuitRepeatsInput", 1);
-		this.setNumber("circuitsInput", 1);
 		this.setNumber("minSplitLengthInput", 10);
 		this.setNumber("splitNumberInput", 0);
 		this.setNumber("startZoneInput", 0);
@@ -129,14 +118,6 @@ class ProcessGPXApp {
 		if (element && value !== undefined && value !== null) {
 			element.value = value;
 		}
-	}
-
-	cloneFeature(feature) {
-		if (!feature) return feature;
-		if (typeof structuredClone === "function") {
-			return structuredClone(feature);
-		}
-		return JSON.parse(JSON.stringify(feature));
 	}
 
 	async handleSelectedFile(file) {
@@ -162,6 +143,7 @@ class ProcessGPXApp {
 			this.showResultsScreen();
 			await this.initializeVisualization(trackFeature);
 			this.updateTrackSummary(trackFeature);
+			this.updateDebugPanel();
 			this.hideLoading();
 		} catch (error) {
 			console.error("Error loading GPX file:", error);
@@ -208,7 +190,6 @@ class ProcessGPXApp {
 		options.autoSegmentFinishMargin = this.readNumber("finishMarginInput", options.autoSegmentFinishMargin ?? 0);
 		options.quiet = this.isChecked("debugLogsOption") ? 0 : 1;
 
-		// Extensions / export related toggles for downstream processing.
 		options.flattenExtensions = this.isChecked("flattenExtensionsOption") ? 1 : 0;
 		options.addPointExtensions = this.isChecked("addPointExtensionsOption") ? 1 : 0;
 		options.includeSegmentExtensions = this.isChecked("includeSegmentExtensionsOption") ? 1 : 0;
@@ -299,19 +280,128 @@ class ProcessGPXApp {
 			const options = this.collectOptionsFromUI();
 
 			await new Promise((resolve) => setTimeout(resolve, 10));
-			const processedRoute = processGPX(this.cloneFeature(this.currentRoute), options);
+			const t0 = performance.now();
+			const processedRoute = processGPX(this.currentRoute, options);
+			this.lastProcessingTimeMs = performance.now() - t0;
 			this.processedRoute = processedRoute;
 
 			this.updateLoadingMessage("Updating map and elevation profile...");
 			this.mapVisualization?.displayProcessedRoute(processedRoute);
 			this.elevationChart?.addProcessedData(processedRoute);
 			this.updateTrackSummary(processedRoute, true);
+			this.updateDebugPanel();
 			this.enableExportButton();
 			this.hideLoading();
 		} catch (error) {
 			console.error("Error processing GPX route:", error);
 			this.showError(error?.message || "Failed to process GPX route.");
 		}
+	}
+
+	handleDownloadOriginalGPX() {
+		if (!this.currentRoute) {
+			this.showError("No original route is available for export.");
+			return;
+		}
+
+		const baseName = (this.currentFile?.name || this.currentRoute?.properties?.name || "route")
+			.replace(/\.gpx$/i, "")
+			.replace(/\s+/g, "_");
+		downloadOriginalGpxBtn(this.currentRoute, `${baseName}_original`, this.currentOptions);
+	}
+
+	openDebugWindow() {
+		if (this.debugWindow && !this.debugWindow.closed) {
+			this.debugWindow.focus();
+			return;
+		}
+
+		this.debugWindow = window.open('', 'GPXDebugWindow', 'width=450,height=580');
+
+		this.debugWindow.document.write(`
+			<!DOCTYPE html>
+			<html lang="en">
+			<head>
+				<meta charset="UTF-8">
+				<title>processGPX - Debug Panel</title>
+				<style>
+					body {
+						font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+						background: #f8fafc;
+						color: #0f172a;
+						padding: 24px;
+						margin: 0;
+					}
+					h2 { 
+						font-size: 1.2rem; 
+						margin-top: 0; 
+						margin-bottom: 20px; 
+						color: #1e293b; 
+						border-bottom: 2px solid #e2e8f0;
+						padding-bottom: 10px;
+					}
+					.debug-grid { display: flex; flex-direction: column; gap: 12px; }
+					.debug-item {
+						background: white;
+						border: 1px solid rgba(15, 23, 42, 0.1);
+						border-radius: 12px;
+						padding: 14px;
+						box-shadow: 0 4px 6px rgba(15, 23, 42, 0.03);
+						display: flex;
+						justify-content: space-between;
+						align-items: center;
+					}
+					.debug-label {
+						font-size: 0.8rem;
+						font-weight: 700;
+						text-transform: uppercase;
+						letter-spacing: 0.04em;
+						color: #64748b;
+					}
+					.debug-value {
+						font-size: 1.1rem;
+						font-weight: 800;
+						color: #2563eb;
+					}
+				</style>
+			</head>
+			<body>
+				<h2>Live Debug Information</h2>
+				<div class="debug-grid">
+					<div class="debug-item"><span class="debug-label">Original points</span><span class="debug-value" id="debugOriginalPoints">-</span></div>
+					<div class="debug-item"><span class="debug-label">Original distance</span><span class="debug-value" id="debugOriginalDistance">-</span></div>
+					<div class="debug-item"><span class="debug-label">Original elevation</span><span class="debug-value" id="debugOriginalElevation">-</span></div>
+					<div class="debug-item"><span class="debug-label">Processed points</span><span class="debug-value" id="debugProcessedPoints">-</span></div>
+					<div class="debug-item"><span class="debug-label">Processed distance</span><span class="debug-value" id="debugProcessedDistance">-</span></div>
+					<div class="debug-item"><span class="debug-label">Processed elevation</span><span class="debug-value" id="debugProcessedElevation">-</span></div>
+					<div class="debug-item"><span class="debug-label">Processing time</span><span class="debug-value" id="debugProcessingTime">-</span></div>
+				</div>
+			</body>
+			</html>
+		`);
+		this.debugWindow.document.close();
+		this.updateDebugPanel();
+	}
+
+	updateDebugPanel() {
+		if (!this.debugWindow || this.debugWindow.closed) return;
+
+		const doc = this.debugWindow.document;
+		const originalStats = this.calculateRouteStats(this.currentRoute?.geometry?.coordinates || []);
+		const processedStats = this.calculateRouteStats(this.processedRoute?.geometry?.coordinates || []);
+
+		const updateField = (id, value) => {
+			const el = doc.getElementById(id);
+			if (el) el.textContent = value;
+		};
+
+		updateField("debugOriginalPoints", this.currentRoute?.geometry?.coordinates?.length ?? "-");
+		updateField("debugOriginalDistance", this.currentRoute ? `${originalStats.distanceKm.toFixed(2)} km` : "-");
+		updateField("debugOriginalElevation", this.currentRoute ? `${Math.round(originalStats.elevationGainM)} m` : "-");
+		updateField("debugProcessedPoints", this.processedRoute?.geometry?.coordinates?.length ?? "-");
+		updateField("debugProcessedDistance", this.processedRoute ? `${processedStats.distanceKm.toFixed(2)} km` : "-");
+		updateField("debugProcessedElevation", this.processedRoute ? `${Math.round(processedStats.elevationGainM)} m` : "-");
+		updateField("debugProcessingTime", this.lastProcessingTimeMs != null ? `${this.lastProcessingTimeMs.toFixed(1)} ms` : "-");
 	}
 
 	handleExportGPX() {
@@ -324,7 +414,7 @@ class ProcessGPXApp {
 			.replace(/\.gpx$/i, "")
 			.replace(/\s+/g, "_");
 		const outputName = `${baseName}_processed`;
-		downloadTrackAsGPX(this.processedRoute, outputName, this.currentOptions);
+		downloadTrackAsGPX(this.processedRoute, outputName);
 	}
 
 	updateTrackSummary(trackFeature, isProcessed = false) {
@@ -347,14 +437,7 @@ class ProcessGPXApp {
 	inferSegmentCount(trackFeature) {
 		const segmentNames = trackFeature?.properties?.segmentName;
 		if (segmentNames && typeof segmentNames === "object") {
-			const trackEntries = Object.values(segmentNames);
-			const nestedCount = trackEntries.reduce((count, entry) => {
-				if (entry && typeof entry === "object") {
-					return count + Object.keys(entry).length;
-				}
-				return count;
-			}, 0);
-			return `${nestedCount || Object.keys(segmentNames).length}`;
+			return `${Object.keys(segmentNames).length}`;
 		}
 		return "-";
 	}
@@ -433,10 +516,13 @@ class ProcessGPXApp {
 		this.currentFile = null;
 		this.currentRoute = null;
 		this.processedRoute = null;
+		this.lastProcessingTimeMs = null;
 		this.disableExportButton();
 		this.resetTrackSummary();
 		this.ui.selectedFileInfo?.classList.add("hidden");
 		this.ui.selectedFileName.textContent = "-";
+		
+		this.updateDebugPanel();
 
 		if (this.mapVisualization) {
 			this.mapVisualization.destroy();
