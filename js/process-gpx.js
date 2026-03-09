@@ -195,12 +195,16 @@ function transition(x) {
 }
 
 // TODO: Translate setFileNameSuffix() from Perl
+//untested implantation from Landixus Andreas Otten
+function setFileNameSuffix(f, suffix) {
+  if (f === "-") return;
 
-/**
- * Reduce angle to range [-π, π]
- * @param {number} theta - Angle in radians
- * @returns {number} Reduced angle
- */
+  let f2 = f.replace(/\.(\w\w\w?\w?)$/, suffix);
+  if (f2 === f) f2 += suffix;
+
+  return f2;
+}
+
 function reduceAngle(theta) {
 	theta -= TWOPI * Math.floor(0.5 + theta / TWOPI);
 	return theta;
@@ -592,21 +596,77 @@ function interpolatePoint(p1, p2, f, courseDistance = 0, isLoop = 0) {
 }
 
 // TODO: Translate pointAtPosition() from Perl
-
+//untested implantation from Landixus Andreas Otten
 /**
- * Catmull-Rom spline interpolation for corners.
- * f is the fraction between points 2 and 3.
- * f1 is the normalized distance from p1 to p2.
- * f4 is the normalized distance from p3 to p4.
- * @param {Object} p1 - First control point
- * @param {Object} p2 - Start point of interpolation
- * @param {Object} p3 - End point of interpolation
- * @param {Object} p4 - Second control point
- * @param {number} f1 - Normalized distance p1->p2 relative to p2->p3
- * @param {number} f4 - Normalized distance p3->p4 relative to p2->p3
- * @param {number} f - Fraction between p2 and p3 (0 to 1)
- * @returns {Object} Interpolated corner point
+ * Return a new list of points and the index of a point at a given position.
+ * The point is interpolated if necessary.
+ *
+ * @param {number} s0 - Target distance/position along the course
+ * @param {Object[]} points - Array of point objects
+ * @param {boolean} [isLoop=false] - Whether the course is a closed loop
+ * @returns {[Object[], number|undefined]} Tuple of [newPoints, pointIndex]
  */
+function pointAtPosition(s0, points, isLoop = false) {
+  const pNew = [];
+
+  if (!("distance" in points[0])) {
+    addDistanceField({ points });
+  }
+
+  let courseDistance = points[points.length - 1].distance;
+  if (isLoop) {
+    courseDistance += latlngDistance(points[points.length - 1], points[0]);
+  }
+
+  if (Math.abs(s0 - points[0].distance) < 0.001) {
+    return [points, 0];
+  }
+
+  if (s0 < points[0].distance || s0 > courseDistance) {
+    return [points, undefined];
+  }
+
+  let pointAdded = false;
+  let pIndex = undefined;
+
+  for (let i = 1; i < points.length; i++) {
+    pNew.push(points[i - 1]);
+
+    if (
+      s0 > 0 &&
+      points[i].distance >= s0 &&
+      points[i - 1].distance < s0
+    ) {
+      const ds = points[i].distance - points[i - 1].distance;
+      const f = (s0 - points[i - 1].distance) / ds;
+      const d1 = f * ds;
+      const d2 = (1 - f) * ds;
+
+      if (d1 < 0.01 && d1 < ds / 2) {
+        pIndex = i - 1;
+      } else if (d2 < 0.01 && d1 >= ds / 2) {
+        pIndex = i;
+      } else {
+        pNew.push(interpolatePoint(points[i - 1], points[i], f));
+        pIndex = pNew.length - 1;
+      }
+    }
+
+    if (i === points.length - 1 && !pointAdded && pIndex === undefined) {
+      const p = { ...points[0], distance: courseDistance };
+      points.push(p);
+      pIndex = points.length - 1;
+      pointAdded = true;
+    }
+  }
+
+  if (!pointAdded) {
+    pNew.push(points[points.length - 1]);
+  }
+
+  return [pNew, pIndex];
+}
+
 function interpolateCorner(
 	p1,
 	p2,
@@ -3681,8 +3741,330 @@ function pointSeparation(p1, p2, courseDistance, isLoop) {
 }
 
 // TODO: Translate climbRating() from Perl
+//untested implantation from Landixus Andreas Otten
+
+/**
+ * Calculate a modified Fiets climb rating.
+ *
+ * Fiets is gradient times altitude. This variant uses:
+ *   elevationGain * |normalizedGradient|^gradientPower
+ *
+ * The gradient is normalized to 10%, so if the average gradient is 10%,
+ * the rating equals the elevation gain.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object[]} params.points - Two points [p1, p2]
+ * @param {number} [params.gradientPower=2] - Exponent applied to the normalized gradient
+ * @param {number} params.courseDistance - Total course distance
+ * @param {boolean} [params.isLoop=false] - Whether the course is a loop
+ * @returns {number} Climb rating
+ */
+function climbRating({ points, gradientPower = 2, courseDistance, isLoop = false }) {
+  const [p1, p2] = points;
+
+  const dz = p2.ele - p1.ele;
+  const ds = distanceDifference(p1, p2, courseDistance, isLoop);
+
+  return ds === 0
+    ? 0
+    : dz * Math.abs((10 * dz) / ds) ** gradientPower;
+}
 
 // TODO: Translate addAutoSegments() from Perl
+//untested implantation from Landixus Andreas Otten
+/**
+ * Add automatic climb segments to a course.
+ *
+ * This function detects climbs, adjusts them to margins and nearby peaks/valleys,
+ * assigns segment IDs and names, and inserts duplicated boundary points where
+ * needed so segment transitions are represented correctly.
+ *
+ * The function mutates some input structures, especially:
+ * - points (segment fields may be changed)
+ * - segmentDefined
+ * - segmentNames
+ *
+ * @param {Object} params - Function parameters
+ * @param {number} [params.courseDistance] - Total course distance
+ * @param {number} [params.gradientPower=2] - Exponent used for climb rating
+ * @param {boolean} [params.isLoop=false] - Whether the course is a loop
+ * @param {number} [params.margin=400] - Minimum spacing between adjacent climbs
+ * @param {number} [params.finishMargin=0] - Minimum distance from finish
+ * @param {number} [params.startMargin=0] - Minimum distance from start
+ * @param {string[]} [params.names] - Optional names for detected climbs
+ * @param {Object[]} params.points - Array of course points
+ * @param {Object} [params.segmentDefined={}] - Map of existing segment IDs
+ * @param {Object} [params.segmentNames={}] - Map of segment names by segment ID
+ * @param {number} [params.simplifyPoints=1] - Whether climb detection should simplify points
+ * @param {number} params.stretch - Fraction of climb length used to search for better start/end points
+ * @param {number} [params.threshold=100] - Minimum climb detection threshold
+ * @returns {Object[]} New array of points including inserted segment boundary points
+ */
+function addAutoSegments({
+  courseDistance,
+  gradientPower = 2,
+  isLoop = false,
+  margin = 400,
+  finishMargin = 0,
+  startMargin = 0,
+  names,
+  points,
+  segmentDefined = {},
+  segmentNames = {},
+  simplifyPoints = 1,
+  stretch,
+  threshold = 100
+}) {
+  note("creating auto-segments...\n");
+
+  addDistanceField({ points });
+
+  if (courseDistance == null) {
+    courseDistance = calcCourseDistance({ isLoop, points });
+  }
+
+  // these terms were important in RGT
+  const dMin = startMargin;
+  const dMax = courseDistance - finishMargin;
+
+  const c = findClimbs({
+    points,
+    courseDistance,
+    simplifyPoints,
+    shiftCircuit: 0,
+    gradientPower,
+    threshold,
+    isLoop,
+    sign: 1
+  });
+
+  // adjust margin for rounding error
+  const m = 0.999 * margin;
+
+  const climbs = [];
+
+  for (const climb of [...c].sort((a, b) => a[0] - b[0])) {
+    // if we are too close to the start or finish line, consider nudging the climb endpoints
+    const d1 = points[climb[0]].distance;
+    const d2 = points[climb[1]].distance;
+    const L = d2 - d1;
+
+    if (d1 < dMin && (dMin - d1) < 0.02 * L) {
+      while (
+        climb[0] < climb[1] - 1 &&
+        points[climb[0]].distance < dMin &&
+        points[climb[0] + 1].distance - d1 < 0.02 * L
+      ) {
+        climb[0]++;
+      }
+
+      if (points[climb[0]].distance > d1) {
+        note(
+          `shifted start of climb from ${d1.toFixed(3)} meters to ${points[climb[0]].distance.toFixed(3)} meters to accomodate start margin\n`
+        );
+      }
+
+      // add interpolation code here
+    }
+
+    if (d2 > dMax && (d2 - dMax) < 0.02 * L) {
+      while (
+        climb[1] > climb[0] + 1 &&
+        points[climb[1]].distance > dMax &&
+        d2 - points[climb[1] - 1].distance < 0.02 * L
+      ) {
+        climb[1]--;
+      }
+
+      if (points[climb[1]].distance < d2) {
+        note(
+          `shifted end of climb from ${d2.toFixed(3)} meters to ${points[climb[1]].distance.toFixed(3)} meters to accomodate finish margin\n`
+        );
+      }
+
+      // add interpolation code here
+    }
+
+    if (
+      points[climb[0]].distance >= dMin &&
+      points[climb[1]].distance <= dMax
+    ) {
+      if (
+        climbs.length === 0 ||
+        points[climb[0]].distance > points[climbs[climbs.length - 1][1]].distance + m
+      ) {
+        note(
+          `autoSegments: identified climb from ${(points[climb[0]].distance / 1000).toFixed(3)} to ${(points[climb[1]].distance / 1000).toFixed(3)} km\n`
+        );
+        climbs.push(climb);
+      } else {
+        warn("autoSegments: removing detected lower-rated climb due to inadequate margin to higher-rated adjacent climb.\n");
+
+        // climb is too close to preceding climb: take the one with the higher rating
+        const r1 = climbRating({
+          points: [
+            points[climbs[climbs.length - 1][0]],
+            points[climbs[climbs.length - 1][1]]
+          ],
+          gradientPower,
+          courseDistance,
+          isLoop
+        });
+
+        const r2 = climbRating({
+          points: [points[climb[0]], points[climb[1]]],
+          gradientPower,
+          courseDistance,
+          isLoop
+        });
+
+        if (r2 < r1) {
+          climbs.pop();
+          climbs.push(climb);
+        }
+      }
+    }
+  }
+
+  //
+  // insert climbs into points -- need to be a bit careful to not
+  // create point triplets if the climb happens to begin/end on point pairs,
+  // for example existing segment boundaries
+  //
+  const newPoints = [];
+  let nS = 1;
+  let i0 = 0;
+  let i1 = 0;
+
+  for (let nc = 0; nc < climbs.length; nc++) {
+    const climb = climbs[nc];
+
+    // maximum distance to shift points to find peak or valley
+    const d = stretch * (points[climb[1]].distance - points[climb[0]].distance);
+
+    // see if we can find a point within the search distance which is an altitude minimum
+    const j0 = climb[0];
+    let j = j0 - 1;
+
+    while (
+      j > 0 &&
+      points[j].distance > points[j0].distance - d &&
+      points[j].distance >= dMin &&
+      (nc === 0 || points[j].distance >= points[climbs[nc - 1][1]].distance + m)
+    ) {
+      if (
+        points[j + 1].ele > points[j].ele &&
+        points[j - 1].ele >= points[j].ele
+      ) {
+        note(
+          `autoSegments: extending climb start from ${(points[climb[0]].distance / 1000).toFixed(3)} to ${(points[j].distance / 1000).toFixed(3)} km\n`
+        );
+        climb[0] = j;
+        break;
+      }
+      j--;
+    }
+
+    const j1 = climb[1];
+    j = j1 + 1;
+
+    while (
+      j < points.length - 1 &&
+      points[j].distance < points[j1].distance + d &&
+      points[j].distance <= dMax &&
+      (nc === climbs.length - 1 || points[j].distance <= points[climbs[nc + 1][0]].distance - m)
+    ) {
+      if (
+        points[j + 1].ele <= points[j].ele &&
+        points[j - 1].ele < points[j].ele
+      ) {
+        note(
+          `autoSegments: extending climb finish from ${(points[climb[1]].distance / 1000).toFixed(3)} to ${(points[j].distance / 1000).toFixed(3)} km\n`
+        );
+        climb[1] = j;
+        break;
+      }
+      j++;
+    }
+
+    while (segmentDefined[nS]) {
+      nS++;
+    }
+
+    segmentDefined[nS] = (segmentDefined[nS] || 0) + 1;
+    segmentNames[nS] =
+      names?.[nc] !== undefined
+        ? names[nc]
+        : (climbs.length > 1 ? `GPM ${nc + 1}` : "GPM");
+
+    // if the climb limits are at point pairs, move each to the appropriate point
+    while (
+      climb[0] < climb[1] &&
+      points[climb[0] + 1].distance < points[climb[0]].distance + 0.05
+    ) {
+      climb[0]++;
+    }
+
+    while (
+      climb[1] > climb[0] &&
+      points[climb[1]].distance < points[climb[1] - 1].distance + 0.05
+    ) {
+      climb[1]--;
+    }
+
+    // points up to the climb
+    i1 = climb[0] - 1;
+    if (i1 >= i0) {
+      newPoints.push(...points.slice(i0, i1 + 1));
+    }
+
+    // shift to the climb
+    i0 = climb[0];
+    i1 = climb[1];
+
+    // we may need to create a copy of the first point of the climb
+    if (
+      i0 > 0 &&
+      points[i0].distance > points[i0 - 1].distance + 0.05
+    ) {
+      const p = { ...points[i0] };
+      newPoints.push(p);
+    }
+
+    // copy all of the points up to the final point in the climb
+    const s = points[i1].segment;
+
+    for (let i = i0; i <= i1; i++) {
+      if (
+        i === i0 ||
+        points[i].distance > points[i - 1].distance + 0.05
+      ) {
+        newPoints.push(points[i]);
+        points[i].segment = nS;
+      }
+    }
+
+    // if the next point is not a pair with the last copied point, then duplicate the last point of the climb
+    if (
+      i1 < points.length - 1 &&
+      points[i1 + 1].distance > points[i1].distance + 0.05
+    ) {
+      const p = { ...points[i1] };
+      p.segment = s;
+      newPoints.push(p);
+    }
+
+    // starting point for the next insertion
+    i0 = i1 + 1;
+  }
+
+  // points following the last climb
+  if (i0 < points.length) {
+    newPoints.push(...points.slice(i0));
+  }
+
+  return newPoints;
+}
 
 // TODO: Translate findClimbs() from Perl
 
