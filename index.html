@@ -1,104 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>processGPX - GPX Route Processing</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>processGPX - GPX Route Processing</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-    <!-- Initial upload screen -->
-    <div id="uploadScreen" class="upload-screen">
-        <div class="upload-content">
-            <h1>processGPX</h1>
+  <div id="uploadScreen" class="upload-screen">
+    <div class="upload-content">
+      <h1 class="app-title">processGPX</h1>
+      <p class="app-subtitle">Upload, inspect, process and export GPX routes</p>
 
-            <div class="file-upload-area">
-                <input type="file" id="gpxFile" accept=".gpx" style="display: none;" />
-                <label for="gpxFile" class="file-upload-button">
-                    Click here to upload your route file
-                    <span class="file-types">Only .gpx accepted</span>
-                </label>
+      <div id="dropZone" class="file-upload-area drop-zone">
+        <input type="file" id="gpxFile" accept=".gpx" hidden />
+
+        <label for="gpxFile" class="file-upload-button">
+          <span class="upload-main">Click here or drop a GPX file</span>
+          <span class="file-types">Accepted format: .gpx</span>
+        </label>
+
+        <div class="drop-zone-hint">Drag &amp; drop supported</div>
+
+        <div id="selectedFileInfo" class="selected-file-info hidden">
+          <div><strong>Selected file:</strong> <span id="selectedFileName">-</span></div>
+          <button id="replaceFileBtn" type="button" class="secondary-button">Replace file</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultsScreen" class="results-screen hidden">
+    <div class="main-container">
+      <div class="left-panel">
+        <div class="split-container">
+          <section class="map-pane panel-card">
+            <div class="panel-header"><h2>Route Map</h2></div>
+            <div id="map"></div>
+          </section>
+
+          <section class="elevation-pane panel-card">
+            <div class="panel-header"><h2>Elevation Profile</h2></div>
+            <div class="elevation-content">
+              <div id="elevationProfile" class="elevation-chart"></div>
             </div>
+          </section>
         </div>
-    </div>
+      </div>
 
-    <!-- Results screen with split layout -->
-    <div id="resultsScreen" class="results-screen hidden">
-        <div class="main-container">
-            <!-- Left side: Map and elevation -->
-            <div class="left-panel">
-                <div class="split-container">
-                    <!-- Top pane: Map -->
-                    <div class="map-pane">
-                        <div id="map"></div>
-                    </div>
+      <aside class="right-sidebar">
+        <div class="sidebar-content">
+          <section class="sidebar-section track-summary-card">
+            <h2 id="trackName" class="track-name">Unnamed Track</h2>
+            <div class="track-summary">
+              <div class="summary-row"><span class="summary-label">Distance</span><span id="trackDistance" class="summary-value">-</span></div>
+              <div class="summary-row"><span class="summary-label">Elevation gain</span><span id="trackElevation" class="summary-value">-</span></div>
+              <div class="summary-row"><span class="summary-label">Points</span><span id="trackPoints" class="summary-value">-</span></div>
+              <div class="summary-row"><span class="summary-label">Loop</span><span id="trackIsLoop" class="summary-value">-</span></div>
+              <div class="summary-row"><span class="summary-label">Segments</span><span id="trackSegments" class="summary-value">-</span></div>
+              <div class="summary-row"><span class="summary-label">Climbs</span><span id="trackClimbs" class="summary-value">-</span></div>
+            </div>
+          </section>
 
-                    <!-- Bottom pane: Elevation profile -->
-                    <div class="elevation-pane">
-                        <div class="elevation-content">
-                            <div id="elevationProfile" class="elevation-chart"></div>
-                        </div>
-                    </div>
-                </div>
+          <section class="sidebar-section">
+            <h3 class="section-title">File</h3>
+            <div class="button-row">
+              <button id="loadAnotherFileBtn" type="button" class="secondary-button">Load another GPX</button>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Processing</h3>
+            <div class="option-item"><input type="checkbox" id="flattenExtensionsOption" /><label for="flattenExtensionsOption">Flatten point extensions</label></div>
+            <div class="option-item"><input type="checkbox" id="addPointExtensionsOption" /><label for="addPointExtensionsOption">Write computed fields to GPX extensions</label></div>
+            <div class="option-item"><input type="checkbox" id="simplifyProfileOption" /><label for="simplifyProfileOption">Simplify profile</label></div>
+            <div class="option-grid">
+              <div class="field-group"><label for="gradientPowerInput">Gradient power</label><input type="number" id="gradientPowerInput" min="1" step="0.1" value="2" /></div>
+              <div class="field-group"><label for="thresholdInput">Threshold</label><input type="number" id="thresholdInput" min="0" step="1" value="100" /></div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Climbs &amp; Signs</h3>
+            <div class="option-item"><input type="checkbox" id="autoSegmentsOption" /><label for="autoSegmentsOption">Add auto climb segments</label></div>
+            <div class="option-item"><input type="checkbox" id="gradientSignsOption" /><label for="gradientSignsOption">Place gradient signs</label></div>
+            <div class="option-grid">
+              <div class="field-group"><label for="marginInput">Segment margin (m)</label><input type="number" id="marginInput" min="0" step="1" value="400" /></div>
+              <div class="field-group"><label for="stretchInput">Stretch</label><input type="number" id="stretchInput" min="0" step="0.01" value="0.15" /></div>
+              <div class="field-group"><label for="startMarginInput">Start margin (m)</label><input type="number" id="startMarginInput" min="0" step="1" value="0" /></div>
+              <div class="field-group"><label for="finishMarginInput">Finish margin (m)</label><input type="number" id="finishMarginInput" min="0" step="1" value="0" /></div>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Route Editing</h3>
+            <div class="option-item"><input type="checkbox" id="straightOption" /><label for="straightOption">Apply straight sections</label></div>
+            <div class="option-grid">
+              <div class="field-group"><label for="straightStartInput">Straight start (m)</label><input type="number" id="straightStartInput" min="0" step="1" placeholder="e.g. 1000" /></div>
+              <div class="field-group"><label for="straightEndInput">Straight end (m)</label><input type="number" id="straightEndInput" min="0" step="1" placeholder="e.g. 1400" /></div>
             </div>
 
-            <!-- Right sidebar -->
-            <div class="right-sidebar">
-                <div class="sidebar-content">
-                    <h2 id="trackName" class="track-name"></h2>
-                    
-                    <div class="options-panel">
-                        <h3 class="options-title">Options</h3>
-                        <div class="option-item">
-                            <input type="checkbox" id="autoOption">
-                            <label for="autoOption">Auto</label>
-                        </div>
-                        <div class="option-item">
-                            <input type="checkbox" id="simplifyOption">
-                            <label for="simplifyOption">Simplify</label>
-                        </div>
-                    </div>
-                    
-                    <button id="processGpxBtn" class="process-button">processGPX</button>
-                    <button id="exportGpxBtn" class="process-button disabled" disabled>Export processed GPX</button>
-                </div>
+            <div class="option-item option-divider"><input type="checkbox" id="circleOption" /><label for="circleOption">Fit circular section</label></div>
+            <div class="option-grid">
+              <div class="field-group"><label for="circleStartInput">Circle start (m)</label><input type="number" id="circleStartInput" min="0" step="1" placeholder="e.g. 2200" /></div>
+              <div class="field-group"><label for="circleEndInput">Circle end (m)</label><input type="number" id="circleEndInput" min="0" step="1" placeholder="e.g. 2600" /></div>
             </div>
-        </div>
-    </div>
+          </section>
 
-    <!-- Loading overlay -->
-    <div id="loading" class="loading-overlay hidden">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p id="loadingMessage">Processing GPX route...</p>
-        </div>
-    </div>
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Circuits &amp; Splits</h3>
+            <div class="option-item"><input type="checkbox" id="circuitFromPositionOption" /><label for="circuitFromPositionOption">Create circuit from position</label></div>
+            <div class="option-grid">
+              <div class="field-group"><label for="circuitPositionInput">Position (m)</label><input type="number" id="circuitPositionInput" min="0" step="1" value="0" /></div>
+              <div class="field-group"><label for="circuitRepeatsInput">Repeats</label><input type="number" id="circuitRepeatsInput" min="1" step="1" value="1" /></div>
+              <div class="field-group"><label for="circuitsInput">Circuits</label><input type="number" id="circuitsInput" min="0" step="1" value="1" /></div>
+            </div>
 
-    <!-- Error overlay -->
-    <div id="error" class="error-overlay hidden">
-        <div class="error-content">
-            <h3>Error</h3>
-            <p id="errorMessage"></p>
-            <button id="errorBackBtn">Back to Upload</button>
-        </div>
-    </div>
+            <div class="option-item option-divider"><input type="checkbox" id="splitRouteOption" /><label for="splitRouteOption">Create splits</label></div>
+            <div class="option-grid">
+              <div class="field-group field-group-full"><label for="splitDistanceInput">Split distances (comma separated, m)</label><input type="text" id="splitDistanceInput" placeholder="e.g. 5000,10000,15000" /></div>
+              <div class="field-group"><label for="startZoneInput">Start zone (m)</label><input type="number" id="startZoneInput" min="0" step="1" value="0" /></div>
+              <div class="field-group"><label for="finishZoneInput">Finish zone (m)</label><input type="number" id="finishZoneInput" min="0" step="1" value="0" /></div>
+              <div class="field-group"><label for="minSplitLengthInput">Min split length (m)</label><input type="number" id="minSplitLengthInput" min="0" step="1" value="10" /></div>
+              <div class="field-group"><label for="splitNumberInput">Split number</label><input type="number" id="splitNumberInput" min="0" step="1" value="0" /></div>
+            </div>
+          </section>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@mapbox/togeojson@0.16.0/togeojson.js"></script>
-    <script src="https://unpkg.com/togpx@0.5.4/togpx.js"></script>
-    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-    <script type="module" src="js/gpx-parser.js"></script>
-    <script type="module" src="js/process-gpx.js"></script>
-    <script type="module" src="js/gpx-export.js"></script>
-    <script type="module" src="js/elevation-chart.js"></script>
-    <script type="module" src="js/map-visualization.js"></script>
-    <script type="module" src="js/main.js"></script>
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Export</h3>
+            <div class="option-item"><input type="checkbox" id="includeSegmentExtensionsOption" checked /><label for="includeSegmentExtensionsOption">Include segment extensions</label></div>
+            <div class="option-item"><input type="checkbox" id="includePointExtensionsOption" checked /><label for="includePointExtensionsOption">Include point extensions</label></div>
+            <div class="button-column">
+              <button id="processGpxBtn" class="process-button">Process GPX</button>
+              <button id="exportGpxBtn" class="process-button disabled" disabled>Export processed GPX</button>
+            </div>
+          </section>
+
+          <section class="sidebar-section options-section">
+            <h3 class="section-title">Developer</h3>
+            <div class="option-item"><input type="checkbox" id="debugLogsOption" /><label for="debugLogsOption">Enable debug logging</label></div>
+            <div class="option-item"><input type="checkbox" id="showWaypointsOption" /><label for="showWaypointsOption">Show generated waypoints</label></div>
+            <div class="option-item"><input type="checkbox" id="showSegmentsOption" /><label for="showSegmentsOption">Highlight segments on map</label></div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="loading" class="loading-overlay hidden">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p id="loadingMessage">Processing GPX route...</p>
+    </div>
+  </div>
+
+  <div id="error" class="error-overlay hidden">
+    <div class="error-content">
+      <h3>Error</h3>
+      <p id="errorMessage"></p>
+      <div class="button-row"><button id="errorBackBtn" type="button">Back to Upload</button></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@mapbox/togeojson@0.16.0/togeojson.js"></script>
+  <script src="https://unpkg.com/togpx@0.5.4/togpx.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <script type="module" src="js/main.js"></script>
 </body>
-
 </html>
