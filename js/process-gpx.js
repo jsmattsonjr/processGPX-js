@@ -5341,6 +5341,7 @@ export function processGPX(trackFeature, options = {}) {
 			options.splineEnd,
 			options.isLoop || 0,
 			"spline",
+			options.splineMaxRatio ?? 0,
 		);
 		dumpPoints(points, "15-js-corner-splines.txt");
 	}
