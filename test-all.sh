@@ -82,7 +82,7 @@ find gpx/ -name "*.gpx" -not -path "gpx/js/*" -not -path "gpx/perl/*" -not -name
     echo "Processing: $base_name"
     
     # Run Perl version with --out to specify output location  
-    if ./processGPX "$gpx_file" "$@" --out "$output_file" > "$log_file" 2>&1; then
+    if processGPX "$gpx_file" "$@" --out "$output_file" > "$log_file" 2>&1; then
         echo "  ✅ Perl: Success -> $output_file"
         ((processed_files_perl++))
     else
