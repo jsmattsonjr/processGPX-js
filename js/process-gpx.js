@@ -5106,9 +5106,9 @@ export function processGPX(trackFeature, options = {}) {
 			options.fitArcs = 1;
 		}
 
-		if (options.splineInterpolation === undefined) {
-			note("setting -splineInterpolation ...");
-			options.splineInterpolation = 1;
+		if (options.arcInterpolation === undefined) {
+			note("setting -arcInterpolation ...");
+			options.arcInterpolation = 1;
 		}
 	}
 
